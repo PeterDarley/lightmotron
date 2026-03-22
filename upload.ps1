@@ -37,22 +37,15 @@ foreach ($f in (Get-ChildItem -Path $PSScriptRoot -Filter *.py)) {
     $first = $false
 }
 
-if (Test-Path (Join-Path $PSScriptRoot 'lib')) {
-    Write-Output "  lib/"
-    $cpArgs.Add('+')
-    $cpArgs.AddRange([string[]]@('fs', 'cp', '-r', (Join-Path $PSScriptRoot 'lib'), ':'))
-}
+$directories = @('lib', 'www', 'templates', "web")
 
-if (Test-Path (Join-Path $PSScriptRoot 'www')) {
-    Write-Output "  www/"
-    $cpArgs.Add('+')
-    $cpArgs.AddRange([string[]]@('fs', 'cp', '-r', (Join-Path $PSScriptRoot 'www'), ':'))
-}
-
-if (Test-Path (Join-Path $PSScriptRoot 'templates')) {
-    Write-Output "  templates/"
-    $cpArgs.Add('+')
-    $cpArgs.AddRange([string[]]@('fs', 'cp', '-r', (Join-Path $PSScriptRoot 'templates'), ':'))
+foreach ($dir in $directories) {
+    $dirPath = Join-Path $PSScriptRoot $dir
+    if (Test-Path $dirPath) {
+        Write-Output "  $dir/"
+        $cpArgs.Add('+')
+        $cpArgs.AddRange([string[]]@('fs', 'cp', '-r', $dirPath, ':'))
+    }
 }
 
 & $mpremote @cpArgs

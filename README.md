@@ -1,20 +1,37 @@
-# Think Tank
+# Lightmotron
 
-Very eary work on writing a controller for a combat robot.  I'd like the bot to be semi-autonomous in the following ways:
-* Use an accelerometer to detect and react to suffering a hit
-* Use a magnetometer to understand what direction the bot is posting
-* Use either treads or Mecanum wheels to allow for absolute steering, meaning tell the bot to move in a certain cardinal direction (forward, backward, strafe left, strafe right) instead of normal steering (forward, backward, turn left, turn right)
+A MicroPython-based lighting controller for plastic model kits, running on an ESP32. Uses NeoPixel LED strips to produce dynamic lighting effects, and exposes a web interface for control over WiFi.
 
-If cloning this repo, you need to know that there are submodules for external libraries.  When cloning you'll need to do: `git submodule init`, then after instalation, and every time there is an update, do: `git submodule update`
+## Features
 
-Currently useing an ESP32 - Wroom module and developing in MicroPython
+* NeoPixel LED strip control for model lighting effects
+* MAX7219 4-module scrolling LED matrix display
+* Web server for browser-based control
+* WiFi connectivity
 
-The current state of the Think Tank hardware:
-![Alt text](https://github.com/PeterDarley/ThinkTank/blob/main/docs/ThinkTank.jpg)
+## Hardware
 
-I chose all the hardware out of ignorance because it was cheap, with the thought that once I had a better idea of what I was doing I could upgrade to what made sense.  So far I'm happy with all of it.
+* ESP-WROOM-32 development board
+* NeoPixel LED strip (GPIO 32)
+* MAX7219 4-module LED matrix display (SPI)
 
-Hardware used:
-* ESP-WROOM-32 development board - Only has 512k of memory.  I suspect this will need to be replaced.
-* GY-273 QMC5883L 3 axis compass module
-* GY-521 MPU-6050 3 axis Accelerometer/Gyroscope module
+## Setup
+
+This repo uses a git submodule for shared MicroPython libraries. After cloning, run:
+
+```bash
+git submodule init
+git submodule update
+```
+
+## Uploading to the Device
+
+```powershell
+.\upload.ps1
+```
+
+To hard reset the device after uploading:
+
+```powershell
+python tools\reset_device.py COM3
+```
