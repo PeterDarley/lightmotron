@@ -1,0 +1,7 @@
+<button class="btn {% if animation_running %}btn-outline-danger{% endif %}{% if animation_stopped %}btn-danger{% endif %}"
+        hx-post="/animation"
+        hx-vals='{"action": "stop"}'
+        hx-target="#animation-buttons"
+        hx-swap="outerHTML">
+    Stop Animation
+</button>

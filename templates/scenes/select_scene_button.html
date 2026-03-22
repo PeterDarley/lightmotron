@@ -1,0 +1,7 @@
+<button class="btn {% if scene == current_scene %}btn-primary{% else %}btn-outline-primary{% endif %}"
+        hx-post="/set_scene"
+        hx-vals='{"scene": "{{ scene }}"}'
+        hx-target="#scene_buttons"
+        hx-swap="outerHTML">
+    {{ scene }}
+</button>

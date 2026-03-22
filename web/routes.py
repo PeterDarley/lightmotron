@@ -4,4 +4,4 @@ import web.views as views
 # Register views with the web server
 web_server = WebServer()
 
-web_server.add_routes({"/": views.HomeView})
+web_server.add_routes({"/": views.HomeView, "/set_scene": views.SetSceneView, "/animation": views.AnimationView})

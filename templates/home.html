@@ -1,3 +1,11 @@
 {% include 'base/base_head.html' %}
-<h1>{{ message }}</h1>
+<div class="container mt-4">
+    <h1>{{ message }}</h1>
+    <div class="d-flex gap-2 mt-3 mb-4">
+        {% include 'animation/buttons.html' %}
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        {% include 'scenes/buttons.html' %}
+    </div>
+</div>
 {% include 'base/base_foot.html' %}

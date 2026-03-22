@@ -1,3 +1,8 @@
 import settings
+from lighting import Lighting
 
-print("Testing")
+lights = Lighting()
+
+lights.animation.start()
+
+print("running")
