@@ -1,2 +1,5 @@
 settings.py
 ThinkTank.code-workspace
+**/__pycache__/
+**/*.pyc
+**/*.pyo
