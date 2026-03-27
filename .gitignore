@@ -4,3 +4,4 @@ ThinkTank.code-workspace
 **/*.pyc
 **/*.pyo
 .playwright-mcp/
+copilot_working/
