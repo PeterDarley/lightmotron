@@ -13,6 +13,9 @@ Do not use `upload.ps1` or `repl.ps1`. These are for manual use by the user only
 ### Temporary working files
 Put any temporary files needed during work (screenshots, logs, test outputs, etc.) into the `copilot_working` directory, which is excluded from the repo.
 
+### Shared lib directory
+The `lib/` directory is a shared submodule used across multiple projects. Do not remove modules from it just because they are unused in this project.
+
 ### Type hints
 All function and method parameters should be typed. Return types should also be specified for anything that returns a non-None value.
 
