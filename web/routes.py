@@ -13,5 +13,9 @@ web_server.add_routes(
         "/setup": views.SetupView,
         "/status": views.StatusView,
         "/named_range": views.NamedRangeView,
+        "/named_range/toggle": views.NamedRangeToggleView,
+        "/named_range/clear": views.NamedRangeClearView,
     }
 )
+
+# Animation runs freely without webserver synchronization

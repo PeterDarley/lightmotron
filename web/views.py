@@ -1,12 +1,10 @@
 from webserver import View, render_template
-from billboard import Billboard
 from storage import PersistentDict
 from lighting import Lighting
 import gc
 import sys
 import machine
 import settings
-import json
 
 try:
     from network import WLAN, STA_IF
@@ -15,9 +13,6 @@ try:
 except Exception:
     _wlan = None
 
-billboard = Billboard.from_settings(debug=True)
-
-storage = PersistentDict()
 lights = Lighting()
 
 
@@ -78,68 +73,14 @@ class AnimationView(View):
         return render_template("animation/buttons.html", _animation_context())
 
 
-def _indent_json(json_str):
-    """Pretty-print a JSON string with proper indentation."""
-    result = ""
-    indent_level = 0
-    in_string = False
-    escape_next = False
-
-    for char in json_str:
-        if escape_next:
-            result += char
-            escape_next = False
-            continue
-
-        if char == "\\":
-            result += char
-            escape_next = True
-            continue
-
-        if char == '"':
-            in_string = not in_string
-            result += char
-            continue
-
-        if in_string:
-            result += char
-            continue
-
-        if char in ("{", "["):
-            result += char
-            indent_level += 1
-            result += "\n" + ("  " * indent_level)
-        elif char in ("}", "]"):
-            indent_level -= 1
-            result += "\n" + ("  " * indent_level) + char
-        elif char == ",":
-            result += char
-            result += "\n" + ("  " * indent_level)
-        elif char == ":":
-            result += char + " "
-        elif char not in (" ", "\n"):
-            result += char
-
-    return result
-
-
 class StorageView(View):
     """Display the persistent storage dictionary as pretty-printed JSON."""
 
     def get(self):
-        """Return the storage contents."""
-        try:
-            storage = PersistentDict()
-            # Convert to plain dict and dump as JSON
-            storage_dict = {}
-            for key, value in storage.items():
-                storage_dict[key] = value
-            storage_json = json.dumps(storage_dict)
-            # Pretty-print with proper indentation
-            storage_json = _indent_json(storage_json)
-            return render_template("storage.html", {"storage_json": storage_json})
-        except Exception as e:
-            return "Error: {}".format(str(e)), 500
+        """Return the storage contents as JSON."""
+
+        storage = PersistentDict()
+        return render_template("storage.html", {"storage": dict(storage)})
 
 
 class SetupView(View):
@@ -158,75 +99,107 @@ class SetupView(View):
         )
 
 
-class NamedRangeView(View):
-    """Handle LED identification and saving of named ranges."""
+# Server-side selection state for the LED naming tool
+_selected_leds = []
 
-    def _parse_selected(self, query_string: str) -> list:
-        """Parse led=N&led=M query string into a list of integers."""
 
-        selected = []
-        for part in query_string.split("&"):
-            if part.startswith("led="):
-                try:
-                    selected.append(int(part[4:]))
-                except ValueError:
-                    pass
+def _named_range_context() -> dict:
+    """Build template context for the LED picker from current server-side selection state."""
 
-        return selected
-
-    def _build_context(self, selected: list) -> dict:
-        """Build template context for the LED picker."""
-
-        selected_set = set(selected)
-        led_list = [{"index": i, "selected": i in selected_set} for i in range(lights.leds.count)]
-        named_range_names = list(lights.settings.get("named_ranges", {}).keys())
-
-        return {
-            "led_list": led_list,
-            "selected_str": ",".join(str(i) for i in selected),
-            "named_range_names": named_range_names,
+    selected_set = set(_selected_leds)
+    led_list = [
+        {
+            "index": i,
+            "css_class": "btn-warning" if i in selected_set else "btn-outline-secondary",
         }
+        for i in range(lights.leds.count)
+    ]
+    named_range_names = list(lights.settings.get("named_ranges", {}).keys())
+
+    return {
+        "led_list": led_list,
+        "named_range_names": named_range_names,
+    }
+
+
+class NamedRangeView(View):
+    """Enter LED naming mode and save named ranges."""
 
     def get(self) -> str:
-        """Pause animation, light selected LEDs, return updated picker."""
+        """Pause animation and show the LED picker."""
 
-        selected = self._parse_selected(self.request.query)
+        global _selected_leds
+        _selected_leds = []
 
         if lights.animation.running:
             lights.animation.pause()
 
-        if selected:
-            lights.leds.identify(selected)
-        else:
-            lights.leds.clear()
-            lights.leds.show()
+        lights.leds.clear()
+        lights.leds.show()
 
-        return render_template("setup/led_picker.html", self._build_context(selected))
+        return render_template("setup/led_picker.html", _named_range_context())
 
     def post(self) -> str:
-        """Save the named range and resume animation."""
+        """Save the current selection as a named range and resume animation."""
 
+        global _selected_leds
         range_name = self.request.form_data.get("range_name", "").strip()
-        selected_raw = self.request.form_data.get("selected", "")
 
-        selected = []
-        for part in selected_raw.split(","):
-            part = part.strip()
-            if part:
-                try:
-                    selected.append(int(part))
-                except ValueError:
-                    pass
-
-        if range_name and selected:
-            lights.settings["named_ranges"][range_name] = selected
+        if range_name and _selected_leds:
+            lights.settings["named_ranges"][range_name] = list(_selected_leds)
             lights.settings_object.store()
 
+        _selected_leds = []
         lights.animation.resume()
         lights.leds.clear()
         lights.leds.show()
 
-        return render_template("setup/led_picker.html", self._build_context([]))
+        return render_template("setup/led_picker.html", _named_range_context())
+
+
+class NamedRangeToggleView(View):
+    """Toggle a single LED in/out of the current selection."""
+
+    def get(self) -> str:
+        """Toggle the LED index given as ?led=N and return updated picker."""
+
+        global _selected_leds
+        led_index = None
+
+        for part in self.request.query.split("&"):
+            if part.startswith("led="):
+                try:
+                    led_index = int(part[4:])
+                except ValueError:
+                    pass
+
+        if led_index is not None:
+            if led_index in _selected_leds:
+                _selected_leds.remove(led_index)
+            else:
+                _selected_leds.append(led_index)
+
+        if _selected_leds:
+            lights.leds.identify(_selected_leds)
+        else:
+            lights.leds.clear()
+            lights.leds.show()
+
+        return render_template("setup/led_picker.html", _named_range_context())
+
+
+class NamedRangeClearView(View):
+    """Clear the current LED selection."""
+
+    def get(self) -> str:
+        """Clear all selected LEDs and return updated picker."""
+
+        global _selected_leds
+        _selected_leds = []
+        lights.leds.clear()
+        lights.leds.show()
+
+        return render_template("setup/led_picker.html", _named_range_context())
 
 
 class StatusView(View):

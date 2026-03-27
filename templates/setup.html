@@ -6,15 +6,15 @@
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#name-lights-panel"
-                        hx-get="/named_range"
-                        hx-target="#led-picker-container"
-                        hx-swap="innerHTML"
-                        hx-trigger="click once">
+                        data-bs-toggle="collapse" data-bs-target="#name-lights-panel">
                     Name Lights
                 </button>
             </h2>
-            <div id="name-lights-panel" class="accordion-collapse collapse">
+            <div id="name-lights-panel" class="accordion-collapse collapse"
+                 hx-get="/named_range"
+                 hx-target="#led-picker-container"
+                 hx-swap="innerHTML"
+                 hx-trigger="show.bs.collapse once">
                 <div class="accordion-body">
                     <p class="text-muted small">Select individual LEDs to group them into a named range. The animation will pause while you work, and resume when you save.</p>
                     <div id="led-picker-container">

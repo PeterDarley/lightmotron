@@ -2,62 +2,30 @@
     <div class="d-flex flex-wrap gap-1 mb-3">
         {% for led in led_list %}
         <button type="button"
-                class="btn btn-sm {% if led.selected %}btn-warning{% else %}btn-outline-secondary{% endif %} led-btn"
+                class="btn btn-sm {{ led.css_class }} led-btn"
                 style="width: 2.2rem; height: 2.2rem; padding: 0; font-size: 0.6rem;"
-                data-led="{{ led.index }}"
-                data-selected="{{ led.selected }}"
-                onclick="ledToggle(this)">
+                hx-get="/named_range/toggle?led={{ led.index }}"
+                hx-target="#led-picker"
+                hx-swap="outerHTML">
             {{ led.index }}
         </button>
         {% endfor %}
     </div>
 
-    <div class="mb-2 text-muted small">
-        Selected: <span id="selected-display">{{ selected_str }}</span>
-    </div>
-
-    <input type="hidden" id="selected-hidden" value="{{ selected_str }}">
-
     <form hx-post="/named_range"
           hx-target="#led-picker"
-          hx-swap="outerHTML"
-          onsubmit="document.querySelector('[name=selected]').value = document.getElementById('selected-hidden').value">
-        <input type="hidden" name="selected" value="{{ selected_str }}">
-        <div class="input-group" style="max-width: 400px;">
+          hx-swap="outerHTML">
+        <div class="input-group mb-2" style="max-width: 400px;">
             <input type="text" class="form-control" name="range_name" placeholder="Range name (e.g. cockpit)" required>
             <button type="submit" class="btn btn-primary">Save</button>
-            <button type="button" class="btn btn-outline-danger" onclick="ledClearAll()">Clear</button>
+            <a class="btn btn-outline-danger"
+               hx-get="/named_range/clear"
+               hx-target="#led-picker"
+               hx-swap="outerHTML">Clear</a>
         </div>
     </form>
 
     {% for range_name in named_range_names %}
-    <span class="badge bg-secondary mt-2 me-1">{{ range_name }}</span>
+    <span class="badge bg-secondary me-1">{{ range_name }}</span>
     {% endfor %}
 </div>
-
-<script>
-function ledGetSelected() {
-    return Array.from(document.querySelectorAll('.led-btn[data-selected="True"]'))
-               .map(function(b) { return b.dataset.led; });
-}
-
-function ledRefresh(selected) {
-    var hiddenInput = document.getElementById('selected-hidden');
-    hiddenInput.value = selected.join(',');
-    document.getElementById('selected-display').textContent = selected.join(', ');
-    var query = selected.length ? '?' + selected.map(function(i) { return 'led=' + i; }).join('&') : '';
-    htmx.ajax('GET', '/named_range' + query, {target: '#led-picker', swap: 'outerHTML'});
-}
-
-function ledToggle(btn) {
-    var isSelected = btn.dataset.selected === 'True';
-    btn.dataset.selected = isSelected ? 'False' : 'True';
-    btn.classList.toggle('btn-warning', !isSelected);
-    btn.classList.toggle('btn-outline-secondary', isSelected);
-    ledRefresh(ledGetSelected());
-}
-
-function ledClearAll() {
-    ledRefresh([]);
-}
-</script>
