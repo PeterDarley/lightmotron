@@ -1,0 +1,60 @@
+{% include 'base/base_head.html' %}
+<div class="container mt-4">
+    <h1>Status</h1>
+
+    <div class="row mt-3">
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">Memory</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <tr><th>Free</th><td>{{ mem_free }} bytes</td></tr>
+                        <tr><th>Allocated</th><td>{{ mem_alloc }} bytes</td></tr>
+                        <tr><th>Total</th><td>{{ mem_total }} bytes</td></tr>
+                        <tr><th>Used</th><td>{{ mem_pct }}%</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">System</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <tr><th>CPU Frequency</th><td>{{ cpu_freq_mhz }} MHz</td></tr>
+                        <tr><th>MicroPython</th><td>{{ upy_version }}</td></tr>
+                        <tr><th>Platform</th><td>{{ platform }}</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">WiFi</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <tr><th>IP Address</th><td>{{ ip_address }}</td></tr>
+                        <tr><th>Connected</th><td>{{ wifi_connected }}</td></tr>
+                        <tr><th>SSID</th><td>{{ wifi_ssid }}</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">Animation</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <tr><th>Running</th><td>{{ animation_running }}</td></tr>
+                        <tr><th>Scene</th><td>{{ current_scene }}</td></tr>
+                        <tr><th>Tick</th><td>{{ tick_number }}</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% include 'base/base_foot.html' %}

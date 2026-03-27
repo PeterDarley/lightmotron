@@ -11,5 +11,7 @@ web_server.add_routes(
         "/animation": views.AnimationView,
         "/storage": views.StorageView,
         "/setup": views.SetupView,
+        "/status": views.StatusView,
+        "/named_range": views.NamedRangeView,
     }
 )
