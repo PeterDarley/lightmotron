@@ -3,3 +3,4 @@ ThinkTank.code-workspace
 **/__pycache__/
 **/*.pyc
 **/*.pyo
+.playwright-mcp/
