@@ -1,0 +1,16 @@
+{
+  "mcp": {
+    "servers": {
+      "playwright": {
+        "command": "npx",
+        "args": [
+          "@playwright/mcp@latest",
+          "--allowed-hosts",
+          "*",
+          "--viewport-size",
+          "1280x720"
+        ]
+      }
+    }
+  }
+}
