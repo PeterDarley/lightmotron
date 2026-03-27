@@ -7,6 +7,16 @@ Guideline:
 
 ## Notes
 
+### Type hints
+All function and method parameters should be typed. Return types should also be specified for anything that returns a non-None value.
+
+### Running Python locally
+The project code is MicroPython-only and should not be run on the Windows machine. If local Python execution is ever necessary (e.g. for syntax checking), always use the `-B` flag to prevent `.pyc` and `__pycache__` generation:
+```powershell
+python -B -c "..."
+python -B script.py
+```
+
 ### ESP32 Board Pinout
 The file `/docs/esp32_pinout.png` shows the pinout for the ESP32 dev board in use (ESP32-WROOM-32).
 
