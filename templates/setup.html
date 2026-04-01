@@ -16,7 +16,14 @@
                  hx-swap="innerHTML"
                  hx-trigger="show.bs.collapse once">
                 <div class="accordion-body">
-                    <p class="text-muted small">Select individual LEDs to group them into a named range. The animation will pause while you work, and resume when you save.</p>
+                    <p class="text-muted small mb-1">Group LEDs into named ranges for use in animations and scenes.</p>
+                    <ul class="text-muted small mb-3">
+                        <li>Click an LED button to toggle it on or off.</li>
+                        <li>Hold <kbd>Shift</kbd> and click a second LED to select or deselect the whole range between them.</li>
+                        <li>Type a name and click <strong>Save</strong> to store the range.</li>
+                        <li>Click an existing range name below the form to edit or delete it.</li>
+                        <li>Click <strong>Clear</strong> to deselect all LEDs and start over.</li>
+                    </ul>
                     <div id="led-picker-container">
                     </div>
                 </div>

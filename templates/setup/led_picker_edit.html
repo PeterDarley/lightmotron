@@ -41,55 +41,5 @@
         </div>
     </div>
 
-    <script>
-    (function() {
-        const selectedLeds = new Set();
-        const ledButtons = document.querySelectorAll('.led-btn');
-        const selectedLedsInput = document.getElementById('selected-leds');
-        const backBtn = document.getElementById('back-btn');
-        const rangeForm = document.getElementById('range-form');
-
-        function updateSelectedLedsInput() {
-            const sorted = Array.from(selectedLeds).sort((a, b) => a - b);
-            selectedLedsInput.value = sorted.join(',');
-        }
-
-        ledButtons.forEach(btn => {
-            const ledIndex = parseInt(btn.dataset.ledIndex);
-            if (btn.classList.contains('btn-warning')) {
-                selectedLeds.add(ledIndex);
-            }
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (selectedLeds.has(ledIndex)) {
-                    selectedLeds.delete(ledIndex);
-                    btn.classList.remove('btn-warning');
-                    btn.classList.add('btn-outline-secondary');
-                } else {
-                    selectedLeds.add(ledIndex);
-                    btn.classList.remove('btn-outline-secondary');
-                    btn.classList.add('btn-warning');
-                }
-                updateSelectedLedsInput();
-                
-                // Send HTMX request to toggle LED on hardware
-                htmx.ajax('GET', '/named_range/toggle?led=' + ledIndex, {
-                    target: '#led-picker',
-                    swap: 'outerHTML'
-                });
-            });
-        });
-
-        backBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            htmx.ajax('GET', '/named_range', {target: '#led-picker', swap: 'outerHTML'});
-        });
-
-        rangeForm.addEventListener('htmx:beforeRequest', (e) => {
-            updateSelectedLedsInput();
-        });
-
-        updateSelectedLedsInput();
-    })();
-    </script>
+    <script src="/scripts/led_picker.js"></script>
 </div>

@@ -234,15 +234,21 @@ class NamedRangeToggleView(View):
                 except ValueError:
                     pass
 
+        print(f"[TOGGLE] led_index={led_index}, before={_selected_leds}")
+
         if led_index is not None:
             if led_index in _selected_leds:
                 _selected_leds.remove(led_index)
             else:
                 _selected_leds.append(led_index)
 
+        print(f"[TOGGLE] after={_selected_leds}")
+
         if _selected_leds:
+            print(f"[TOGGLE] identify({_selected_leds})")
             lights.leds.identify(_selected_leds)
         else:
+            print(f"[TOGGLE] clear & show")
             lights.leds.clear()
             lights.leds.show()
 
@@ -266,6 +272,34 @@ class NamedRangeToggleView(View):
             )
         else:
             return render_template("setup/led_picker.html", _named_range_context())
+
+
+class NamedRangeSetView(View):
+    """Set the current LED selection without returning HTML."""
+
+    def post(self) -> None:
+        """Update _selected_leds from form data and light up hardware. Returns 204 (no content)."""
+
+        global _selected_leds, _editing_range_name
+        selected_leds_str = self.request.form_data.get("selected_leds", "").strip()
+
+        selected_leds = []
+        if selected_leds_str:
+            try:
+                selected_leds = [int(x) for x in selected_leds_str.split(",") if x]
+            except ValueError:
+                pass
+
+        _selected_leds = selected_leds
+        print(f"[SET] selected_leds updated to {_selected_leds}")
+
+        if _selected_leds:
+            lights.leds.identify(_selected_leds)
+        else:
+            lights.leds.clear()
+            lights.leds.show()
+
+        return None
 
 
 class NamedRangeClearView(View):

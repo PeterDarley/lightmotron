@@ -14,6 +14,7 @@ web_server.add_routes(
         "/status": views.StatusView,
         "/named_range": views.NamedRangeView,
         "/named_range/toggle": views.NamedRangeToggleView,
+        "/named_range/set": views.NamedRangeSetView,
         "/named_range/clear": views.NamedRangeClearView,
         "/named_range/edit": views.NamedRangeEditView,
     }
