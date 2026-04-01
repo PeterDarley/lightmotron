@@ -1,4 +1,4 @@
-from webserver import View, render_template
+from webserver import View, render_template, Response
 from storage import PersistentDict
 from lighting import Lighting
 import gc
@@ -150,6 +150,7 @@ class SetupView(View):
 
 # Server-side selection state for the LED naming tool
 _selected_leds = []
+_editing_range_name = None
 
 
 def _named_range_context() -> dict:
@@ -177,8 +178,10 @@ class NamedRangeView(View):
     def get(self) -> str:
         """Pause animation and show the LED picker."""
 
-        global _selected_leds
+        global _selected_leds, _editing_range_name
         _selected_leds = []
+        _editing_range_name = None
+        _editing_range_name = None
 
         if lights.animation.running:
             lights.animation.pause()
@@ -191,14 +194,23 @@ class NamedRangeView(View):
     def post(self) -> str:
         """Save the current selection as a named range and resume animation."""
 
-        global _selected_leds
+        global _selected_leds, _editing_range_name
         range_name = self.request.form_data.get("range_name", "").strip()
+        selected_leds_str = self.request.form_data.get("selected_leds", "").strip()
 
-        if range_name and _selected_leds:
-            lights.settings["named_ranges"][range_name] = list(_selected_leds)
+        selected_leds = []
+        if selected_leds_str:
+            try:
+                selected_leds = [int(x) for x in selected_leds_str.split(",") if x]
+            except ValueError:
+                pass
+
+        if range_name and selected_leds:
+            lights.settings["named_ranges"][range_name] = selected_leds
             lights.settings_object.store()
 
         _selected_leds = []
+        _editing_range_name = None
         lights.animation.resume()
         lights.leds.clear()
         lights.leds.show()
@@ -212,7 +224,7 @@ class NamedRangeToggleView(View):
     def get(self) -> str:
         """Toggle the LED index given as ?led=N and return updated picker."""
 
-        global _selected_leds
+        global _selected_leds, _editing_range_name
         led_index = None
 
         for part in self.request.query.split("&"):
@@ -234,7 +246,26 @@ class NamedRangeToggleView(View):
             lights.leds.clear()
             lights.leds.show()
 
-        return render_template("setup/led_picker.html", _named_range_context())
+        if _editing_range_name:
+            selected_set = set(_selected_leds)
+            led_list = [
+                {
+                    "index": i,
+                    "css_class": "btn-warning" if i in selected_set else "btn-outline-secondary",
+                }
+                for i in range(lights.leds.count)
+            ]
+            named_range_names = list(lights.settings.get("named_ranges", {}).keys())
+            return render_template(
+                "setup/led_picker_edit.html",
+                {
+                    "range_name": _editing_range_name,
+                    "led_list": led_list,
+                    "named_range_names": named_range_names,
+                },
+            )
+        else:
+            return render_template("setup/led_picker.html", _named_range_context())
 
 
 class NamedRangeClearView(View):
@@ -243,8 +274,90 @@ class NamedRangeClearView(View):
     def get(self) -> str:
         """Clear all selected LEDs and return updated picker."""
 
-        global _selected_leds
+        global _selected_leds, _editing_range_name
         _selected_leds = []
+        _editing_range_name = None
+        lights.leds.clear()
+        lights.leds.show()
+
+        return render_template("setup/led_picker.html", _named_range_context())
+
+
+class NamedRangeEditView(View):
+    """Edit an existing named range."""
+
+    def get(self) -> str:
+        """Load a named range for editing."""
+
+        global _selected_leds, _editing_range_name
+        range_name = self.request.query_params.get("name")
+
+        if not range_name or range_name not in lights.settings.get("named_ranges", {}):
+            return "", 404
+
+        _editing_range_name = range_name
+        _selected_leds = list(lights.settings["named_ranges"][range_name])
+
+        if lights.animation.running:
+            lights.animation.pause()
+
+        lights.leds.clear()
+        if _selected_leds:
+            lights.leds.identify(_selected_leds)
+        lights.leds.show()
+
+        selected_set = set(_selected_leds)
+        led_list = [
+            {
+                "index": i,
+                "css_class": "btn-warning" if i in selected_set else "btn-outline-secondary",
+            }
+            for i in range(lights.leds.count)
+        ]
+
+        return render_template(
+            "setup/led_picker_edit.html",
+            {
+                "range_name": range_name,
+                "led_list": led_list,
+                "named_range_names": list(lights.settings.get("named_ranges", {}).keys()),
+            },
+        )
+
+    def post(self) -> str:
+        """Update or delete a named range."""
+
+        global _selected_leds, _editing_range_name
+        old_name = self.request.form_data.get("old_name", "").strip()
+        new_name = self.request.form_data.get("new_name", "").strip()
+        action = self.request.form_data.get("action", "").strip()
+        selected_leds_str = self.request.form_data.get("selected_leds", "").strip()
+
+        if not old_name or old_name not in lights.settings.get("named_ranges", {}):
+            _selected_leds = []
+            _editing_range_name = None
+            lights.animation.resume()
+            return render_template("setup/led_picker.html", _named_range_context())
+
+        selected_leds = []
+        if selected_leds_str:
+            try:
+                selected_leds = [int(x) for x in selected_leds_str.split(",") if x]
+            except ValueError:
+                pass
+
+        if action == "delete":
+            del lights.settings["named_ranges"][old_name]
+        elif action == "save" and new_name:
+            lights.settings["named_ranges"][new_name] = selected_leds
+            if new_name != old_name:
+                del lights.settings["named_ranges"][old_name]
+
+        lights.settings_object.store()
+
+        _selected_leds = []
+        _editing_range_name = None
+        lights.animation.resume()
         lights.leds.clear()
         lights.leds.show()
 

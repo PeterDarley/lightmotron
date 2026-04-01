@@ -10,34 +10,43 @@
         {% endfor %}
     </div>
 
-    <form hx-post="/named_range"
+    <form hx-post="/named_range/edit"
           hx-target="#led-picker"
           hx-swap="outerHTML"
           id="range-form">
+        <input type="hidden" name="old_name" value="{{ range_name }}">
         <input type="hidden" id="selected-leds" name="selected_leds" value="">
         <div class="input-group mb-2" style="max-width: 400px;">
-            <input type="text" class="form-control" name="range_name" placeholder="Range name (e.g. cockpit)" required>
-            <button type="submit" class="btn btn-primary">Save</button>
-            <button type="button" class="btn btn-outline-danger" id="clear-btn">Clear</button>
+            <input type="text" class="form-control" name="new_name" value="{{ range_name }}" required>
+            <button type="submit" name="action" value="save" class="btn btn-primary">Save</button>
+            <button type="submit" name="action" value="delete" class="btn btn-outline-danger">Delete</button>
         </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="back-btn">Back</button>
     </form>
 
-    {% for range_name in named_range_names %}
-    <button type="button"
-            class="btn btn-outline-secondary btn-sm me-1 mb-2"
-            hx-get="/named_range/edit?name={{ range_name }}"
-            hx-target="#led-picker"
-            hx-swap="outerHTML">
-        {{ range_name }}
-    </button>
-    {% endfor %}
+    <div class="mt-3">
+        <small class="text-muted">Other ranges:</small>
+        <div>
+            {% for other_name in named_range_names %}
+                {% if other_name != range_name %}
+                <button type="button"
+                        class="btn btn-outline-secondary btn-sm me-1 mb-2"
+                        hx-get="/named_range/edit?name={{ other_name }}"
+                        hx-target="#led-picker"
+                        hx-swap="outerHTML">
+                    {{ other_name }}
+                </button>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
 
     <script>
     (function() {
         const selectedLeds = new Set();
         const ledButtons = document.querySelectorAll('.led-btn');
         const selectedLedsInput = document.getElementById('selected-leds');
-        const clearBtn = document.getElementById('clear-btn');
+        const backBtn = document.getElementById('back-btn');
         const rangeForm = document.getElementById('range-form');
 
         function updateSelectedLedsInput() {
@@ -71,25 +80,16 @@
             });
         });
 
-        clearBtn.addEventListener('click', (e) => {
+        backBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            selectedLeds.clear();
-            ledButtons.forEach(btn => {
-                btn.classList.remove('btn-warning');
-                btn.classList.add('btn-outline-secondary');
-            });
-            updateSelectedLedsInput();
-            
-            // Send HTMX request to clear LEDs on hardware
-            htmx.ajax('GET', '/named_range/clear', {
-                target: '#led-picker',
-                swap: 'outerHTML'
-            });
+            htmx.ajax('GET', '/named_range', {target: '#led-picker', swap: 'outerHTML'});
         });
 
         rangeForm.addEventListener('htmx:beforeRequest', (e) => {
             updateSelectedLedsInput();
         });
+
+        updateSelectedLedsInput();
     })();
     </script>
 </div>
