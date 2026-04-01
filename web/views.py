@@ -2,9 +2,46 @@ from webserver import View, render_template
 from storage import PersistentDict
 from lighting import Lighting
 import gc
+import json
+import os
 import sys
 import machine
 import settings
+
+
+def _fmt_bytes(num_bytes: int) -> str:
+    """Format a byte count as a human-readable string (KB or MB)."""
+
+    if num_bytes >= 1024 * 1024:
+        return "{:.1f} MB".format(num_bytes / (1024 * 1024))
+    elif num_bytes >= 1024:
+        return "{:.1f} KB".format(num_bytes / 1024)
+    else:
+        return "{} B".format(num_bytes)
+
+
+def _pretty_json(obj: dict, indent: int = 0) -> str:
+    """Pretty-print a JSON object with indentation."""
+
+    if isinstance(obj, dict):
+        if not obj:
+            return "{}"
+        items = []
+        for k, v in obj.items():
+            value_str = _pretty_json(v, indent + 2)
+            items.append("  " * (indent // 2 + 1) + json.dumps(k) + ": " + value_str)
+        return "{\n" + ",\n".join(items) + "\n" + "  " * (indent // 2) + "}"
+    elif isinstance(obj, list):
+        if not obj:
+            return "[]"
+        items = []
+        for item in obj:
+            item_str = _pretty_json(item, indent + 2)
+            items.append("  " * (indent // 2 + 1) + item_str)
+        return "[\n" + ",\n".join(items) + "\n" + "  " * (indent // 2) + "]"
+    else:
+        return json.dumps(obj)
+
 
 try:
     from network import WLAN, STA_IF
@@ -79,8 +116,20 @@ class StorageView(View):
     def get(self):
         """Return the storage contents as JSON."""
 
-        storage = PersistentDict()
-        return render_template("storage.html", {"storage": dict(storage)})
+        import io
+
+        try:
+            storage = PersistentDict()
+            storage_dict = {k: v for k, v in storage.items()}
+            storage_json = _pretty_json(storage_dict)
+
+            return render_template("storage.html", {"storage_json": storage_json})
+
+        except Exception as e:
+            buf = io.StringIO()
+            sys.print_exception(e, buf)
+            traceback_text = buf.getvalue()
+            return "<pre>{}</pre>".format(traceback_text), 500
 
 
 class SetupView(View):
@@ -209,10 +258,24 @@ class StatusView(View):
         """Return the status page with memory, system, WiFi, and animation info."""
 
         gc.collect()
-        mem_free = gc.mem_free()
-        mem_alloc = gc.mem_alloc()
-        mem_total = mem_free + mem_alloc
-        mem_pct = int(mem_alloc * 100 // mem_total) if mem_total else 0
+        mem_free_bytes = gc.mem_free()
+        mem_alloc_bytes = gc.mem_alloc()
+        mem_total_bytes = mem_free_bytes + mem_alloc_bytes
+        mem_pct = int(mem_alloc_bytes * 100 // mem_total_bytes) if mem_total_bytes else 0
+
+        try:
+            vfs = os.statvfs("/")
+            storage_block_size = vfs[0]
+            storage_total_bytes = vfs[2] * storage_block_size
+            storage_free_bytes = vfs[3] * storage_block_size
+            storage_used_bytes = storage_total_bytes - storage_free_bytes
+            storage_pct = int(storage_used_bytes * 100 // storage_total_bytes) if storage_total_bytes else 0
+            storage_total = _fmt_bytes(storage_total_bytes)
+            storage_free = _fmt_bytes(storage_free_bytes)
+            storage_used = _fmt_bytes(storage_used_bytes)
+        except Exception:
+            storage_total = storage_free = storage_used = "N/A"
+            storage_pct = 0
 
         try:
             cpu_freq_mhz = machine.freq() // 1000000
@@ -229,10 +292,14 @@ class StatusView(View):
         return render_template(
             "status.html",
             {
-                "mem_free": mem_free,
-                "mem_alloc": mem_alloc,
-                "mem_total": mem_total,
+                "mem_free": _fmt_bytes(mem_free_bytes),
+                "mem_alloc": _fmt_bytes(mem_alloc_bytes),
+                "mem_total": _fmt_bytes(mem_total_bytes),
                 "mem_pct": mem_pct,
+                "storage_total": storage_total,
+                "storage_free": storage_free,
+                "storage_used": storage_used,
+                "storage_pct": storage_pct,
                 "cpu_freq_mhz": cpu_freq_mhz,
                 "upy_version": sys.version,
                 "platform": sys.platform,

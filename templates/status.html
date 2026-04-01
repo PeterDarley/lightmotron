@@ -8,10 +8,24 @@
                 <div class="card-header">Memory</div>
                 <div class="card-body">
                     <table class="table table-sm mb-0">
-                        <tr><th>Free</th><td>{{ mem_free }} bytes</td></tr>
-                        <tr><th>Allocated</th><td>{{ mem_alloc }} bytes</td></tr>
-                        <tr><th>Total</th><td>{{ mem_total }} bytes</td></tr>
+                        <tr><th>Free</th><td>{{ mem_free }}</td></tr>
+                        <tr><th>Allocated</th><td>{{ mem_alloc }}</td></tr>
+                        <tr><th>Total</th><td>{{ mem_total }}</td></tr>
                         <tr><th>Used</th><td>{{ mem_pct }}%</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">Storage</div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <tr><th>Total</th><td>{{ storage_total }}</td></tr>
+                        <tr><th>Used</th><td>{{ storage_used }}</td></tr>
+                        <tr><th>Free</th><td>{{ storage_free }}</td></tr>
+                        <tr><th>Used</th><td>{{ storage_pct }}%</td></tr>
                     </table>
                 </div>
             </div>
