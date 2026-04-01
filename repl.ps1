@@ -10,6 +10,6 @@ if (-not (Test-Path $mpremote)) {
 
 # Default COM port can be overridden by providing a first argument
 $port = $args[0]
-if (-not $port) { $port = 'COM3' }
+if (-not $port) { $port = 'COM4' }
 
 & $mpremote connect $port

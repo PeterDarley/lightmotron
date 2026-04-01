@@ -13,12 +13,12 @@ $port = $null
 foreach ($a in $args) {
     if (-not $port) { $port = $a }
 }
-if (-not $port) { $port = 'COM3' }
+if (-not $port) { $port = 'COM4' }
 
 # NOTE: This script does NOT reboot the device after upload.
 # The device must already be at a quiet REPL before running this script.
 # To stop the webserver from the REPL: WebServer().stop()
-# Reboot manually with: python tools\reset_device.py COM3 2
+# Reboot manually with: python tools\reset_device.py COM4 2
 
 # Copy project files to device in a single mpremote session using chained commands.
 Write-Output "Uploading to $port..."
