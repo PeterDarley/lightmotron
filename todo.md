@@ -2,7 +2,7 @@
 
 ## Tasks
 
-1. **Set up lighting __init__ to accept custom colors**
+1. ~~**Set up lighting __init__ to accept custom colors**~~
    - Modify `Lighting.__init__()` to accept optional custom colors parameter
    - Merge custom colors into the `colors` library
    - Make them available for use in patterns and scenes
