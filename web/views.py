@@ -74,7 +74,7 @@ class HomeView(View):
     def get(self):
         """Handle GET requests for the home route."""
 
-        context = {"message": "Lighting"}
+        context = {"message": "Lighting", "page_title": "Home"}
         context.update(_scenes_context())
         context.update(_animation_context())
 
@@ -123,7 +123,7 @@ class StorageView(View):
             storage_dict = {k: v for k, v in storage.items()}
             storage_json = _pretty_json(storage_dict)
 
-            return render_template("storage.html", {"storage_json": storage_json})
+            return render_template("storage.html", {"storage_json": storage_json, "page_title": "Storage"})
 
         except Exception as e:
             buf = io.StringIO()
@@ -144,6 +144,7 @@ class SetupView(View):
             {
                 "led_count": lights.leds.count,
                 "named_range_names": list(named_ranges.keys()),
+                "page_title": "Setup",
             },
         )
 
@@ -198,7 +199,11 @@ class NamedRangeView(View):
             lights.leds.identify(_selected_leds)
         lights.leds.show()
 
-        return render_template("setup/led_picker.html", _named_range_context())
+        context = _named_range_context()
+        print(context["range_name"])
+        print(context["named_range_names"])
+        context["page_title"] = "Named Ranges"
+        return render_template("setup/led_picker.html", context)
 
     def post(self) -> str:
         """Save or delete a named range."""
@@ -232,7 +237,9 @@ class NamedRangeView(View):
         lights.leds.clear()
         lights.leds.show()
 
-        return render_template("setup/led_picker.html", _named_range_context())
+        context = _named_range_context()
+        context["page_title"] = "Named Ranges"
+        return render_template("setup/led_picker.html", context)
 
 
 class NamedRangeSetView(View):
@@ -320,5 +327,6 @@ class StatusView(View):
                 "animation_running": str(lights.animation.running),
                 "current_scene": lights.scene_name,
                 "tick_number": lights.animation.tick_number,
+                "page_title": "Status",
             },
         )
