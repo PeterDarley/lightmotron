@@ -29,6 +29,25 @@
                 </div>
             </div>
         </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#custom-colors-panel">
+                    Custom Colors
+                </button>
+            </h2>
+            <div id="custom-colors-panel" class="accordion-collapse collapse"
+                 hx-get="/custom_colors"
+                 hx-target="#custom-colors-container"
+                 hx-swap="innerHTML"
+                 hx-trigger="show.bs.collapse once">
+                <div class="accordion-body">
+                    <p class="text-muted small mb-3">Create custom colors to use in scenes and animations.</p>
+                    <div id="custom-colors-container">
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <a href="/" class="btn btn-secondary mt-4">Back to Home</a>

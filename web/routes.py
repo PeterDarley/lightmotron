@@ -14,6 +14,7 @@ web_server.add_routes(
         "/status": views.StatusView,
         "/named_range": views.NamedRangeView,
         "/named_range/set": views.NamedRangeSetView,
+        "/custom_colors": views.CustomColorsView,
     }
 )
 

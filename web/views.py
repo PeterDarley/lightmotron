@@ -330,3 +330,71 @@ class StatusView(View):
                 "page_title": "Status",
             },
         )
+
+
+class CustomColorsView(View):
+    """Manage custom colors - create new or delete existing colors."""
+
+    def get(self) -> str:
+        """Show custom colors form and list of current colors."""
+
+        custom_colors_dict = lights.settings.get("custom_colors", {})
+
+        # Convert dict to list of (name, value) tuples for template iteration
+        # Ensure values are tuples (they may be lists from JSON deserialization)
+        custom_colors_list = [
+            (name, tuple(value) if isinstance(value, (list, tuple)) else value)
+            for name, value in custom_colors_dict.items()
+        ]
+
+        context = {
+            "custom_colors": custom_colors_list,
+            "page_title": "Custom Colors",
+        }
+        return render_template("setup/custom_colors.html", context)
+
+    def post(self) -> str:
+        """Add or delete a custom color."""
+
+        action = self.request.form_data.get("action", "add").strip()
+        color_name = self.request.form_data.get("color_name", "").strip()
+        color_value = self.request.form_data.get("color_value", "").strip()
+
+        # Initialize custom_colors dict if it doesn't exist
+        if "custom_colors" not in lights.settings:
+            lights.settings["custom_colors"] = {}
+
+        # Handle delete action
+        if action == "delete" and color_name and color_name in lights.settings["custom_colors"]:
+            del lights.settings["custom_colors"][color_name]
+        # Handle add action
+        elif action == "add" and color_name and color_value:
+            # Convert hex color to RGB tuple
+            # color_value format: "#RRGGBB"
+            try:
+                # Remove the '#' if present
+                hex_color = color_value.lstrip("#")
+                # Convert to RGB tuple
+                r = int(hex_color[0:2], 16)
+                g = int(hex_color[2:4], 16)
+                b = int(hex_color[4:6], 16)
+                lights.settings["custom_colors"][color_name] = (r, g, b)
+            except (ValueError, IndexError):
+                pass
+
+        lights.settings_object.store()
+
+        custom_colors_dict = lights.settings.get("custom_colors", {})
+
+        # Convert dict to list of (name, value) tuples for template iteration
+        # Ensure values are tuples (they may be lists from JSON deserialization)
+        custom_colors_list = [
+            (name, tuple(value) if isinstance(value, (list, tuple)) else value)
+            for name, value in custom_colors_dict.items()
+        ]
+
+        context = {
+            "custom_colors": custom_colors_list,
+            "page_title": "Custom Colors",
+        }
+        return render_template("setup/custom_colors.html", context)
