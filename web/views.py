@@ -394,28 +394,28 @@ def _scenes_list(scenes_dict: dict) -> list:
     """Build a list of scene summary dicts for template rendering."""
 
     result: list = []
-    for scene_name, scene_jobs in scenes_dict.items():
+    for scene_name, scene_effects in scenes_dict.items():
         result.append(
             {
                 "name": scene_name,
                 "name_id": _scene_name_id(scene_name),
-                "job_count": len(scene_jobs),
+                "effect_count": len(scene_effects),
             }
         )
 
     return result
 
 
-def _pattern_params_context(pattern: str, existing_job: dict = None) -> dict:
+def _pattern_params_context(pattern: str, existing_effect: dict = None) -> dict:
     """Build the template context needed to render the pattern params fragment.
 
-    If existing_job is provided, pre-fills all fields with its current values.
+    If existing_effect is provided, pre-fills all fields with its current values.
     """
 
     pattern_metadata: dict = lights.get_pattern_metadata()
     pattern_info: dict = pattern_metadata[pattern]
     color_count: int = pattern_info["color_count"]
-    existing_colors: list = existing_job.get("colors") if existing_job else None
+    existing_colors: list = existing_effect.get("colors") if existing_effect else None
 
     color_hex: list = []
     color_names: list = []
@@ -444,46 +444,46 @@ def _pattern_params_context(pattern: str, existing_job: dict = None) -> dict:
     }
 
     # Add pre-fill values for optional numeric/boolean params as param_val_<name>
-    if existing_job:
+    if existing_effect:
         for param_name in pattern_info["optional"]:
-            if param_name in existing_job:
-                val = existing_job[param_name]
+            if param_name in existing_effect:
+                val = existing_effect[param_name]
                 context["param_val_" + param_name] = "true" if val is True else str(val)
 
         # Pre-fill target
-        if "target" in existing_job:
-            context["param_val_target"] = str(existing_job["target"])
+        if "target" in existing_effect:
+            context["param_val_target"] = str(existing_effect["target"])
 
     return context
 
 
-def _scene_edit_context(scene_name: str, edit_job_name: str = None) -> dict:
-    """Build template context for the scene job editor."""
+def _scene_edit_context(scene_name: str, edit_effect_name: str = None) -> dict:
+    """Build template context for the scene effect editor."""
 
     context: dict = {
         "scene_name": scene_name,
         "scene_name_id": _scene_name_id(scene_name),
-        "scene_jobs": lights.settings["scenes"].get(scene_name, {}),
+        "scene_effects": lights.settings["scenes"].get(scene_name, {}),
         "pattern_metadata": lights.get_pattern_metadata(),
         "named_ranges": lights.settings.get("named_ranges", {}),
         "custom_colors": lights.settings.get("custom_colors", {}),
         "page_title": "Edit Scene",
     }
 
-    if edit_job_name:
-        job_dict: dict = lights.settings["scenes"].get(scene_name, {}).get(edit_job_name, {})
-        pattern: str = job_dict.get("pattern", "")
-        context["edit_job_name"] = edit_job_name
-        context["edit_job_pattern"] = pattern
-        context["old_job_name"] = edit_job_name
+    if edit_effect_name:
+        effect_dict: dict = lights.settings["scenes"].get(scene_name, {}).get(edit_effect_name, {})
+        pattern: str = effect_dict.get("pattern", "")
+        context["edit_effect_name"] = edit_effect_name
+        context["edit_effect_pattern"] = pattern
+        context["old_effect_name"] = edit_effect_name
         if pattern and pattern in lights.get_pattern_metadata():
-            context.update(_pattern_params_context(pattern, job_dict))
+            context.update(_pattern_params_context(pattern, effect_dict))
 
     return context
 
 
-def _parse_job_from_form(form_data: dict, pattern: str) -> dict:
-    """Build a job dict from form data, handling colors and typed parameters."""
+def _parse_effect_from_form(form_data: dict, pattern: str) -> dict:
+    """Build an effect dict from form data, handling colors and typed parameters."""
 
     job_dict: dict = {"pattern": pattern}
 
@@ -572,37 +572,37 @@ class ScenesView(View):
 
 
 class SceneEditView(View):
-    """Manage jobs within a specific scene."""
+    """Manage effects within a specific scene."""
 
     def get(self) -> str:
-        """Show job body for the given scene, optionally pre-loaded to edit a job."""
+        """Show effect body for the given scene, optionally pre-loaded to edit an effect."""
 
         scene_name: str = self.request.query_params.get("scene", "").strip()
 
         if not scene_name or scene_name not in lights.settings.get("scenes", {}):
             return '<p class="text-danger small">Scene not found.</p>'
 
-        edit_job_name: str = self.request.query_params.get("edit_job", "").strip()
+        edit_effect_name: str = self.request.query_params.get("edit_effect", "").strip()
         params_only: str = self.request.query_params.get("params_only", "").strip()
 
         # If params_only flag is set, return just the pattern parameters fragment
-        if params_only and edit_job_name:
+        if params_only and edit_effect_name:
             return render_template(
                 "setup/pattern_params.html",
                 _pattern_params_context(
-                    lights.settings["scenes"][scene_name][edit_job_name]["pattern"],
-                    lights.settings["scenes"][scene_name].get(edit_job_name, {}),
+                    lights.settings["scenes"][scene_name][edit_effect_name]["pattern"],
+                    lights.settings["scenes"][scene_name].get(edit_effect_name, {}),
                 ),
             )
 
-        return render_template("setup/scene_edit.html", _scene_edit_context(scene_name, edit_job_name or None))
+        return render_template("setup/scene_edit.html", _scene_edit_context(scene_name, edit_effect_name or None))
 
     def post(self) -> str:
-        """Add/update or delete a job, or return pattern parameter fields fragment."""
+        """Add/update or delete an effect, or return pattern parameter fields fragment."""
 
         action: str = self.request.form_data.get("action", "").strip()
         scene_name: str = self.request.form_data.get("scene_name", "").strip()
-        job_name: str = self.request.form_data.get("job_name", "").strip()
+        effect_name: str = self.request.form_data.get("effect_name", "").strip()
         pattern: str = self.request.form_data.get("pattern", "").strip()
 
         # Pattern selected — return parameters fragment only
@@ -612,19 +612,25 @@ class SceneEditView(View):
             return '<p class="text-danger">Invalid pattern.</p>'
 
         if scene_name and scene_name in lights.settings.get("scenes", {}):
-            if action == "add_job" and job_name and pattern:
-                old_job_name: str = self.request.form_data.get("old_job_name", "").strip()
+            if action == "add_effect" and effect_name and pattern:
+                old_effect_name: str = self.request.form_data.get("old_effect_name", "").strip()
 
                 # If renaming, delete the old entry first
-                if old_job_name and old_job_name != job_name and old_job_name in lights.settings["scenes"][scene_name]:
-                    del lights.settings["scenes"][scene_name][old_job_name]
+                if (
+                    old_effect_name
+                    and old_effect_name != effect_name
+                    and old_effect_name in lights.settings["scenes"][scene_name]
+                ):
+                    del lights.settings["scenes"][scene_name][old_effect_name]
 
-                lights.settings["scenes"][scene_name][job_name] = _parse_job_from_form(self.request.form_data, pattern)
+                lights.settings["scenes"][scene_name][effect_name] = _parse_effect_from_form(
+                    self.request.form_data, pattern
+                )
                 lights.settings_object.store()
 
-            elif action == "delete_job" and job_name:
-                if job_name in lights.settings["scenes"][scene_name]:
-                    del lights.settings["scenes"][scene_name][job_name]
+            elif action == "delete_effect" and effect_name:
+                if effect_name in lights.settings["scenes"][scene_name]:
+                    del lights.settings["scenes"][scene_name][effect_name]
                     lights.settings_object.store()
 
         return render_template("setup/scene_edit.html", _scene_edit_context(scene_name))
