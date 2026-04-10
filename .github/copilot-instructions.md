@@ -50,9 +50,11 @@ Prefer long, descriptive variable names over short or abbreviated ones (e.g. `ro
 Indented blocks (if/for/while/try/with/class/def bodies) should generally be followed by a blank line for readability.
 
 ### Custom templating system
-The web server uses a custom templating system (defined in `lib/webserver.py`), not Jinja2. It supports:
-- `{{ variable }}` and `{{ variable.key }}` or `{{ variable.0 }}` for dot-notation access
+The web server uses a custom templating system (defined in `lib/webserver.py`), not Jinja2. If a template needs a feature the engine doesn't support, update `lib/webserver.py` to add it rather than working around it in the view or template. It supports:
+- `{{ variable }}` and `{{ variable.key }}` or `{{ variable.0 }}` for dot-notation access (list indices can also be context variables, e.g. `{{ mylist.i }}` where `i` is a loop variable)
 - `{% for var in list %}...{% endfor %}` loops
+- `{% for i in range(n) %}` where `n` is an integer literal or a context variable
+- `{% for key, value in dict.items() %}`, `{% for key in dict.keys() %}`, `{% for val in dict.values() %}`
 - `{% if expression %}...{% endif %}` conditionals (including `==` comparisons)
 - `{% include 'filename' %}` for template inclusion
 
