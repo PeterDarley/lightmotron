@@ -16,7 +16,7 @@
                 <ul class="dropdown-menu dropdown-menu-end">
                     <li><a class="dropdown-item" href="#" onclick="setTarget('all'); return false;">all</a></li>
                     {% for range_name in named_ranges.keys() %}
-                    <li><a class="dropdown-item" href="#" onclick="setTarget('{{ range_name }}'); return false;">{{ range_name }}</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="setTarget('named:{{ range_name }}'); return false;">{{ range_name }}</a></li>
                     {% endfor %}
                 </ul>
             </div>

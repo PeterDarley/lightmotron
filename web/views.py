@@ -128,7 +128,7 @@ class StorageView(View):
             buf = io.StringIO()
             sys.print_exception(e, buf)
             traceback_text = buf.getvalue()
-            return "<pre>{}</pre>".format(traceback_text), 500
+            return Response(status=500, reason="Internal Server Error", body="<pre>{}</pre>".format(traceback_text))
 
 
 class SetupView(View):
