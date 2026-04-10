@@ -331,15 +331,24 @@ class StatusView(View):
         )
 
 
-def _custom_colors_response() -> str:
-    """Build and render the custom colors template with current settings."""
+def _custom_colors_response(edit_name: str = "", edit_hex: str = "") -> str:
+    """Build and render the custom colors template with current settings.
+
+    Pass edit_name and edit_hex to pre-fill the form for editing an existing color.
+    """
 
     custom_colors_list = [
         (name, tuple(value) if isinstance(value, (list, tuple)) else value)
         for name, value in lights.settings.get("custom_colors", {}).items()
     ]
     return render_template(
-        "setup/custom_colors.html", {"custom_colors": custom_colors_list, "page_title": "Custom Colors"}
+        "setup/custom_colors.html",
+        {
+            "custom_colors": custom_colors_list,
+            "page_title": "Custom Colors",
+            "edit_name": edit_name,
+            "edit_hex": edit_hex,
+        },
     )
 
 
@@ -363,7 +372,7 @@ class CustomColorsView(View):
 
         if action == "delete" and color_name and color_name in lights.settings["custom_colors"]:
             del lights.settings["custom_colors"][color_name]
-        elif action == "add" and color_name and color_value:
+        elif action in ("add", "update") and color_name and color_value:
             try:
                 hex_color = color_value.lstrip("#")
                 r = int(hex_color[0:2], 16)
@@ -372,6 +381,12 @@ class CustomColorsView(View):
                 lights.settings["custom_colors"][color_name] = (r, g, b)
             except (ValueError, IndexError):
                 pass
+        elif action == "edit_form" and color_name and color_name in lights.settings["custom_colors"]:
+            rgb = lights.settings["custom_colors"][color_name]
+            edit_hex = "#{:02X}{:02X}{:02X}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+            return _custom_colors_response(edit_name=color_name, edit_hex=edit_hex)
+        elif action == "cancel":
+            return _custom_colors_response()
 
         lights.settings_object.store()
         return _custom_colors_response()
@@ -406,6 +421,32 @@ def _scenes_list(scenes_dict: dict) -> list:
     return result
 
 
+_STANDARD_COLORS: dict = {
+    "white": (255, 255, 255),
+    "black": (0, 0, 0),
+    "red": (255, 0, 0),
+    "green": (0, 255, 0),
+    "blue": (0, 0, 255),
+}
+
+
+def _color_name_to_hex(color_name: str, custom_colors: dict) -> str:
+    """Return the hex string for a named color (standard or custom).
+
+    Falls back to '#FF0000' if the name is not found.
+    """
+
+    if color_name in _STANDARD_COLORS:
+        r, g, b = _STANDARD_COLORS[color_name]
+        return "#{:02X}{:02X}{:02X}".format(r, g, b)
+
+    if color_name in custom_colors:
+        rgb = custom_colors[color_name]
+        return "#{:02X}{:02X}{:02X}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+
+    return "#FF0000"
+
+
 def _pattern_params_context(pattern: str, existing_effect: dict = None) -> dict:
     """Build the template context needed to render the pattern params fragment.
 
@@ -416,22 +457,44 @@ def _pattern_params_context(pattern: str, existing_effect: dict = None) -> dict:
     pattern_info: dict = pattern_metadata[pattern]
     color_count: int = pattern_info["color_count"]
     existing_colors: list = existing_effect.get("colors") if existing_effect else None
+    custom_colors: dict = lights.settings.get("custom_colors", {})
 
     color_hex: list = []
     color_names: list = []
+    color_selected: list = []
+    color_is_named: list = []
+    color_is_picker: list = []
 
     for i in range(color_count):
         existing = existing_colors[i] if existing_colors and i < len(existing_colors) else None
 
         if isinstance(existing, str):
-            color_hex.append("#FF0000")
+            # Resolve display and selection values
+            if existing.startswith("custom:"):
+                raw_name: str = existing[7:]
+                hex_val: str = _color_name_to_hex(raw_name, custom_colors)
+                # Dropdown option value includes the prefix
+                dropdown_val: str = existing
+            else:
+                hex_val = _color_name_to_hex(existing, custom_colors)
+                dropdown_val = existing
+            color_hex.append(hex_val)
             color_names.append(existing)
+            color_selected.append(dropdown_val)
+            color_is_named.append(True)
+            color_is_picker.append(False)
         elif isinstance(existing, (list, tuple)) and len(existing) == 3:
             color_hex.append("#{:02X}{:02X}{:02X}".format(int(existing[0]), int(existing[1]), int(existing[2])))
             color_names.append("")
+            color_selected.append("__picker__")
+            color_is_named.append(False)
+            color_is_picker.append(True)
         else:
             color_hex.append("#FF0000")
             color_names.append("")
+            color_selected.append("")
+            color_is_named.append(False)
+            color_is_picker.append(False)
 
     context: dict = {
         "pattern": pattern,
@@ -439,8 +502,12 @@ def _pattern_params_context(pattern: str, existing_effect: dict = None) -> dict:
         "color_count": color_count,
         "color_hex": color_hex,
         "color_names": color_names,
+        "color_display_names": [n[7:] if n.startswith("custom:") else n for n in color_names],
+        "color_selected": color_selected,
+        "color_is_named": color_is_named,
+        "color_is_picker": color_is_picker,
         "named_ranges": lights.settings.get("named_ranges", {}),
-        "custom_colors": lights.settings.get("custom_colors", {}),
+        "custom_colors": custom_colors,
     }
 
     # Add pre-fill values for optional numeric/boolean params as param_val_<name>
@@ -491,26 +558,30 @@ def _parse_effect_from_form(form_data: dict, pattern: str) -> dict:
     colors_list: list = []
     color_index = 0
     while True:
-        color_name_key = f"param_color_name_{color_index}"
-        color_value_key = f"param_color_{color_index}"
+        color_key = f"param_color_{color_index}"
 
-        if color_name_key not in form_data:
+        if color_key not in form_data:
             break
 
-        color_name: str = form_data.get(color_name_key, "").strip()
-        color_hex: str = form_data.get(color_value_key, "").strip()
+        color_value: str = form_data.get(color_key, "").strip()
 
-        if color_name:
-            colors_list.append(color_name)
-        elif color_hex:
+        if not color_value:
+            pass
+        elif color_value.startswith("#") or (
+            len(color_value) == 6 and all(c in "0123456789ABCDEFabcdef" for c in color_value)
+        ):
+            # Hex color value - convert to tuple
             try:
-                hex_color: str = color_hex.lstrip("#")
+                hex_color: str = color_value.lstrip("#")
                 r: int = int(hex_color[0:2], 16)
                 g: int = int(hex_color[2:4], 16)
                 b: int = int(hex_color[4:6], 16)
                 colors_list.append((r, g, b))
             except (ValueError, IndexError):
-                colors_list.append(color_hex)
+                colors_list.append(color_value)
+        else:
+            # Color name (possibly with "custom:" prefix)
+            colors_list.append(color_value)
 
         color_index += 1
 
@@ -612,7 +683,7 @@ class SceneEditView(View):
             return '<p class="text-danger">Invalid pattern.</p>'
 
         if scene_name and scene_name in lights.settings.get("scenes", {}):
-            if action == "add_effect" and effect_name and pattern:
+            if action in ("add_effect", "update_effect") and effect_name and pattern:
                 old_effect_name: str = self.request.form_data.get("old_effect_name", "").strip()
 
                 # If renaming, delete the old entry first
@@ -634,3 +705,45 @@ class SceneEditView(View):
                     lights.settings_object.store()
 
         return render_template("setup/scene_edit.html", _scene_edit_context(scene_name))
+
+
+class ColorSelectView(View):
+    """Return an HTML fragment for the color display area when the color dropdown changes."""
+
+    def post(self) -> str:
+        """Return a pill, color picker, or empty based on the selected color."""
+
+        color_index: str = self.request.form_data.get("color_index", "0").strip()
+        color_value: str = self.request.form_data.get(f"param_color_{color_index}", "").strip()
+        custom_colors: dict = lights.settings.get("custom_colors", {})
+
+        is_named: bool = bool(color_value and color_value != "__picker__")
+        is_picker: bool = color_value == "__picker__"
+
+        # Determine stored color name and hex for display
+        if is_named:
+            is_custom: bool = color_value.startswith("custom:")
+            if is_custom:
+                raw_name: str = color_value[7:]
+                stored_name: str = color_value
+                display_name: str = raw_name
+            else:
+                raw_name = color_value
+                stored_name = color_value
+                display_name = color_value
+            hex_val: str = _color_name_to_hex(raw_name, custom_colors)
+        else:
+            stored_name = ""
+            display_name = ""
+            hex_val = "#FF0000"
+
+        context: dict = {
+            "color_index": color_index,
+            "color_name": stored_name,
+            "color_display_name": display_name,
+            "color_hex_val": hex_val,
+            "is_named": is_named,
+            "is_picker": is_picker,
+        }
+
+        return render_template("setup/color_select.html", context)

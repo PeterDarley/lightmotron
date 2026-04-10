@@ -1,0 +1,11 @@
+{% if is_named %}
+<span class="badge rounded-pill"
+      style="background-color: {{ color_hex_val }}; min-width: 60px; height: 30px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">{{ color_display_name }}</span>
+{% else %}
+{% if is_picker %}
+<input type="color" class="form-control form-control-color"
+       name="param_color_{{ color_index }}"
+       value="{{ color_hex_val }}"
+       style="max-width: 80px;">
+{% endif %}
+{% endif %}

@@ -28,30 +28,49 @@
             <label class="form-label">Colors ({{ pattern_info.color_count }} needed)</label>
             {% for i in range(color_count) %}
             <div class="mb-2">
-                <div class="input-group" style="max-width: 300px;">
-                    <span class="input-group-text">Color {{ i }}</span>
-                    <input type="color" class="form-control form-control-color"
-                           id="color_{{ i }}" name="param_color_{{ i }}"
-                           value="{{ color_hex.i }}" required style="max-width: 80px;">
-                    <input type="text" class="form-control"
-                           id="color_name_{{ i }}"
-                           name="param_color_name_{{ i }}"
-                           value="{{ color_names.i }}"
-                           placeholder="Color name or hex">
-                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown">
-                        Presets
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', 'white'); return false;">white</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', 'black'); return false;">black</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', 'red'); return false;">red</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', 'green'); return false;">green</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', 'blue'); return false;">blue</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        {% for color_name, color_value in custom_colors.items() %}
-                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', '{{ color_name }}', {{ color_value }}); return false;">{{ color_name }}</a></li>
-                        {% endfor %}
-                    </ul>
+                <div class="d-flex align-items-center gap-2" style="max-width: 500px;">
+                    <span class="text-muted">Color {{ i }}</span>
+
+                    <!-- Color dropdown selector (submits as param_color_{{ i }}) -->
+                    <select class="form-select" id="param_color_{{ i }}" name="param_color_{{ i }}"
+                            hx-post="/scenes/color_select"
+                            hx-trigger="change"
+                            hx-target="#color-display-{{ i }}"
+                            hx-swap="innerHTML"
+                            hx-vals='{"color_index": "{{ i }}"}'>
+                        <option value="">Select color...</option>
+                        <optgroup label="Standard">
+                            <option value="white"{% if color_selected.i == "white" %} selected{% endif %}>White</option>
+                            <option value="black"{% if color_selected.i == "black" %} selected{% endif %}>Black</option>
+                            <option value="red"{% if color_selected.i == "red" %} selected{% endif %}>Red</option>
+                            <option value="green"{% if color_selected.i == "green" %} selected{% endif %}>Green</option>
+                            <option value="blue"{% if color_selected.i == "blue" %} selected{% endif %}>Blue</option>
+                        </optgroup>
+                        {% if custom_colors %}
+                        <optgroup label="Custom">
+                            {% for color_name in custom_colors.keys() %}
+                            <option value="custom:{{ color_name }}"{% if color_selected.i == color_name %} selected{% endif %}>{{ color_name }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endif %}
+                        <option value="__picker__"{% if color_selected.i == "__picker__" %} selected{% endif %}>Use Color Picker</option>
+                    </select>
+
+                    <!-- Color display: shows pill or picker (no form inputs) -->
+                    <div id="color-display-{{ i }}" class="d-flex align-items-center">
+                        {% if color_is_named.i %}
+                        <span class="badge rounded-pill"
+                              style="background-color: {{ color_hex.i }}; min-width: 60px; height: 30px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">{{ color_display_names.i }}</span>
+                        {% else %}
+                        {% if color_is_picker.i %}
+                        <input type="color" class="form-control form-control-color"
+                               id="color_picker_{{ i }}"
+                               value="{{ color_hex.i }}"
+                               onchange="document.getElementById('param_color_{{ i }}').value = this.value"
+                               style="max-width: 80px;">
+                        {% endif %}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% endfor %}
@@ -107,21 +126,6 @@
 <script>
 function setTarget(value) {
     document.getElementById('target').value = value;
-}
-
-function setColor(index, colorName, colorValue) {
-    document.getElementById('color_name_' + index).value = colorName;
-    if (colorValue) {
-        // colorValue is a tuple from Python template, format: (r, g, b)
-        const r = colorValue[0];
-        const g = colorValue[1];
-        const b = colorValue[2];
-        const hex = '#' + [r, g, b].map(x => {
-            const hex_val = x.toString(16);
-            return hex_val.length === 1 ? '0' + hex_val : hex_val;
-        }).join('').toUpperCase();
-        document.getElementById('color_' + index).value = hex;
-    }
 }
 </script>
 {% else %}

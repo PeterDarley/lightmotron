@@ -3,12 +3,26 @@
           hx-target="#custom-colors-picker"
           hx-swap="outerHTML"
           id="custom-colors-form">
+        {% if edit_name %}
+        <input type="hidden" name="action" value="update">
+        <div class="input-group mb-2" style="max-width: 400px;">
+            <input type="text" class="form-control" name="color_name" value="{{ edit_name }}" readonly>
+            <input type="color" class="form-control form-control-color" name="color_value" value="{{ edit_hex }}" required style="max-width: 80px;">
+            <button type="submit" class="btn btn-primary">Update</button>
+            <button type="button" class="btn btn-outline-secondary"
+                    hx-post="/custom_colors"
+                    hx-target="#custom-colors-picker"
+                    hx-swap="outerHTML"
+                    hx-vals='{"action": "cancel"}'>Cancel</button>
+        </div>
+        {% else %}
         <input type="hidden" name="action" value="add">
         <div class="input-group mb-2" style="max-width: 400px;">
             <input type="text" class="form-control" name="color_name" placeholder="Color name (e.g. my_red)" required>
             <input type="color" class="form-control form-control-color" name="color_value" value="#FF0000" required style="max-width: 80px;">
             <button type="submit" class="btn btn-primary">Add</button>
         </div>
+        {% endif %}
     </form>
 
     {% if custom_colors %}
@@ -18,7 +32,14 @@
             {% for color_name, color_value in custom_colors %}
             <div class="card" style="width: 120px;">
                 <div class="card-body p-2">
-                    <div style="width: 100%; height: 60px; background-color: rgb({{ color_value.0 }}, {{ color_value.1 }}, {{ color_value.2 }}); border-radius: 4px; border: 1px solid #ddd; margin-bottom: 8px;"></div>
+                    <button type="button"
+                            class="btn p-0 border-0 w-100"
+                            hx-post="/custom_colors"
+                            hx-target="#custom-colors-picker"
+                            hx-swap="outerHTML"
+                            hx-vals='{"action": "edit_form", "color_name": "{{ color_name }}"}'
+                            style="height: 60px; background-color: rgb({{ color_value.0 }}, {{ color_value.1 }}, {{ color_value.2 }}); border-radius: 4px; border: 1px solid #ddd !important; margin-bottom: 8px; cursor: pointer;"
+                            title="Edit {{ color_name }}"></button>
                     <small class="text-muted">{{ color_name }}</small>
                     <button type="button"
                             class="btn btn-sm btn-outline-danger"

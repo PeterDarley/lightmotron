@@ -17,6 +17,7 @@ web_server.add_routes(
         "/custom_colors": views.CustomColorsView,
         "/scenes": views.ScenesView,
         "/scenes/edit": views.SceneEditView,
+        "/scenes/color_select": views.ColorSelectView,
     }
 )
 

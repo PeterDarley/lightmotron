@@ -85,7 +85,7 @@
     <form hx-post="/scenes/edit"
           hx-target="#scene-body-{{ scene_name_id }}"
           hx-swap="innerHTML">
-        <input type="hidden" name="action" value="add_effect">
+        <input type="hidden" name="action" value="{% if edit_effect_name %}update_effect{% else %}add_effect{% endif %}">
         <input type="hidden" name="scene_name" value="{{ scene_name }}">
         {% if edit_effect_name %}
         <input type="hidden" name="old_effect_name" value="{{ edit_effect_name }}">
