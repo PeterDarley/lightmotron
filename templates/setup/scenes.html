@@ -1,0 +1,43 @@
+<div id="scenes-manager">
+    <form hx-post="/scenes"
+          hx-target="#scenes-manager"
+          hx-swap="outerHTML">
+        <input type="hidden" name="action" value="create_scene">
+        <div class="input-group mb-3" style="max-width: 400px;">
+            <input type="text" class="form-control" name="scene_name" placeholder="New scene name" required>
+            <button type="submit" class="btn btn-primary">Create Scene</button>
+        </div>
+    </form>
+
+    {% if scenes %}
+    <div class="accordion" id="scenes-accordion">
+        {% for scene in scenes %}
+        <div class="accordion-item scheme-nested">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#scene-collapse-{{ scene.name_id }}">
+                    {{ scene.name }}
+                    <span class="badge bg-secondary ms-2 me-auto">{{ scene.job_count }} job(s)</span>
+                </button>
+            </h2>
+            <div id="scene-collapse-{{ scene.name_id }}"
+                 class="accordion-collapse collapse"
+                 data-bs-parent="#scenes-accordion"
+                 hx-get="/scenes/edit?scene={{ scene.name }}"
+                 hx-target="#scene-body-{{ scene.name_id }}"
+                 hx-swap="innerHTML"
+                 hx-trigger="show.bs.collapse once">
+                <div class="accordion-body">
+                    <div id="scene-body-{{ scene.name_id }}">
+                        <p class="text-muted small mb-0">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted small mt-2">No scenes yet. Create one above.</p>
+    {% endif %}
+</div>

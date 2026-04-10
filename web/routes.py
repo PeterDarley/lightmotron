@@ -15,7 +15,10 @@ web_server.add_routes(
         "/named_range": views.NamedRangeView,
         "/named_range/set": views.NamedRangeSetView,
         "/custom_colors": views.CustomColorsView,
+        "/scenes": views.ScenesView,
+        "/scenes/edit": views.SceneEditView,
     }
 )
+
 
 # Animation runs freely without webserver synchronization

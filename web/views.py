@@ -2,6 +2,7 @@ from webserver import View, render_template, Response
 from storage import PersistentDict
 from lighting import Lighting
 import gc
+import io
 import json
 import os
 import sys
@@ -115,8 +116,6 @@ class StorageView(View):
 
     def get(self):
         """Return the storage contents as JSON."""
-
-        import io
 
         try:
             storage = PersistentDict()
@@ -332,26 +331,25 @@ class StatusView(View):
         )
 
 
+def _custom_colors_response() -> str:
+    """Build and render the custom colors template with current settings."""
+
+    custom_colors_list = [
+        (name, tuple(value) if isinstance(value, (list, tuple)) else value)
+        for name, value in lights.settings.get("custom_colors", {}).items()
+    ]
+    return render_template(
+        "setup/custom_colors.html", {"custom_colors": custom_colors_list, "page_title": "Custom Colors"}
+    )
+
+
 class CustomColorsView(View):
     """Manage custom colors - create new or delete existing colors."""
 
     def get(self) -> str:
         """Show custom colors form and list of current colors."""
 
-        custom_colors_dict = lights.settings.get("custom_colors", {})
-
-        # Convert dict to list of (name, value) tuples for template iteration
-        # Ensure values are tuples (they may be lists from JSON deserialization)
-        custom_colors_list = [
-            (name, tuple(value) if isinstance(value, (list, tuple)) else value)
-            for name, value in custom_colors_dict.items()
-        ]
-
-        context = {
-            "custom_colors": custom_colors_list,
-            "page_title": "Custom Colors",
-        }
-        return render_template("setup/custom_colors.html", context)
+        return _custom_colors_response()
 
     def post(self) -> str:
         """Add or delete a custom color."""
@@ -360,21 +358,14 @@ class CustomColorsView(View):
         color_name = self.request.form_data.get("color_name", "").strip()
         color_value = self.request.form_data.get("color_value", "").strip()
 
-        # Initialize custom_colors dict if it doesn't exist
         if "custom_colors" not in lights.settings:
             lights.settings["custom_colors"] = {}
 
-        # Handle delete action
         if action == "delete" and color_name and color_name in lights.settings["custom_colors"]:
             del lights.settings["custom_colors"][color_name]
-        # Handle add action
         elif action == "add" and color_name and color_value:
-            # Convert hex color to RGB tuple
-            # color_value format: "#RRGGBB"
             try:
-                # Remove the '#' if present
                 hex_color = color_value.lstrip("#")
-                # Convert to RGB tuple
                 r = int(hex_color[0:2], 16)
                 g = int(hex_color[2:4], 16)
                 b = int(hex_color[4:6], 16)
@@ -383,18 +374,257 @@ class CustomColorsView(View):
                 pass
 
         lights.settings_object.store()
+        return _custom_colors_response()
 
-        custom_colors_dict = lights.settings.get("custom_colors", {})
 
-        # Convert dict to list of (name, value) tuples for template iteration
-        # Ensure values are tuples (they may be lists from JSON deserialization)
-        custom_colors_list = [
-            (name, tuple(value) if isinstance(value, (list, tuple)) else value)
-            for name, value in custom_colors_dict.items()
-        ]
+def _scene_name_id(scene_name: str) -> str:
+    """Convert a scene name to a safe string suitable for use in DOM element IDs."""
 
-        context = {
-            "custom_colors": custom_colors_list,
-            "page_title": "Custom Colors",
+    result: str = ""
+    for char in scene_name:
+        if char.isalpha() or char.isdigit() or char in ("-", "_"):
+            result += char.lower()
+        else:
+            result += "-"
+
+    return result
+
+
+def _scenes_list(scenes_dict: dict) -> list:
+    """Build a list of scene summary dicts for template rendering."""
+
+    result: list = []
+    for scene_name, scene_jobs in scenes_dict.items():
+        result.append(
+            {
+                "name": scene_name,
+                "name_id": _scene_name_id(scene_name),
+                "job_count": len(scene_jobs),
+            }
+        )
+
+    return result
+
+
+def _pattern_params_context(pattern: str, existing_job: dict = None) -> dict:
+    """Build the template context needed to render the pattern params fragment.
+
+    If existing_job is provided, pre-fills all fields with its current values.
+    """
+
+    pattern_metadata: dict = lights.get_pattern_metadata()
+    pattern_info: dict = pattern_metadata[pattern]
+    color_count: int = pattern_info["color_count"]
+    existing_colors: list = existing_job.get("colors") if existing_job else None
+
+    color_hex: list = []
+    color_names: list = []
+
+    for i in range(color_count):
+        existing = existing_colors[i] if existing_colors and i < len(existing_colors) else None
+
+        if isinstance(existing, str):
+            color_hex.append("#FF0000")
+            color_names.append(existing)
+        elif isinstance(existing, (list, tuple)) and len(existing) == 3:
+            color_hex.append("#{:02X}{:02X}{:02X}".format(int(existing[0]), int(existing[1]), int(existing[2])))
+            color_names.append("")
+        else:
+            color_hex.append("#FF0000")
+            color_names.append("")
+
+    context: dict = {
+        "pattern": pattern,
+        "pattern_info": pattern_info,
+        "color_count": color_count,
+        "color_hex": color_hex,
+        "color_names": color_names,
+        "named_ranges": lights.settings.get("named_ranges", {}),
+        "custom_colors": lights.settings.get("custom_colors", {}),
+    }
+
+    # Add pre-fill values for optional numeric/boolean params as param_val_<name>
+    if existing_job:
+        for param_name in pattern_info["optional"]:
+            if param_name in existing_job:
+                val = existing_job[param_name]
+                context["param_val_" + param_name] = "true" if val is True else str(val)
+
+        # Pre-fill target
+        if "target" in existing_job:
+            context["param_val_target"] = str(existing_job["target"])
+
+    return context
+
+
+def _scene_edit_context(scene_name: str, edit_job_name: str = None) -> dict:
+    """Build template context for the scene job editor."""
+
+    context: dict = {
+        "scene_name": scene_name,
+        "scene_name_id": _scene_name_id(scene_name),
+        "scene_jobs": lights.settings["scenes"].get(scene_name, {}),
+        "pattern_metadata": lights.get_pattern_metadata(),
+        "named_ranges": lights.settings.get("named_ranges", {}),
+        "custom_colors": lights.settings.get("custom_colors", {}),
+        "page_title": "Edit Scene",
+    }
+
+    if edit_job_name:
+        job_dict: dict = lights.settings["scenes"].get(scene_name, {}).get(edit_job_name, {})
+        pattern: str = job_dict.get("pattern", "")
+        context["edit_job_name"] = edit_job_name
+        context["edit_job_pattern"] = pattern
+        context["old_job_name"] = edit_job_name
+        if pattern and pattern in lights.get_pattern_metadata():
+            context.update(_pattern_params_context(pattern, job_dict))
+
+    return context
+
+
+def _parse_job_from_form(form_data: dict, pattern: str) -> dict:
+    """Build a job dict from form data, handling colors and typed parameters."""
+
+    job_dict: dict = {"pattern": pattern}
+
+    # Collect indexed color fields
+    colors_list: list = []
+    color_index = 0
+    while True:
+        color_name_key = f"param_color_name_{color_index}"
+        color_value_key = f"param_color_{color_index}"
+
+        if color_name_key not in form_data:
+            break
+
+        color_name: str = form_data.get(color_name_key, "").strip()
+        color_hex: str = form_data.get(color_value_key, "").strip()
+
+        if color_name:
+            colors_list.append(color_name)
+        elif color_hex:
+            try:
+                hex_color: str = color_hex.lstrip("#")
+                r: int = int(hex_color[0:2], 16)
+                g: int = int(hex_color[2:4], 16)
+                b: int = int(hex_color[4:6], 16)
+                colors_list.append((r, g, b))
+            except (ValueError, IndexError):
+                colors_list.append(color_hex)
+
+        color_index += 1
+
+    if colors_list:
+        job_dict["colors"] = colors_list
+
+    # Collect other param_ fields
+    for key in form_data.keys():
+        if key.startswith("param_") and not key.startswith("param_color"):
+            param_name: str = key[6:]
+            param_value: str = form_data.get(key, "").strip()
+            if param_value:
+                if param_value.lower() == "true":
+                    job_dict[param_name] = True
+                else:
+                    try:
+                        job_dict[param_name] = float(param_value) if "." in param_value else int(param_value)
+                    except ValueError:
+                        job_dict[param_name] = param_value
+
+    return job_dict
+
+
+class ScenesView(View):
+    """List scenes and create or delete scenes."""
+
+    def get(self) -> str:
+        """Show scene list and create-scene form."""
+
+        context: dict = {
+            "scenes": _scenes_list(lights.settings.get("scenes", {})),
+            "page_title": "Scenes",
         }
-        return render_template("setup/custom_colors.html", context)
+        return render_template("setup/scenes.html", context)
+
+    def post(self) -> str:
+        """Create or delete a scene."""
+
+        action: str = self.request.form_data.get("action", "").strip()
+        scene_name: str = self.request.form_data.get("scene_name", "").strip()
+
+        if "scenes" not in lights.settings:
+            lights.settings["scenes"] = {}
+
+        if action == "create_scene" and scene_name:
+            if scene_name not in lights.settings["scenes"]:
+                lights.settings["scenes"][scene_name] = {}
+            lights.settings_object.store()
+
+        elif action == "delete_scene" and scene_name and scene_name in lights.settings["scenes"]:
+            del lights.settings["scenes"][scene_name]
+            lights.settings_object.store()
+
+        context: dict = {
+            "scenes": _scenes_list(lights.settings.get("scenes", {})),
+            "page_title": "Scenes",
+        }
+        return render_template("setup/scenes.html", context)
+
+
+class SceneEditView(View):
+    """Manage jobs within a specific scene."""
+
+    def get(self) -> str:
+        """Show job body for the given scene, optionally pre-loaded to edit a job."""
+
+        scene_name: str = self.request.query_params.get("scene", "").strip()
+
+        if not scene_name or scene_name not in lights.settings.get("scenes", {}):
+            return '<p class="text-danger small">Scene not found.</p>'
+
+        edit_job_name: str = self.request.query_params.get("edit_job", "").strip()
+        params_only: str = self.request.query_params.get("params_only", "").strip()
+
+        # If params_only flag is set, return just the pattern parameters fragment
+        if params_only and edit_job_name:
+            return render_template(
+                "setup/pattern_params.html",
+                _pattern_params_context(
+                    lights.settings["scenes"][scene_name][edit_job_name]["pattern"],
+                    lights.settings["scenes"][scene_name].get(edit_job_name, {}),
+                ),
+            )
+
+        return render_template("setup/scene_edit.html", _scene_edit_context(scene_name, edit_job_name or None))
+
+    def post(self) -> str:
+        """Add/update or delete a job, or return pattern parameter fields fragment."""
+
+        action: str = self.request.form_data.get("action", "").strip()
+        scene_name: str = self.request.form_data.get("scene_name", "").strip()
+        job_name: str = self.request.form_data.get("job_name", "").strip()
+        pattern: str = self.request.form_data.get("pattern", "").strip()
+
+        # Pattern selected — return parameters fragment only
+        if not action and pattern:
+            if pattern in lights.get_pattern_metadata():
+                return render_template("setup/pattern_params.html", _pattern_params_context(pattern))
+            return '<p class="text-danger">Invalid pattern.</p>'
+
+        if scene_name and scene_name in lights.settings.get("scenes", {}):
+            if action == "add_job" and job_name and pattern:
+                old_job_name: str = self.request.form_data.get("old_job_name", "").strip()
+
+                # If renaming, delete the old entry first
+                if old_job_name and old_job_name != job_name and old_job_name in lights.settings["scenes"][scene_name]:
+                    del lights.settings["scenes"][scene_name][old_job_name]
+
+                lights.settings["scenes"][scene_name][job_name] = _parse_job_from_form(self.request.form_data, pattern)
+                lights.settings_object.store()
+
+            elif action == "delete_job" and job_name:
+                if job_name in lights.settings["scenes"][scene_name]:
+                    del lights.settings["scenes"][scene_name][job_name]
+                    lights.settings_object.store()
+
+        return render_template("setup/scene_edit.html", _scene_edit_context(scene_name))

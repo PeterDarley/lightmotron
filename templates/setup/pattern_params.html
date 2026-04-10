@@ -1,0 +1,129 @@
+{% if pattern %}
+<div class="card mb-3">
+    <div class="card-body">
+        <h6 class="card-title">{{ pattern_info.description }}</h6>
+
+        <!-- Target Parameter -->
+        <div class="mb-3">
+            <label for="target" class="form-label">Target</label>
+            <div class="input-group" style="max-width: 400px;">
+                <input type="text" class="form-control" id="target" name="param_target"
+                       value="{{ param_val_target }}"
+                       placeholder="e.g., 0, 1-5, all, or named_range" required>
+                <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                    Named Ranges
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="#" onclick="setTarget('all'); return false;">all</a></li>
+                    {% for range_name in named_ranges.keys() %}
+                    <li><a class="dropdown-item" href="#" onclick="setTarget('{{ range_name }}'); return false;">{{ range_name }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <small class="text-muted">Single LED (0), range (0-5), all LEDs (all), or named range</small>
+        </div>
+
+        <!-- Colors Section -->
+        <div class="mb-3">
+            <label class="form-label">Colors ({{ pattern_info.color_count }} needed)</label>
+            {% for i in range(color_count) %}
+            <div class="mb-2">
+                <div class="input-group" style="max-width: 300px;">
+                    <span class="input-group-text">Color {{ i }}</span>
+                    <input type="color" class="form-control form-control-color"
+                           id="color_{{ i }}" name="param_color_{{ i }}"
+                           value="{{ color_hex.i }}" required style="max-width: 80px;">
+                    <input type="text" class="form-control"
+                           id="color_name_{{ i }}"
+                           name="param_color_name_{{ i }}"
+                           value="{{ color_names.i }}"
+                           placeholder="Color name or hex">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                        Presets
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', 'white'); return false;">white</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', 'black'); return false;">black</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', 'red'); return false;">red</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', 'green'); return false;">green</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', 'blue'); return false;">blue</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% for color_name, color_value in custom_colors.items() %}
+                        <li><a class="dropdown-item" href="#" onclick="setColor('{{ i }}', '{{ color_name }}', {{ color_value }}); return false;">{{ color_name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Optional Parameters -->
+        {% if pattern_info.optional %}
+        <div class="mb-3">
+            <label class="form-label">Optional Parameters</label>
+            {% for param in pattern_info.optional %}
+            <div class="mb-2">
+                {% if param == "frequency" %}
+                <input type="number" class="form-control" name="param_frequency"
+                       value="{{ param_val_frequency }}"
+                       placeholder="Frequency (Hz)" min="0.1" max="40" step="0.1" style="max-width: 200px;">
+                {% elif param == "duration" %}
+                <input type="number" class="form-control" name="param_duration"
+                       value="{{ param_val_duration }}"
+                       placeholder="Duration (ticks)" min="1" max="1000" step="1" style="max-width: 200px;">
+                {% elif param == "width" %}
+                <input type="number" class="form-control" name="param_width"
+                       value="{{ param_val_width }}"
+                       placeholder="Wave width (LEDs)" min="1" max="20" step="1" style="max-width: 200px;">
+                {% elif param == "number" %}
+                <input type="number" class="form-control" name="param_number"
+                       value="{{ param_val_number }}"
+                       placeholder="Number of waves" min="1" max="10" step="1" style="max-width: 200px;">
+                {% elif param == "variation" %}
+                <input type="number" class="form-control" name="param_variation"
+                       value="{{ param_val_variation }}"
+                       placeholder="Variation" min="0" max="255" step="1" style="max-width: 200px;">
+                {% elif param == "heat" %}
+                <input type="number" class="form-control" name="param_heat"
+                       value="{{ param_val_heat }}"
+                       placeholder="Heat/step size" min="1" max="50" step="1" style="max-width: 200px;">
+                {% elif param == "reverse" %}
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" name="param_reverse"
+                           id="param_reverse" value="true"
+                           {% if param_val_reverse == "true" %}checked{% endif %}>
+                    <label class="form-check-label" for="param_reverse">
+                        Reverse direction
+                    </label>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function setTarget(value) {
+    document.getElementById('target').value = value;
+}
+
+function setColor(index, colorName, colorValue) {
+    document.getElementById('color_name_' + index).value = colorName;
+    if (colorValue) {
+        // colorValue is a tuple from Python template, format: (r, g, b)
+        const r = colorValue[0];
+        const g = colorValue[1];
+        const b = colorValue[2];
+        const hex = '#' + [r, g, b].map(x => {
+            const hex_val = x.toString(16);
+            return hex_val.length === 1 ? '0' + hex_val : hex_val;
+        }).join('').toUpperCase();
+        document.getElementById('color_' + index).value = hex;
+    }
+}
+</script>
+{% else %}
+<p class="text-muted small">Select a pattern to see available parameters.</p>
+{% endif %}

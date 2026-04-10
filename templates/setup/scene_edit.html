@@ -1,0 +1,152 @@
+{% if scene_jobs %}
+<div class="accordion mb-3" id="jobs-accordion-{{ scene_name_id }}">
+    {% for job_name, job_details in scene_jobs.items() %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#job-collapse-{{ job_name }}" aria-expanded="false">
+                <strong>{{ job_name }}</strong>
+                <small class="text-muted ms-2">{{ job_details.pattern }}</small>
+                <small class="text-muted ms-1">&mdash; {{ job_details.target }}</small>
+            </button>
+        </h2>
+        <div id="job-collapse-{{ job_name }}" class="accordion-collapse collapse"
+             data-bs-parent="#jobs-accordion-{{ scene_name_id }}">
+            <div class="accordion-body">
+                <form hx-post="/scenes/edit"
+                      hx-target="#scene-body-{{ scene_name_id }}"
+                      hx-swap="innerHTML">
+                    <input type="hidden" name="action" value="add_job">
+                    <input type="hidden" name="scene_name" value="{{ scene_name }}">
+                    <input type="hidden" name="old_job_name" value="{{ job_name }}">
+
+                    <div class="mb-3">
+                        <label for="job-name-{{ job_name }}" class="form-label">Job Name</label>
+                        <input type="text" class="form-control" id="job-name-{{ job_name }}" name="job_name"
+                               value="{{ job_name }}"
+                               placeholder="e.g., wave_1" required style="max-width: 300px;">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="pattern-{{ job_name }}" class="form-label">Pattern</label>
+                        <select class="form-select" id="pattern-{{ job_name }}" name="pattern"
+                                hx-post="/scenes/edit"
+                                hx-target="#pattern-params-{{ job_name }}"
+                                hx-swap="innerHTML"
+                                required style="max-width: 300px;">
+                            <option value="">Select a pattern...</option>
+                            {% for pattern_name, metadata in pattern_metadata.items() %}
+                            <option value="{{ pattern_name }}"{% if job_details.pattern == pattern_name %} selected{% endif %}>{{ metadata.description }} ({{ pattern_name }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div id="pattern-params-{{ job_name }}"
+                         hx-get="/scenes/edit?scene={{ scene_name }}&edit_job={{ job_name }}&params_only=1"
+                         hx-target="#pattern-params-{{ job_name }}"
+                         hx-trigger="show.bs.collapse from:#job-collapse-{{ job_name }} once"
+                         hx-swap="innerHTML">
+                        <!-- Pattern parameters will be loaded here on expand -->
+                    </div>
+
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="submit" class="btn btn-primary">Update Job</button>
+                        <button type="button" class="btn btn-outline-danger"
+                                hx-post="/scenes/edit"
+                                hx-target="#scene-body-{{ scene_name_id }}"
+                                hx-swap="innerHTML"
+                                hx-vals='{"scene_name": "{{ scene_name }}", "job_name": "{{ job_name }}", "action": "delete_job"}'>
+                            Delete
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-muted small mb-3">No jobs yet. Add one below.</p>
+{% endif %}
+
+{% if not edit_job_name %}
+<button type="button"
+        class="btn btn-primary mt-3"
+        onclick="document.getElementById('job-form-{{ scene_name_id }}').classList.toggle('d-none')">
+    Add Job
+</button>
+{% endif %}
+
+<div id="job-form-{{ scene_name_id }}" class="{% if not edit_job_name %}d-none {% endif %}mt-3">
+    <h6 class="border-top pt-3 mb-3">
+        {% if edit_job_name %}Edit Job: {{ edit_job_name }}{% else %}Add Job{% endif %}
+    </h6>
+
+    <form hx-post="/scenes/edit"
+          hx-target="#scene-body-{{ scene_name_id }}"
+          hx-swap="innerHTML">
+        <input type="hidden" name="action" value="add_job">
+        <input type="hidden" name="scene_name" value="{{ scene_name }}">
+        {% if edit_job_name %}
+        <input type="hidden" name="old_job_name" value="{{ edit_job_name }}">
+        {% endif %}
+
+        <div class="mb-3">
+            <label for="job-name-{{ scene_name_id }}" class="form-label">Job Name</label>
+            <input type="text" class="form-control" id="job-name-{{ scene_name_id }}" name="job_name"
+                   value="{{ edit_job_name }}"
+                   placeholder="e.g., wave_1" required style="max-width: 300px;">
+        </div>
+
+        <div class="mb-3">
+            <label for="pattern-{{ scene_name_id }}" class="form-label">Pattern</label>
+            <select class="form-select" id="pattern-{{ scene_name_id }}" name="pattern"
+                    hx-post="/scenes/edit"
+                    hx-target="#pattern-params-{{ scene_name_id }}"
+                    hx-swap="innerHTML"
+                    required style="max-width: 300px;">
+                <option value="">Select a pattern...</option>
+                {% for pattern_name, metadata in pattern_metadata.items() %}
+                <option value="{{ pattern_name }}"{% if edit_job_pattern == pattern_name %} selected{% endif %}>{{ metadata.description }} ({{ pattern_name }})</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div id="pattern-params-{{ scene_name_id }}">
+            {% include 'setup/pattern_params.html' %}
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">
+                {% if edit_job_name %}Update Job{% else %}Save Job{% endif %}
+            </button>
+            {% if edit_job_name %}
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    hx-get="/scenes/edit?scene={{ scene_name }}"
+                    hx-target="#scene-body-{{ scene_name_id }}"
+                    hx-swap="innerHTML">
+                Cancel
+            </button>
+            {% else %}
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    onclick="document.getElementById('job-form-{{ scene_name_id }}').classList.add('d-none')">
+                Cancel
+            </button>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div class="border-top mt-3 pt-3">
+    <button type="button"
+            class="btn btn-sm btn-outline-danger"
+            hx-post="/scenes"
+            hx-target="#scenes-manager"
+            hx-swap="outerHTML"
+            hx-vals='{"scene_name": "{{ scene_name }}", "action": "delete_scene"}'>
+        Delete Scene
+    </button>
+</div>
+
