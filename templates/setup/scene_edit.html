@@ -143,8 +143,8 @@
     <button type="button"
             class="btn btn-sm btn-outline-danger"
             hx-post="/scenes"
-            hx-target="#scenes-manager"
-            hx-swap="outerHTML"
+            hx-target="#modal-body"
+            hx-swap="innerHTML"
             hx-vals='{"scene_name": "{{ scene_name }}", "action": "delete_scene"}'>
         Delete Scene
     </button>

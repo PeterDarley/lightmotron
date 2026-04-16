@@ -1,0 +1,9 @@
+{% if custom_colors %}
+<div class="d-flex flex-wrap gap-1 mb-0">
+    {% for color_name, color_value in custom_colors %}
+    <span class="badge rounded-pill" style="background-color: rgb({{ color_value.0 }}, {{ color_value.1 }}, {{ color_value.2 }}); color: white;">{{ color_name }}</span>
+    {% endfor %}
+</div>
+{% else %}
+<small class="text-muted">No custom colors yet.</small>
+{% endif %}

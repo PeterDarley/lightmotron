@@ -1,0 +1,9 @@
+{% if named_range_names %}
+<div class="d-flex flex-wrap gap-1 mb-0">
+    {% for range_name in named_range_names %}
+    <span class="badge bg-secondary">{{ range_name }}</span>
+    {% endfor %}
+</div>
+{% else %}
+<small class="text-muted">No ranges defined yet.</small>
+{% endif %}

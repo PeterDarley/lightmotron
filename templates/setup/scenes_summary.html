@@ -1,0 +1,9 @@
+{% if scenes %}
+<div class="d-flex flex-wrap gap-1 mb-0">
+    {% for scene in scenes %}
+    <span class="badge bg-secondary">{{ scene.name }} <small>({{ scene.effect_count }})</small></span>
+    {% endfor %}
+</div>
+{% else %}
+<small class="text-muted">No scenes yet.</small>
+{% endif %}

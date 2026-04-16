@@ -1,7 +1,7 @@
 <div id="scenes-manager">
     <form hx-post="/scenes"
-          hx-target="#scenes-manager"
-          hx-swap="outerHTML">
+          hx-target="#modal-body"
+          hx-swap="innerHTML">
         <input type="hidden" name="action" value="create_scene">
         <div class="input-group mb-3" style="max-width: 400px;">
             <input type="text" class="form-control" name="scene_name" placeholder="New scene name" required>

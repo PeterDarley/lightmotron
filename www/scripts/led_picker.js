@@ -87,7 +87,7 @@
 
         if (e.target.closest('#back-btn')) {
             e.preventDefault();
-            htmx.ajax('GET', '/named_range', { target: '#led-picker', swap: 'outerHTML' });
+            document.getElementById('modal-body').innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
         }
     });
 

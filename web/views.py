@@ -137,14 +137,50 @@ class SetupView(View):
     def get(self) -> str:
         """Return the setup page."""
 
+        return render_template("setup.html", {"page_title": "Setup"})
+
+
+class NamedRangeSummaryView(View):
+    """Return a summary snippet of named ranges for the setup card."""
+
+    def get(self) -> str:
+        """Return named ranges summary HTML fragment."""
+
         named_ranges = lights.settings.get("named_ranges", {})
         return render_template(
-            "setup.html",
-            {
-                "led_count": lights.leds.count,
-                "named_range_names": sorted(named_ranges.keys()),
-                "page_title": "Setup",
-            },
+            "setup/named_ranges_summary.html",
+            {"named_range_names": sorted(named_ranges.keys())},
+        )
+
+
+class CustomColorsSummaryView(View):
+    """Return a summary snippet of custom colors for the setup card."""
+
+    def get(self) -> str:
+        """Return custom colors summary HTML fragment."""
+
+        custom_colors_list = sorted(
+            [
+                (name, tuple(value) if isinstance(value, (list, tuple)) else value)
+                for name, value in lights.settings.get("custom_colors", {}).items()
+            ],
+            key=lambda item: item[0],
+        )
+        return render_template(
+            "setup/custom_colors_summary.html",
+            {"custom_colors": custom_colors_list},
+        )
+
+
+class ScenesSummaryView(View):
+    """Return a summary snippet of scenes for the setup card."""
+
+    def get(self) -> str:
+        """Return scenes summary HTML fragment."""
+
+        return render_template(
+            "setup/scenes_summary.html",
+            {"scenes": _scenes_list(lights.settings.get("scenes", {}))},
         )
 
 
@@ -199,8 +235,6 @@ class NamedRangeView(View):
         lights.leds.show()
 
         context = _named_range_context()
-        print(context["range_name"])
-        print(context["named_range_names"])
         context["page_title"] = "Named Ranges"
         return render_template("setup/led_picker.html", context)
 

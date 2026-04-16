@@ -1,4 +1,7 @@
+<div id="led-picker-container">
 <div id="led-picker">
+    <p class="text-muted small mb-1">Click an LED to toggle it. Hold <kbd>Shift</kbd> + click to select a range.</p>
+
     <div class="d-flex flex-wrap gap-1 mb-3" id="led-buttons">
         {% for led in led_list %}
         <button type="button"
@@ -11,8 +14,8 @@
     </div>
 
     <form hx-post="/named_range"
-          hx-target="#led-picker"
-          hx-swap="outerHTML"
+          hx-target="#modal-body"
+          hx-swap="innerHTML"
           id="range-form">
         {% if range_name %}
             <input type="hidden" name="old_name" value="{{ range_name }}">
@@ -22,7 +25,10 @@
                 <button type="submit" name="action" value="save" class="btn btn-primary">Save</button>
                 <button type="submit" name="action" value="delete" class="btn btn-outline-danger">Delete</button>
             </div>
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="back-btn">Back</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="back-btn"
+                    hx-get="/named_range"
+                    hx-target="#modal-body"
+                    hx-swap="innerHTML">Back</button>
         {% else %}
             <input type="hidden" id="selected-leds" name="selected_leds" value="">
             <div class="input-group mb-2" style="max-width: 400px;">
@@ -41,8 +47,8 @@
             <button type="button"
                     class="btn btn-outline-secondary btn-sm me-1 mb-2"
                     hx-get="/named_range?name={{ saved_range }}"
-                    hx-target="#led-picker"
-                    hx-swap="outerHTML">
+                    hx-target="#modal-body"
+                    hx-swap="innerHTML">
                 {{ saved_range }}
             </button>
             {% endfor %}
@@ -57,8 +63,8 @@
                 <button type="button"
                         class="btn btn-outline-secondary btn-sm me-1 mb-2"
                         hx-get="/named_range?name={{ other_name }}"
-                        hx-target="#led-picker"
-                        hx-swap="outerHTML">
+                        hx-target="#modal-body"
+                        hx-swap="innerHTML">
                     {{ other_name }}
                 </button>
                 {% endif %}
@@ -68,4 +74,5 @@
     {% endif %}
 
     <script src="/scripts/led_picker.js"></script>
+</div>
 </div>
