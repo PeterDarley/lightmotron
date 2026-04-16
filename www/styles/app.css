@@ -1,0 +1,8 @@
+/* Setup page cards */
+.setup-card { transition: box-shadow 0.15s; }
+.setup-card:hover { box-shadow: 0 .25rem .75rem rgba(0,0,0,.12); }
+.setup-card .card-body { padding: 1.25rem; }
+
+/* Frequency slider track */
+#freq_slider::-webkit-slider-runnable-track { background: #dee2e6; border-radius: 4px; height: 6px; }
+#freq_slider::-moz-range-track { background: #dee2e6; border-radius: 4px; height: 6px; }

@@ -545,6 +545,7 @@ def _pattern_params_context(pattern: str, existing_effect: dict = None) -> dict:
         "color_is_picker": color_is_picker,
         "named_ranges": lights.settings.get("named_ranges", {}),
         "custom_colors": custom_colors,
+        "has_optional": bool(pattern_info["optional"]),
     }
 
     # Add pre-fill values for optional numeric/boolean params as param_val_<name>
@@ -754,8 +755,8 @@ class ColorSelectView(View):
         color_value: str = self.request.form_data.get(f"param_color_{color_index}", "").strip()
         custom_colors: dict = lights.settings.get("custom_colors", {})
 
-        is_named: bool = bool(color_value and color_value != "__picker__")
-        is_picker: bool = color_value == "__picker__"
+        is_named: bool = bool(color_value and color_value != "__picker__" and not color_value.startswith("#"))
+        is_picker: bool = color_value == "__picker__" or color_value.startswith("#")
 
         # Determine stored color name and hex for display
         if is_named:
@@ -772,7 +773,7 @@ class ColorSelectView(View):
         else:
             stored_name = ""
             display_name = ""
-            hex_val = "#FF0000"
+            hex_val = color_value if color_value.startswith("#") else "#FF0000"
 
         context: dict = {
             "color_index": color_index,

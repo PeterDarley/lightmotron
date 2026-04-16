@@ -53,7 +53,11 @@
                             {% endfor %}
                         </optgroup>
                         {% endif %}
-                        <option value="__picker__"{% if color_selected.i == "__picker__" %} selected{% endif %}>Use Color Picker</option>
+                        {% if color_is_picker.i %}
+                        <option value="{{ color_hex.i }}" selected>Use Color Picker</option>
+                        {% else %}
+                        <option value="__picker__">Use Color Picker</option>
+                        {% endif %}
                     </select>
 
                     <!-- Color display: shows pill or picker (no form inputs) -->
@@ -77,25 +81,28 @@
         </div>
 
         <!-- Optional Parameters -->
-        {% if pattern_info.optional %}
+        {% if has_optional %}
         <div class="mb-3">
-            <label class="form-label">Optional Parameters</label>
+            <label class="form-label fw-semibold">Additional Settings</label>
             {% for param in pattern_info.optional %}
-            <div class="mb-2">
-                {% if param == "frequency" %}
-                <label class="form-label small text-muted mb-1">Frequency (Hz) — center = 1 Hz</label>
-                <div class="d-flex align-items-center gap-2" style="max-width: 420px;">
+            {% if param == "frequency" %}
+            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+                <label class="form-label mb-1">Frequency</label>
+                <div class="d-flex align-items-center gap-2" style="max-width: 480px;">
                     <span class="small text-muted" style="white-space:nowrap">1/60</span>
-                    <input type="range" class="form-range" id="freq_slider"
-                           min="0" max="200" step="1" style="flex: 1;"
-                           oninput="freqSliderChanged(this.value)">
+                    <div style="flex: 1; min-width: 120px;">
+                        <input type="range" class="form-range w-100" id="freq_slider"
+                               min="0" max="200" step="1"
+                               oninput="freqSliderChanged(this.value)">
+                    </div>
                     <span class="small text-muted">40</span>
                     <input type="number" class="form-control" name="param_frequency"
                            id="freq_number" value="{{ param_val_frequency }}"
-                           min="0.017" max="40" step="0.001" style="max-width: 90px;"
+                           min="0.017" max="40" step="0.001" style="width: 90px;"
                            oninput="freqNumberChanged(this.value)">
                     <span class="small text-muted">Hz</span>
                 </div>
+                <small class="text-muted">How fast the effect cycles. Center is 1 Hz (once per second).</small>
                 <script>
                 (function() {
                     var MIN_FREQ = 1 / 60;
@@ -134,37 +141,66 @@
                     document.getElementById('freq_slider').value = freqToSlider(initVal || '1');
                 })();
                 </script>
-                {% elif param == "duration" %}
-                <input type="number" class="form-control" name="param_duration"
+            </div>
+            {% endif %}
+            {% if param == "duration" %}
+            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+                <label class="form-label mb-1" for="param_duration">Duration</label>
+                <input type="number" class="form-control" name="param_duration" id="param_duration"
                        value="{{ param_val_duration }}"
-                       placeholder="Duration (ticks)" min="1" max="1000" step="1" style="max-width: 200px;">
-                {% elif param == "width" %}
-                <input type="number" class="form-control" name="param_width"
+                       placeholder="e.g., 100" min="1" max="1000" step="1" style="max-width: 200px;">
+                <small class="text-muted">Number of ticks before the effect ends.</small>
+            </div>
+            {% endif %}
+            {% if param == "width" %}
+            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+                <label class="form-label mb-1" for="param_width">Wave Width</label>
+                <input type="number" class="form-control" name="param_width" id="param_width"
                        value="{{ param_val_width }}"
-                       placeholder="Wave width (LEDs)" min="1" max="20" step="1" style="max-width: 200px;">
-                {% elif param == "number" %}
-                <input type="number" class="form-control" name="param_number"
+                       placeholder="e.g., 5" min="1" max="20" step="1" style="max-width: 200px;">
+                <small class="text-muted">Width of the wave in LEDs.</small>
+            </div>
+            {% endif %}
+            {% if param == "number" %}
+            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+                <label class="form-label mb-1" for="param_number">Number of Waves</label>
+                <input type="number" class="form-control" name="param_number" id="param_number"
                        value="{{ param_val_number }}"
-                       placeholder="Number of waves" min="1" max="10" step="1" style="max-width: 200px;">
-                {% elif param == "variation" %}
-                <input type="number" class="form-control" name="param_variation"
+                       placeholder="e.g., 2" min="1" max="10" step="1" style="max-width: 200px;">
+                <small class="text-muted">How many simultaneous waves.</small>
+            </div>
+            {% endif %}
+            {% if param == "variation" %}
+            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+                <label class="form-label mb-1" for="param_variation">Variation</label>
+                <input type="number" class="form-control" name="param_variation" id="param_variation"
                        value="{{ param_val_variation }}"
-                       placeholder="Variation" min="0" max="255" step="1" style="max-width: 200px;">
-                {% elif param == "heat" %}
-                <input type="number" class="form-control" name="param_heat"
+                       placeholder="e.g., 30" min="0" max="255" step="1" style="max-width: 200px;">
+                <small class="text-muted">Random color variation amount (0 = none, 255 = max).</small>
+            </div>
+            {% endif %}
+            {% if param == "heat" %}
+            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+                <label class="form-label mb-1" for="param_heat">Heat</label>
+                <input type="number" class="form-control" name="param_heat" id="param_heat"
                        value="{{ param_val_heat }}"
-                       placeholder="Heat/step size" min="1" max="50" step="1" style="max-width: 200px;">
-                {% elif param == "reverse" %}
+                       placeholder="e.g., 10" min="1" max="50" step="1" style="max-width: 200px;">
+                <small class="text-muted">Step size per tick &mdash; higher values make faster movement.</small>
+            </div>
+            {% endif %}
+            {% if param == "reverse" %}
+            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
                 <div class="form-check">
                     <input type="checkbox" class="form-check-input" name="param_reverse"
                            id="param_reverse" value="true"
                            {% if param_val_reverse == "true" %}checked{% endif %}>
                     <label class="form-check-label" for="param_reverse">
-                        Reverse direction
+                        Reverse Direction
                     </label>
                 </div>
-                {% endif %}
+                <small class="text-muted">Run the effect in the opposite direction.</small>
             </div>
+            {% endif %}
             {% endfor %}
         </div>
         {% endif %}

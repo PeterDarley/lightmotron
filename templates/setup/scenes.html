@@ -1,7 +1,7 @@
 <div id="scenes-manager">
     <form hx-post="/scenes"
-          hx-target="#modal-body"
-          hx-swap="innerHTML">
+          hx-target="#scenes-manager"
+          hx-swap="outerHTML">
         <input type="hidden" name="action" value="create_scene">
         <div class="input-group mb-3" style="max-width: 400px;">
             <input type="text" class="form-control" name="scene_name" placeholder="New scene name" required>
@@ -10,33 +10,39 @@
     </form>
 
     {% if scenes %}
-    <div class="accordion" id="scenes-accordion">
-        {% for scene in scenes %}
-        <div class="accordion-item scheme-nested">
-            <h2 class="accordion-header">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#scene-collapse-{{ scene.name_id }}">
-                    {{ scene.name }}
-                    <span class="badge bg-secondary ms-2 me-auto">{{ scene.effect_count }} effect(s)</span>
-                </button>
-            </h2>
-            <div id="scene-collapse-{{ scene.name_id }}"
-                 class="accordion-collapse collapse"
-                 data-bs-parent="#scenes-accordion"
-                 hx-get="/scenes/edit?scene={{ scene.name }}"
-                 hx-target="#scene-body-{{ scene.name_id }}"
-                 hx-swap="innerHTML"
-                 hx-trigger="show.bs.collapse once">
-                <div class="accordion-body">
-                    <div id="scene-body-{{ scene.name_id }}">
-                        <p class="text-muted small mb-0">Loading...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
+    <table class="table table-hover align-middle mb-0">
+        <thead>
+            <tr>
+                <th>Scene</th>
+                <th class="text-center" style="width: 100px;">Effects</th>
+                <th style="width: 140px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for scene in scenes %}
+            <tr>
+                <td><strong>{{ scene.name }}</strong></td>
+                <td class="text-center"><span class="badge bg-secondary">{{ scene.effect_count }}</span></td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-primary me-1"
+                            hx-get="/scenes/edit?scene={{ scene.name }}"
+                            hx-target="#modal-body"
+                            hx-swap="innerHTML">
+                        Edit
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger"
+                            hx-post="/scenes"
+                            hx-target="#scenes-manager"
+                            hx-swap="outerHTML"
+                            hx-vals='{"scene_name": "{{ scene.name }}", "action": "delete_scene"}'
+                            hx-confirm="Delete scene '{{ scene.name }}'?">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
     {% else %}
     <p class="text-muted small mt-2">No scenes yet. Create one above.</p>
     {% endif %}
