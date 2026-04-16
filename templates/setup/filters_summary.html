@@ -1,0 +1,9 @@
+{% if filter_names %}
+<div class="d-flex flex-wrap gap-1 mb-0">
+    {% for filter_name in filter_names %}
+    <span class="badge bg-secondary">{{ filter_name }}</span>
+    {% endfor %}
+</div>
+{% else %}
+<small class="text-muted">No filters yet.</small>
+{% endif %}

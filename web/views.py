@@ -197,6 +197,19 @@ class EffectsSummaryView(View):
         )
 
 
+class FiltersSummaryView(View):
+    """Return a summary snippet of filters for the setup card."""
+
+    def get(self) -> str:
+        """Return filters summary HTML fragment."""
+
+        filter_names = sorted(lights.settings.get("filters", {}).keys())
+        return render_template(
+            "setup/filters_summary.html",
+            {"filter_names": filter_names},
+        )
+
+
 # Server-side selection state for the LED naming tool
 _selected_leds = []
 _editing_range_name = None
@@ -487,6 +500,22 @@ def _effects_list(effects_dict: dict) -> list:
     return result
 
 
+def _filters_list(filters_dict: dict) -> list:
+    """Build a list of filter summary dicts for template rendering, sorted alphabetically."""
+
+    result: list = []
+    for filter_name in sorted(filters_dict.keys()):
+        filter_def = filters_dict[filter_name]
+        result.append(
+            {
+                "name": filter_name,
+                "filter_type": filter_def.get("filter", ""),
+            }
+        )
+
+    return result
+
+
 _STANDARD_COLORS: dict = {
     "white": (255, 255, 255),
     "black": (0, 0, 0),
@@ -579,6 +608,24 @@ def _pattern_params_context(pattern: str, existing_effect: dict = None, show_tar
         "show_target": show_target,
         "color_select_url": "/scenes/color_select" if show_target else "/effects/color_select",
     }
+
+    # Build available named filters list with selection state
+    stored_filters: dict = lights.settings.get("filters", {})
+    selected_filters: list = existing_effect.get("filters", []) if existing_effect else []
+    available_filters: list = []
+    for filter_name in sorted(stored_filters.keys()):
+        filter_data: dict = stored_filters[filter_name]
+        available_filters.append(
+            {
+                "name": filter_name,
+                "filter_type": filter_data.get("filter", "?"),
+                "selected": filter_name in selected_filters,
+            }
+        )
+
+    if available_filters:
+        context["available_filters"] = available_filters
+        context["has_available_filters"] = True
 
     # Add pre-fill values for optional numeric/boolean params as param_val_<name>
     if existing_effect:
@@ -691,6 +738,16 @@ def _parse_effect_from_form(form_data: dict, pattern: str) -> dict:
                         job_dict[param_name] = float(param_value) if "." in param_value else int(param_value)
                     except ValueError:
                         job_dict[param_name] = param_value
+
+    # Collect selected named filters (individual checkboxes named effect_filter_<name>)
+    stored_filters: dict = lights.settings.get("filters", {})
+    selected_filters: list = [
+        filter_name
+        for filter_name in sorted(stored_filters.keys())
+        if form_data.get(f"effect_filter_{filter_name}") == "1"
+    ]
+    if selected_filters:
+        job_dict["filters"] = selected_filters
 
     return job_dict
 
@@ -824,6 +881,134 @@ class EffectEditView(View):
             {
                 "effects": _effects_list(lights.settings.get("effects", {})),
                 "page_title": "Effects",
+            },
+        )
+
+
+def _filter_edit_context(filter_name: str = None) -> dict:
+    """Build template context for the filter editor."""
+
+    filters_dict: dict = lights.settings.get("filters", {})
+    filter_metadata: dict = lights.get_filter_metadata()
+    context: dict = {
+        "filters": _filters_list(filters_dict),
+        "filter_metadata": filter_metadata,
+        "page_title": "Filters",
+    }
+
+    if filter_name and filter_name in filters_dict:
+        filter_def: dict = filters_dict[filter_name]
+        filter_type: str = filter_def.get("filter", "")
+        context["edit_filter_name"] = filter_name
+        context["edit_filter_type"] = filter_type
+        context["old_filter_name"] = filter_name
+        # Pre-fill optional params
+        if filter_type in filter_metadata:
+            for param_name in filter_metadata[filter_type].get("optional", []):
+                if param_name in filter_def:
+                    context["filter_val_" + param_name] = str(filter_def[param_name])
+
+    return context
+
+
+class FiltersView(View):
+    """List filters and create or delete filters."""
+
+    def get(self) -> str:
+        """Show filter list and create-filter form."""
+
+        context: dict = {
+            "filters": _filters_list(lights.settings.get("filters", {})),
+            "page_title": "Filters",
+        }
+        return render_template("setup/filters.html", context)
+
+    def post(self) -> str:
+        """Create or delete a filter."""
+
+        action: str = self.request.form_data.get("action", "").strip()
+        filter_name: str = self.request.form_data.get("filter_name", "").strip()
+
+        if "filters" not in lights.settings:
+            lights.settings["filters"] = {}
+
+        if action == "create_filter" and filter_name:
+            if filter_name not in lights.settings["filters"]:
+                lights.settings["filters"][filter_name] = {"filter": "sizzle"}
+            lights.settings_object.store()
+            return render_template("setup/filter_edit.html", _filter_edit_context(filter_name))
+
+        elif action == "delete_filter" and filter_name and filter_name in lights.settings["filters"]:
+            del lights.settings["filters"][filter_name]
+            lights.settings_object.store()
+
+        context: dict = {
+            "filters": _filters_list(lights.settings.get("filters", {})),
+            "page_title": "Filters",
+        }
+        return render_template("setup/filters.html", context)
+
+
+class FilterEditView(View):
+    """Edit an individual filter's type and parameters."""
+
+    def get(self) -> str:
+        """Show filter editor for the given filter."""
+
+        filter_name: str = self.request.query_params.get("filter", "").strip()
+
+        if not filter_name or filter_name not in lights.settings.get("filters", {}):
+            return '<p class="text-danger small">Filter not found.</p>'
+
+        return render_template("setup/filter_edit.html", _filter_edit_context(filter_name))
+
+    def post(self) -> str:
+        """Update a filter's type and parameters."""
+
+        action: str = self.request.form_data.get("action", "").strip()
+        filter_name: str = self.request.form_data.get("filter_name", "").strip()
+        filter_type: str = self.request.form_data.get("filter_type", "").strip()
+
+        if "filters" not in lights.settings:
+            lights.settings["filters"] = {}
+
+        if action == "update_filter" and filter_name and filter_type:
+            old_filter_name: str = self.request.form_data.get("old_filter_name", "").strip()
+
+            filter_def: dict = {"filter": filter_type}
+            filter_metadata: dict = lights.get_filter_metadata()
+            for param_name in filter_metadata.get(filter_type, {}).get("optional", []):
+                param_value: str = self.request.form_data.get("filter_param_" + param_name, "").strip()
+                if param_value:
+                    try:
+                        filter_def[param_name] = float(param_value) if "." in param_value else int(param_value)
+                    except ValueError:
+                        filter_def[param_name] = param_value
+
+            if old_filter_name and old_filter_name != filter_name and old_filter_name in lights.settings["filters"]:
+                del lights.settings["filters"][old_filter_name]
+
+            lights.settings["filters"][filter_name] = filter_def
+            lights.settings_object.store()
+
+        elif action == "delete_filter" and filter_name:
+            if filter_name in lights.settings.get("filters", {}):
+                del lights.settings["filters"][filter_name]
+                lights.settings_object.store()
+
+            return render_template(
+                "setup/filters.html",
+                {
+                    "filters": _filters_list(lights.settings.get("filters", {})),
+                    "page_title": "Filters",
+                },
+            )
+
+        return render_template(
+            "setup/filters.html",
+            {
+                "filters": _filters_list(lights.settings.get("filters", {})),
+                "page_title": "Filters",
             },
         )
 

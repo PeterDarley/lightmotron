@@ -206,6 +206,31 @@
             {% endfor %}
         </div>
         {% endif %}
+
+        <!-- Filters Section -->
+        {% if has_available_filters %}
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Filters</label>
+            <small class="text-muted d-block mb-2">Select named filters to apply after the pattern renders.</small>
+
+            {% for available_filter in available_filters %}
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       name="effect_filter_{{ available_filter.name }}" value="1"
+                       id="filter-check-{{ available_filter.name }}"
+                       {% if available_filter.selected %}checked{% endif %}>
+                <label class="form-check-label" for="filter-check-{{ available_filter.name }}">
+                    {{ available_filter.name }}
+                    <span class="text-muted small">({{ available_filter.filter_type }})</span>
+                </label>
+            </div>
+            {% endfor %}
+
+            <small class="text-muted d-block mt-2">
+                Manage filters in the <strong>Filters</strong> section on the Setup page.
+            </small>
+        </div>
+        {% endif %}
     </div>
 </div>
 

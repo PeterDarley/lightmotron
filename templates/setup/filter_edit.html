@@ -1,0 +1,107 @@
+<div id="filter-editor">
+    <div class="d-flex align-items-center mb-3">
+        <button class="btn btn-outline-secondary btn-sm me-3"
+                hx-get="/filters"
+                hx-target="#modal-body"
+                hx-swap="innerHTML">
+            &larr; Back to Filters
+        </button>
+        <h5 class="mb-0">{{ edit_filter_name }}</h5>
+    </div>
+
+    <form hx-post="/filters/edit"
+          hx-target="#modal-body"
+          hx-swap="innerHTML">
+        <input type="hidden" name="action" value="update_filter">
+        <input type="hidden" name="old_filter_name" value="{{ edit_filter_name }}">
+
+        <div class="mb-3">
+            <label for="filter-name" class="form-label">Filter Name</label>
+            <input type="text" class="form-control" id="filter-name" name="filter_name"
+                   value="{{ edit_filter_name }}"
+                   placeholder="e.g., gentle_sizzle" required style="max-width: 300px;">
+        </div>
+
+        <div class="mb-3">
+            <label for="filter-type-select" class="form-label">Filter Type</label>
+            <select class="form-select" id="filter-type-select" name="filter_type"
+                    onchange="toggleFilterEditParams()"
+                    required style="max-width: 300px;">
+                {% for type_name, type_info in filter_metadata.items() %}
+                {% if type_name != "null" %}
+                <option value="{{ type_name }}"{% if edit_filter_type == type_name %} selected{% endif %}>{{ type_info.description }} ({{ type_name }})</option>
+                {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+
+        <div id="filter-edit-params">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h6 class="card-title">Parameters</h6>
+                    <div class="row g-3">
+                        <div class="col-auto">
+                            <label class="form-label" for="filter_param_frequency">Frequency</label>
+                            <input type="number" class="form-control" name="filter_param_frequency"
+                                   id="filter_param_frequency"
+                                   value="{{ filter_val_frequency }}"
+                                   placeholder="40" min="1" max="40" step="1" style="width: 100px;">
+                            <small class="text-muted">Updates per second (1&ndash;40).</small>
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label" for="filter_param_variation">Variation</label>
+                            <input type="number" class="form-control" name="filter_param_variation"
+                                   id="filter_param_variation"
+                                   value="{{ filter_val_variation }}"
+                                   placeholder="50" min="0" max="255" step="1" style="width: 100px;">
+                            <small class="text-muted">Color variation range (0&ndash;255).</small>
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label" for="filter_param_heat">Heat</label>
+                            <input type="number" class="form-control" name="filter_param_heat"
+                                   id="filter_param_heat"
+                                   value="{{ filter_val_heat }}"
+                                   placeholder="10" min="1" max="50" step="1" style="width: 100px;">
+                            <small class="text-muted">Step size per tick (1&ndash;50).</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">Save Filter</button>
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    hx-get="/filters"
+                    hx-target="#modal-body"
+                    hx-swap="innerHTML">
+                Cancel
+            </button>
+        </div>
+    </form>
+
+    <div class="border-top mt-3 pt-3">
+        <button type="button"
+                class="btn btn-sm btn-outline-danger"
+                hx-post="/filters"
+                hx-target="#modal-body"
+                hx-swap="innerHTML"
+                hx-vals='{"filter_name": "{{ edit_filter_name }}", "action": "delete_filter"}'
+                hx-confirm="Delete filter '{{ edit_filter_name }}'?">
+            Delete Filter
+        </button>
+    </div>
+</div>
+
+<script>
+function toggleFilterEditParams() {
+    var select = document.getElementById('filter-type-select');
+    var paramsDiv = document.getElementById('filter-edit-params');
+    if (select.value && select.value !== 'null') {
+        paramsDiv.style.display = '';
+    } else {
+        paramsDiv.style.display = 'none';
+    }
+}
+</script>
