@@ -1,0 +1,49 @@
+<div id="effects-manager">
+    <form hx-post="/effects"
+          hx-target="#effects-manager"
+          hx-swap="outerHTML">
+        <input type="hidden" name="action" value="create_effect">
+        <div class="input-group mb-3" style="max-width: 400px;">
+            <input type="text" class="form-control" name="effect_name" placeholder="New effect name" required>
+            <button type="submit" class="btn btn-primary">Create Effect</button>
+        </div>
+    </form>
+
+    {% if effects %}
+    <table class="table table-hover align-middle mb-0">
+        <thead>
+            <tr>
+                <th>Effect</th>
+                <th>Pattern</th>
+                <th style="width: 140px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for effect in effects %}
+            <tr>
+                <td><strong>{{ effect.name }}</strong></td>
+                <td><span class="text-muted">{{ effect.pattern }}</span></td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-primary me-1"
+                            hx-get="/effects/edit?effect={{ effect.name }}"
+                            hx-target="#modal-body"
+                            hx-swap="innerHTML">
+                        Edit
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger"
+                            hx-post="/effects"
+                            hx-target="#effects-manager"
+                            hx-swap="outerHTML"
+                            hx-vals='{"effect_name": "{{ effect.name }}", "action": "delete_effect"}'
+                            hx-confirm="Delete effect '{{ effect.name }}'?">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted small mt-2">No effects yet. Create one above.</p>
+    {% endif %}
+</div>

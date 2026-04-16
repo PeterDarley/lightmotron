@@ -4,6 +4,7 @@
         <h6 class="card-title">{{ pattern_info.description }}</h6>
 
         <!-- Target Parameter -->
+        {% if show_target %}
         <div class="mb-3">
             <label for="target" class="form-label">Target</label>
             <div class="input-group" style="max-width: 400px;">
@@ -22,6 +23,7 @@
             </div>
             <small class="text-muted">Single LED (0), range (0-5), all LEDs (all), or named range</small>
         </div>
+        {% endif %}
 
         <!-- Colors Section -->
         <div class="mb-3">
@@ -33,7 +35,7 @@
 
                     <!-- Color dropdown selector (submits as param_color_{{ i }}) -->
                     <select class="form-select" id="param_color_{{ i }}" name="param_color_{{ i }}"
-                            hx-post="/scenes/color_select"
+                            hx-post="{{ color_select_url }}"
                             hx-trigger="change"
                             hx-target="#color-display-{{ i }}"
                             hx-swap="innerHTML"

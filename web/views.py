@@ -184,6 +184,19 @@ class ScenesSummaryView(View):
         )
 
 
+class EffectsSummaryView(View):
+    """Return a summary snippet of effects for the setup card."""
+
+    def get(self) -> str:
+        """Return effects summary HTML fragment."""
+
+        effect_names = sorted(lights.settings.get("effects", {}).keys())
+        return render_template(
+            "setup/effects_summary.html",
+            {"effect_names": effect_names},
+        )
+
+
 # Server-side selection state for the LED naming tool
 _selected_leds = []
 _editing_range_name = None
@@ -458,6 +471,22 @@ def _scenes_list(scenes_dict: dict) -> list:
     return result
 
 
+def _effects_list(effects_dict: dict) -> list:
+    """Build a list of effect summary dicts for template rendering, sorted alphabetically."""
+
+    result: list = []
+    for effect_name in sorted(effects_dict.keys()):
+        effect = effects_dict[effect_name]
+        result.append(
+            {
+                "name": effect_name,
+                "pattern": effect.get("pattern", ""),
+            }
+        )
+
+    return result
+
+
 _STANDARD_COLORS: dict = {
     "white": (255, 255, 255),
     "black": (0, 0, 0),
@@ -484,10 +513,11 @@ def _color_name_to_hex(color_name: str, custom_colors: dict) -> str:
     return "#FF0000"
 
 
-def _pattern_params_context(pattern: str, existing_effect: dict = None) -> dict:
+def _pattern_params_context(pattern: str, existing_effect: dict = None, show_target: bool = True) -> dict:
     """Build the template context needed to render the pattern params fragment.
 
     If existing_effect is provided, pre-fills all fields with its current values.
+    Set show_target=False to hide the target input (used for standalone effect editing).
     """
 
     pattern_metadata: dict = lights.get_pattern_metadata()
@@ -546,6 +576,8 @@ def _pattern_params_context(pattern: str, existing_effect: dict = None) -> dict:
         "named_ranges": lights.settings.get("named_ranges", {}),
         "custom_colors": custom_colors,
         "has_optional": bool(pattern_info["optional"]),
+        "show_target": show_target,
+        "color_select_url": "/scenes/color_select" if show_target else "/effects/color_select",
     }
 
     # Add pre-fill values for optional numeric/boolean params as param_val_<name>
@@ -562,27 +594,47 @@ def _pattern_params_context(pattern: str, existing_effect: dict = None) -> dict:
     return context
 
 
-def _scene_edit_context(scene_name: str, edit_effect_name: str = None) -> dict:
-    """Build template context for the scene effect editor."""
+def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
+    """Build template context for the scene entry editor.
+
+    Scene entries map an effect name to a target. Each entry is {effect: "name", target: "spec"}.
+    """
+
+    scene_data: dict = lights.settings["scenes"].get(scene_name, {})
+    effects_dict: dict = lights.settings.get("effects", {})
+
+    # Build entries list with resolved effect pattern for display
+    scene_entries: list = []
+    for entry_name in sorted(scene_data.keys()):
+        entry = scene_data[entry_name]
+        effect_name = entry.get("effect", "")
+        effect_pattern = effects_dict.get(effect_name, {}).get("pattern", "?")
+        scene_entries.append(
+            (
+                entry_name,
+                {
+                    "effect": effect_name,
+                    "target": entry.get("target", "all"),
+                    "pattern": effect_pattern,
+                },
+            )
+        )
 
     context: dict = {
         "scene_name": scene_name,
         "scene_name_id": _scene_name_id(scene_name),
-        "scene_effects": sorted(lights.settings["scenes"].get(scene_name, {}).items()),
-        "pattern_metadata": lights.get_pattern_metadata(),
+        "scene_entries": scene_entries,
+        "available_effects": sorted(effects_dict.keys()),
         "named_ranges": lights.settings.get("named_ranges", {}),
-        "custom_colors": lights.settings.get("custom_colors", {}),
         "page_title": "Edit Scene",
     }
 
-    if edit_effect_name:
-        effect_dict: dict = lights.settings["scenes"].get(scene_name, {}).get(edit_effect_name, {})
-        pattern: str = effect_dict.get("pattern", "")
-        context["edit_effect_name"] = edit_effect_name
-        context["edit_effect_pattern"] = pattern
-        context["old_effect_name"] = edit_effect_name
-        if pattern and pattern in lights.get_pattern_metadata():
-            context.update(_pattern_params_context(pattern, effect_dict))
+    if edit_entry_name:
+        entry_dict: dict = scene_data.get(edit_entry_name, {})
+        context["edit_entry_name"] = edit_entry_name
+        context["edit_entry_effect"] = entry_dict.get("effect", "")
+        context["edit_entry_target"] = str(entry_dict.get("target", ""))
+        context["old_entry_name"] = edit_entry_name
 
     return context
 
@@ -643,6 +695,139 @@ def _parse_effect_from_form(form_data: dict, pattern: str) -> dict:
     return job_dict
 
 
+def _effect_edit_context(effect_name: str = None) -> dict:
+    """Build template context for the effect editor.
+
+    Effects are standalone pattern definitions without a target.
+    """
+
+    effects_dict: dict = lights.settings.get("effects", {})
+    context: dict = {
+        "effects": _effects_list(effects_dict),
+        "pattern_metadata": lights.get_pattern_metadata(),
+        "page_title": "Effects",
+    }
+
+    if effect_name and effect_name in effects_dict:
+        effect_dict: dict = effects_dict[effect_name]
+        pattern: str = effect_dict.get("pattern", "")
+        context["edit_effect_name"] = effect_name
+        context["edit_effect_pattern"] = pattern
+        context["old_effect_name"] = effect_name
+        if pattern and pattern in lights.get_pattern_metadata():
+            context.update(_pattern_params_context(pattern, effect_dict, show_target=False))
+
+    return context
+
+
+class EffectsView(View):
+    """List effects and create or delete effects."""
+
+    def get(self) -> str:
+        """Show effect list and create-effect form."""
+
+        context: dict = {
+            "effects": _effects_list(lights.settings.get("effects", {})),
+            "page_title": "Effects",
+        }
+        return render_template("setup/effects.html", context)
+
+    def post(self) -> str:
+        """Create or delete an effect."""
+
+        action: str = self.request.form_data.get("action", "").strip()
+        effect_name: str = self.request.form_data.get("effect_name", "").strip()
+
+        if "effects" not in lights.settings:
+            lights.settings["effects"] = {}
+
+        if action == "create_effect" and effect_name:
+            if effect_name not in lights.settings["effects"]:
+                lights.settings["effects"][effect_name] = {"pattern": "solid"}
+            lights.settings_object.store()
+            # Go straight to editing the new effect
+            return render_template("setup/effect_edit.html", _effect_edit_context(effect_name))
+
+        elif action == "delete_effect" and effect_name and effect_name in lights.settings["effects"]:
+            del lights.settings["effects"][effect_name]
+            lights.settings_object.store()
+
+        context: dict = {
+            "effects": _effects_list(lights.settings.get("effects", {})),
+            "page_title": "Effects",
+        }
+        return render_template("setup/effects.html", context)
+
+
+class EffectEditView(View):
+    """Edit an individual effect's pattern, colors, and parameters."""
+
+    def get(self) -> str:
+        """Show effect editor for the given effect."""
+
+        effect_name: str = self.request.query_params.get("effect", "").strip()
+
+        if not effect_name or effect_name not in lights.settings.get("effects", {}):
+            return '<p class="text-danger small">Effect not found.</p>'
+
+        return render_template("setup/effect_edit.html", _effect_edit_context(effect_name))
+
+    def post(self) -> str:
+        """Update an effect's pattern and parameters, or return pattern params fragment."""
+
+        action: str = self.request.form_data.get("action", "").strip()
+        effect_name: str = self.request.form_data.get("effect_name", "").strip()
+        pattern: str = self.request.form_data.get("pattern", "").strip()
+
+        # Pattern selected — return parameters fragment only (no target)
+        if not action and pattern:
+            if pattern in lights.get_pattern_metadata():
+                return render_template(
+                    "setup/pattern_params.html",
+                    _pattern_params_context(pattern, show_target=False),
+                )
+
+            return '<p class="text-danger">Invalid pattern.</p>'
+
+        if "effects" not in lights.settings:
+            lights.settings["effects"] = {}
+
+        if action == "update_effect" and effect_name and pattern:
+            old_effect_name: str = self.request.form_data.get("old_effect_name", "").strip()
+
+            # Build effect dict without target (target lives in scenes)
+            effect_dict: dict = _parse_effect_from_form(self.request.form_data, pattern)
+            effect_dict.pop("target", None)
+
+            # If renaming, delete the old entry first
+            if old_effect_name and old_effect_name != effect_name and old_effect_name in lights.settings["effects"]:
+                del lights.settings["effects"][old_effect_name]
+
+            lights.settings["effects"][effect_name] = effect_dict
+            lights.settings_object.store()
+
+        elif action == "delete_effect" and effect_name:
+            if effect_name in lights.settings.get("effects", {}):
+                del lights.settings["effects"][effect_name]
+                lights.settings_object.store()
+
+            return render_template(
+                "setup/effects.html",
+                {
+                    "effects": _effects_list(lights.settings.get("effects", {})),
+                    "page_title": "Effects",
+                },
+            )
+
+        return render_template(
+            "setup/effects.html",
+            {
+                "effects": _effects_list(lights.settings.get("effects", {})),
+                "page_title": "Effects",
+            },
+        )
+
+
 class ScenesView(View):
     """List scenes and create or delete scenes."""
 
@@ -681,65 +866,52 @@ class ScenesView(View):
 
 
 class SceneEditView(View):
-    """Manage effects within a specific scene."""
+    """Manage entries within a specific scene.
+
+    Each scene entry maps a named effect to a target LED specification.
+    """
 
     def get(self) -> str:
-        """Show effect body for the given scene, optionally pre-loaded to edit an effect."""
+        """Show entry list for the given scene, optionally pre-loaded to edit an entry."""
 
         scene_name: str = self.request.query_params.get("scene", "").strip()
 
         if not scene_name or scene_name not in lights.settings.get("scenes", {}):
             return '<p class="text-danger small">Scene not found.</p>'
 
-        edit_effect_name: str = self.request.query_params.get("edit_effect", "").strip()
-        params_only: str = self.request.query_params.get("params_only", "").strip()
-
-        # If params_only flag is set, return just the pattern parameters fragment
-        if params_only and edit_effect_name:
-            return render_template(
-                "setup/pattern_params.html",
-                _pattern_params_context(
-                    lights.settings["scenes"][scene_name][edit_effect_name]["pattern"],
-                    lights.settings["scenes"][scene_name].get(edit_effect_name, {}),
-                ),
-            )
-
-        return render_template("setup/scene_edit.html", _scene_edit_context(scene_name, edit_effect_name or None))
+        edit_entry_name: str = self.request.query_params.get("edit_entry", "").strip()
+        return render_template("setup/scene_edit.html", _scene_edit_context(scene_name, edit_entry_name or None))
 
     def post(self) -> str:
-        """Add/update or delete an effect, or return pattern parameter fields fragment."""
+        """Add/update or delete a scene entry (effect + target mapping)."""
 
         action: str = self.request.form_data.get("action", "").strip()
         scene_name: str = self.request.form_data.get("scene_name", "").strip()
+        entry_name: str = self.request.form_data.get("entry_name", "").strip()
         effect_name: str = self.request.form_data.get("effect_name", "").strip()
-        pattern: str = self.request.form_data.get("pattern", "").strip()
-
-        # Pattern selected — return parameters fragment only
-        if not action and pattern:
-            if pattern in lights.get_pattern_metadata():
-                return render_template("setup/pattern_params.html", _pattern_params_context(pattern))
-            return '<p class="text-danger">Invalid pattern.</p>'
+        target: str = self.request.form_data.get("target", "").strip()
 
         if scene_name and scene_name in lights.settings.get("scenes", {}):
-            if action in ("add_effect", "update_effect") and effect_name and pattern:
-                old_effect_name: str = self.request.form_data.get("old_effect_name", "").strip()
+            if action in ("add_entry", "update_entry") and entry_name and effect_name:
+                old_entry_name: str = self.request.form_data.get("old_entry_name", "").strip()
 
                 # If renaming, delete the old entry first
                 if (
-                    old_effect_name
-                    and old_effect_name != effect_name
-                    and old_effect_name in lights.settings["scenes"][scene_name]
+                    old_entry_name
+                    and old_entry_name != entry_name
+                    and old_entry_name in lights.settings["scenes"][scene_name]
                 ):
-                    del lights.settings["scenes"][scene_name][old_effect_name]
+                    del lights.settings["scenes"][scene_name][old_entry_name]
 
-                lights.settings["scenes"][scene_name][effect_name] = _parse_effect_from_form(
-                    self.request.form_data, pattern
-                )
+                lights.settings["scenes"][scene_name][entry_name] = {
+                    "effect": effect_name,
+                    "target": target or "all",
+                }
                 lights.settings_object.store()
 
-            elif action == "delete_effect" and effect_name:
-                if effect_name in lights.settings["scenes"][scene_name]:
-                    del lights.settings["scenes"][scene_name][effect_name]
+            elif action == "delete_entry" and entry_name:
+                if entry_name in lights.settings["scenes"][scene_name]:
+                    del lights.settings["scenes"][scene_name][entry_name]
                     lights.settings_object.store()
 
         return render_template("setup/scene_edit.html", _scene_edit_context(scene_name))

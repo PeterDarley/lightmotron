@@ -1,0 +1,66 @@
+<div id="effect-editor">
+    <div class="d-flex align-items-center mb-3">
+        <button class="btn btn-outline-secondary btn-sm me-3"
+                hx-get="/effects"
+                hx-target="#modal-body"
+                hx-swap="innerHTML">
+            &larr; Back to Effects
+        </button>
+        <h5 class="mb-0">{{ edit_effect_name }}</h5>
+    </div>
+
+    <form hx-post="/effects/edit"
+          hx-target="#modal-body"
+          hx-swap="innerHTML">
+        <input type="hidden" name="action" value="update_effect">
+        <input type="hidden" name="old_effect_name" value="{{ edit_effect_name }}">
+
+        <div class="mb-3">
+            <label for="effect-name" class="form-label">Effect Name</label>
+            <input type="text" class="form-control" id="effect-name" name="effect_name"
+                   value="{{ edit_effect_name }}"
+                   placeholder="e.g., red_wave" required style="max-width: 300px;">
+        </div>
+
+        <div class="mb-3">
+            <label for="pattern-select" class="form-label">Pattern</label>
+            <select class="form-select" id="pattern-select" name="pattern"
+                    hx-post="/effects/edit"
+                    hx-target="#pattern-params-area"
+                    hx-swap="innerHTML"
+                    required style="max-width: 300px;">
+                <option value="">Select a pattern...</option>
+                {% for pattern_name, metadata in pattern_metadata.items() %}
+                <option value="{{ pattern_name }}"{% if edit_effect_pattern == pattern_name %} selected{% endif %}>{{ metadata.description }} ({{ pattern_name }})</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div id="pattern-params-area">
+            {% include 'setup/pattern_params.html' %}
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">Save Effect</button>
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    hx-get="/effects"
+                    hx-target="#modal-body"
+                    hx-swap="innerHTML">
+                Cancel
+            </button>
+        </div>
+    </form>
+
+    <div class="border-top mt-3 pt-3">
+        <button type="button"
+                class="btn btn-sm btn-outline-danger"
+                hx-post="/effects"
+                hx-target="#modal-body"
+                hx-swap="innerHTML"
+                hx-vals='{"effect_name": "{{ edit_effect_name }}", "action": "delete_effect"}'
+                hx-confirm="Delete effect '{{ edit_effect_name }}'?">
+            Delete Effect
+        </button>
+    </div>
+</div>

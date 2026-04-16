@@ -21,6 +21,10 @@ web_server.add_routes(
         "/scenes/edit": views.SceneEditView,
         "/scenes/color_select": views.ColorSelectView,
         "/scenes/summary": views.ScenesSummaryView,
+        "/effects": views.EffectsView,
+        "/effects/edit": views.EffectEditView,
+        "/effects/color_select": views.ColorSelectView,
+        "/effects/summary": views.EffectsSummaryView,
     }
 )
 

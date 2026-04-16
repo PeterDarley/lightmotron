@@ -9,11 +9,12 @@
         <h5 class="mb-0">{{ scene_name }}</h5>
     </div>
 
-    <!-- Effects list -->
-    {% if scene_effects %}
+    <!-- Entries list -->
+    {% if scene_entries %}
     <table class="table table-hover align-middle mb-3">
         <thead>
             <tr>
+                <th>Entry</th>
                 <th>Effect</th>
                 <th>Pattern</th>
                 <th>Target</th>
@@ -21,14 +22,15 @@
             </tr>
         </thead>
         <tbody>
-            {% for effect_name, effect_details in scene_effects %}
+            {% for entry_name, entry_details in scene_entries %}
             <tr>
-                <td><strong>{{ effect_name }}</strong></td>
-                <td><span class="text-muted">{{ effect_details.pattern }}</span></td>
-                <td><span class="text-muted">{{ effect_details.target }}</span></td>
+                <td><strong>{{ entry_name }}</strong></td>
+                <td>{{ entry_details.effect }}</td>
+                <td><span class="text-muted">{{ entry_details.pattern }}</span></td>
+                <td><span class="text-muted">{{ entry_details.target }}</span></td>
                 <td class="text-end">
                     <button class="btn btn-sm btn-outline-primary me-1"
-                            hx-get="/scenes/edit?scene={{ scene_name }}&edit_effect={{ effect_name }}"
+                            hx-get="/scenes/edit?scene={{ scene_name }}&edit_entry={{ entry_name }}"
                             hx-target="#modal-body"
                             hx-swap="innerHTML">
                         Edit
@@ -37,7 +39,7 @@
                             hx-post="/scenes/edit"
                             hx-target="#modal-body"
                             hx-swap="innerHTML"
-                            hx-vals='{"scene_name": "{{ scene_name }}", "effect_name": "{{ effect_name }}", "action": "delete_effect"}'>
+                            hx-vals='{"scene_name": "{{ scene_name }}", "entry_name": "{{ entry_name }}", "action": "delete_entry"}'>
                         Delete
                     </button>
                 </td>
@@ -46,64 +48,76 @@
         </tbody>
     </table>
     {% else %}
-    <p class="text-muted small mb-3">No effects yet. Add one below.</p>
+    <p class="text-muted small mb-3">No entries yet. Add one below to assign an effect to a target.</p>
     {% endif %}
 
-    <!-- Add / Edit effect form -->
-    {% if edit_effect_name %}
+    <!-- Add / Edit entry form -->
+    {% if edit_entry_name %}
     <div class="card">
         <div class="card-header">
-            Edit Effect: {{ edit_effect_name }}
+            Edit Entry: {{ edit_entry_name }}
         </div>
         <div class="card-body">
     {% else %}
-    <button class="btn btn-primary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#add-effect-card">
-        Add Effect
+    <button class="btn btn-primary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#add-entry-card">
+        Add Entry
     </button>
-    <div class="collapse" id="add-effect-card">
+    <div class="collapse" id="add-entry-card">
     <div class="card">
-        <div class="card-header">Add Effect</div>
+        <div class="card-header">Add Entry</div>
         <div class="card-body">
     {% endif %}
             <form hx-post="/scenes/edit"
                   hx-target="#modal-body"
                   hx-swap="innerHTML">
-                <input type="hidden" name="action" value="{% if edit_effect_name %}update_effect{% else %}add_effect{% endif %}">
+                <input type="hidden" name="action" value="{% if edit_entry_name %}update_entry{% else %}add_entry{% endif %}">
                 <input type="hidden" name="scene_name" value="{{ scene_name }}">
-                {% if edit_effect_name %}
-                <input type="hidden" name="old_effect_name" value="{{ edit_effect_name }}">
+                {% if edit_entry_name %}
+                <input type="hidden" name="old_entry_name" value="{{ edit_entry_name }}">
                 {% endif %}
 
                 <div class="mb-3">
-                    <label for="effect-name-{{ scene_name_id }}" class="form-label">Effect Name</label>
-                    <input type="text" class="form-control" id="effect-name-{{ scene_name_id }}" name="effect_name"
-                           value="{{ edit_effect_name }}"
-                           placeholder="e.g., wave_1" required style="max-width: 300px;">
+                    <label for="entry-name-{{ scene_name_id }}" class="form-label">Entry Name</label>
+                    <input type="text" class="form-control" id="entry-name-{{ scene_name_id }}" name="entry_name"
+                           value="{{ edit_entry_name }}"
+                           placeholder="e.g., background_glow" required style="max-width: 300px;">
                 </div>
 
                 <div class="mb-3">
-                    <label for="pattern-{{ scene_name_id }}" class="form-label">Pattern</label>
-                    <select class="form-select" id="pattern-{{ scene_name_id }}" name="pattern"
-                            hx-post="/scenes/edit"
-                            hx-target="#pattern-params-{{ scene_name_id }}"
-                            hx-swap="innerHTML"
+                    <label for="effect-select-{{ scene_name_id }}" class="form-label">Effect</label>
+                    <select class="form-select" id="effect-select-{{ scene_name_id }}" name="effect_name"
                             required style="max-width: 300px;">
-                        <option value="">Select a pattern...</option>
-                        {% for pattern_name, metadata in pattern_metadata.items() %}
-                        <option value="{{ pattern_name }}"{% if edit_effect_pattern == pattern_name %} selected{% endif %}>{{ metadata.description }} ({{ pattern_name }})</option>
+                        <option value="">Select an effect...</option>
+                        {% for effect in available_effects %}
+                        <option value="{{ effect }}"{% if edit_entry_effect == effect %} selected{% endif %}>{{ effect }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
-                <div id="pattern-params-{{ scene_name_id }}">
-                    {% include 'setup/pattern_params.html' %}
+                <div class="mb-3">
+                    <label for="target-{{ scene_name_id }}" class="form-label">Target</label>
+                    <div class="input-group" style="max-width: 400px;">
+                        <input type="text" class="form-control" id="target-{{ scene_name_id }}" name="target"
+                               value="{{ edit_entry_target }}"
+                               placeholder="e.g., 0, 1-5, all, or named range" required>
+                        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                            Named Ranges
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="document.getElementById('target-{{ scene_name_id }}').value='all'; return false;">all</a></li>
+                            {% for range_name in named_ranges.keys() %}
+                            <li><a class="dropdown-item" href="#" onclick="document.getElementById('target-{{ scene_name_id }}').value='named:{{ range_name }}'; return false;">{{ range_name }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <small class="text-muted">Single LED (0), range (0-5), all LEDs (all), or named range</small>
                 </div>
 
                 <div class="d-flex gap-2 mt-3">
                     <button type="submit" class="btn btn-primary">
-                        {% if edit_effect_name %}Update Effect{% else %}Save Effect{% endif %}
+                        {% if edit_entry_name %}Update Entry{% else %}Save Entry{% endif %}
                     </button>
-                    {% if edit_effect_name %}
+                    {% if edit_entry_name %}
                     <button type="button"
                             class="btn btn-outline-secondary"
                             hx-get="/scenes/edit?scene={{ scene_name }}"
@@ -116,7 +130,7 @@
             </form>
         </div>
     </div>
-    {% if not edit_effect_name %}
+    {% if not edit_entry_name %}
     </div>
     {% endif %}
 

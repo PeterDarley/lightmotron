@@ -1,0 +1,9 @@
+{% if effect_names %}
+<div class="d-flex flex-wrap gap-1 mb-0">
+    {% for effect_name in effect_names %}
+    <span class="badge bg-secondary">{{ effect_name }}</span>
+    {% endfor %}
+</div>
+{% else %}
+<small class="text-muted">No effects yet.</small>
+{% endif %}
