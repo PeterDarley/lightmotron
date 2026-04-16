@@ -65,7 +65,7 @@ def _scenes_context():
     """Return a context dict with the scenes list and current scene."""
 
     return {
-        "scenes": list(lights.settings["scenes"].keys()),
+        "scenes": sorted(lights.settings["scenes"].keys()),
         "current_scene": lights.scene_name,
     }
 
@@ -142,7 +142,7 @@ class SetupView(View):
             "setup.html",
             {
                 "led_count": lights.leds.count,
-                "named_range_names": list(named_ranges.keys()),
+                "named_range_names": sorted(named_ranges.keys()),
                 "page_title": "Setup",
             },
         )
@@ -164,7 +164,7 @@ def _named_range_context() -> dict:
         }
         for i in range(lights.leds.count)
     ]
-    named_range_names = list(lights.settings.get("named_ranges", {}).keys())
+    named_range_names = sorted(lights.settings.get("named_ranges", {}).keys())
 
     return {
         "led_list": led_list,
@@ -337,10 +337,13 @@ def _custom_colors_response(edit_name: str = "", edit_hex: str = "") -> str:
     Pass edit_name and edit_hex to pre-fill the form for editing an existing color.
     """
 
-    custom_colors_list = [
-        (name, tuple(value) if isinstance(value, (list, tuple)) else value)
-        for name, value in lights.settings.get("custom_colors", {}).items()
-    ]
+    custom_colors_list = sorted(
+        [
+            (name, tuple(value) if isinstance(value, (list, tuple)) else value)
+            for name, value in lights.settings.get("custom_colors", {}).items()
+        ],
+        key=lambda item: item[0],
+    )
     return render_template(
         "setup/custom_colors.html",
         {
@@ -406,15 +409,15 @@ def _scene_name_id(scene_name: str) -> str:
 
 
 def _scenes_list(scenes_dict: dict) -> list:
-    """Build a list of scene summary dicts for template rendering."""
+    """Build a list of scene summary dicts for template rendering, sorted alphabetically."""
 
     result: list = []
-    for scene_name, scene_effects in scenes_dict.items():
+    for scene_name in sorted(scenes_dict.keys()):
         result.append(
             {
                 "name": scene_name,
                 "name_id": _scene_name_id(scene_name),
-                "effect_count": len(scene_effects),
+                "effect_count": len(scenes_dict[scene_name]),
             }
         )
 
@@ -473,8 +476,8 @@ def _pattern_params_context(pattern: str, existing_effect: dict = None) -> dict:
             if existing.startswith("custom:"):
                 raw_name: str = existing[7:]
                 hex_val: str = _color_name_to_hex(raw_name, custom_colors)
-                # Dropdown option value includes the prefix
-                dropdown_val: str = existing
+                # Dropdown option conditions compare against raw name (custom_colors.keys())
+                dropdown_val: str = raw_name
             else:
                 hex_val = _color_name_to_hex(existing, custom_colors)
                 dropdown_val = existing
@@ -530,7 +533,7 @@ def _scene_edit_context(scene_name: str, edit_effect_name: str = None) -> dict:
     context: dict = {
         "scene_name": scene_name,
         "scene_name_id": _scene_name_id(scene_name),
-        "scene_effects": lights.settings["scenes"].get(scene_name, {}),
+        "scene_effects": sorted(lights.settings["scenes"].get(scene_name, {}).items()),
         "pattern_metadata": lights.get_pattern_metadata(),
         "named_ranges": lights.settings.get("named_ranges", {}),
         "custom_colors": lights.settings.get("custom_colors", {}),
