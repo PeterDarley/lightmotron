@@ -65,6 +65,9 @@ Web server speed is not very important. Optimizations should prioritize memory e
 ### Hardware upgrade to ESP32-S3
 Upgrading from ESP32-WROOM-32 to ESP32-S3-WROOM-1 (N16R8 variant with 8MB octal PSRAM). This eliminates all heap constraints (~8MB free heap vs ~28KB on WROOM-32). No code changes needed—PSRAM is transparent to MicroPython. However, GPIO physical pin positions differ between boards; MAX7219 wiring (GPIO 18, 23, 5) numbers stay the same but physical header positions change—confirm pinout before wiring.
 
+### CSS in separate files
+Do not use inline `<style>` blocks in templates. All CSS must go in files under `www/styles/` and be linked via `base/imports.html`.
+
 
 
 
