@@ -87,71 +87,128 @@
         <div class="mb-3">
             <label class="form-label fw-semibold">Additional Settings</label>
             {% for param in pattern_info.optional %}
-            {% if param == "frequency" %}
+            {% if param == "duration" %}
             <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
-                <label class="form-label mb-1">Frequency</label>
-                <div class="d-flex align-items-center gap-2" style="max-width: 480px;">
-                    <span class="small text-muted" style="white-space:nowrap">1/60</span>
+                <label class="form-label mb-1">Duration</label>
+                <div class="d-flex align-items-center gap-2 mb-2" style="max-width: 480px;">
+                    <span class="small text-muted" style="white-space:nowrap">1 tick</span>
                     <div style="flex: 1; min-width: 120px;">
-                        <input type="range" class="form-range w-100" id="freq_slider"
-                               min="0" max="200" step="1"
-                               oninput="freqSliderChanged(this.value)">
+                        <input type="range" class="form-range w-100" id="duration_slider"
+                               min="1" max="2400" step="1"
+                               oninput="durationSliderChanged(this.value)">
                     </div>
-                    <span class="small text-muted">40</span>
-                    <input type="number" class="form-control" name="param_frequency"
-                           id="freq_number" value="{{ param_val_frequency }}"
-                           min="0.017" max="40" step="0.001" style="width: 90px;"
-                           oninput="freqNumberChanged(this.value)">
-                    <span class="small text-muted">Hz</span>
+                    <span class="small text-muted">1 min</span>
                 </div>
-                <small class="text-muted">How fast the effect cycles. Center is 1 Hz (once per second).</small>
+                <div class="d-flex align-items-center gap-2">
+                    <input type="number" class="form-control form-control-sm" id="duration_min"
+                           min="0" step="1" style="width: 75px;"
+                           oninput="durationPartsChanged()">
+                    <span class="small text-muted">min</span>
+                    <input type="number" class="form-control form-control-sm" id="duration_sec"
+                           min="0" max="59" step="1" style="width: 75px;"
+                           oninput="durationPartsChanged()">
+                    <span class="small text-muted">sec</span>
+                    <input type="number" class="form-control form-control-sm" id="duration_ticks_part"
+                           min="0" max="39" step="1" style="width: 75px;"
+                           oninput="durationPartsChanged()">
+                    <span class="small text-muted">ticks</span>
+                    <input type="hidden" name="param_duration" id="param_duration" value="{{ param_val_duration }}">
+                </div>
+                <small class="text-muted">Cycle duration. 40 ticks = 1 second, 2400 ticks = 1 minute.</small>
                 <script>
                 (function() {
-                    var MIN_FREQ = 1 / 60;
-
-                    function freqToSlider(freq) {
-                        freq = parseFloat(freq);
-                        if (isNaN(freq) || freq <= 0) return 100;
-                        if (freq <= 1) {
-                            return Math.round(Math.max(0, (freq - MIN_FREQ) / (1 - MIN_FREQ) * 100));
-                        } else {
-                            return Math.round(100 + Math.min(100, (freq - 1) / 39 * 100));
-                        }
+                    function ticksToDisplay(t) {
+                        t = Math.max(1, parseInt(t) || 1);
+                        return { min: Math.floor(t / 2400), sec: Math.floor((t % 2400) / 40), ticks: t % 40 };
                     }
-
-                    function sliderToFreq(pos) {
-                        pos = parseInt(pos);
-                        if (pos <= 100) {
-                            var f = MIN_FREQ + pos / 100 * (1 - MIN_FREQ);
-                            return Math.round(f * 1000) / 1000;
-                        } else {
-                            var f = 1 + (pos - 100) / 100 * 39;
-                            return Math.round(f * 10) / 10;
-                        }
+                    function displayToTicks(min, sec, ticks) {
+                        return Math.max(1, (parseInt(min) || 0) * 2400 + (parseInt(sec) || 0) * 40 + (parseInt(ticks) || 0));
                     }
-
-                    window.freqSliderChanged = function(pos) {
-                        document.getElementById('freq_number').value = sliderToFreq(pos);
+                    function durationUpdateFromTicks(t) {
+                        var d = ticksToDisplay(t);
+                        document.getElementById('duration_min').value = d.min;
+                        document.getElementById('duration_sec').value = d.sec;
+                        document.getElementById('duration_ticks_part').value = d.ticks;
+                        document.getElementById('param_duration').value = t;
+                        document.getElementById('duration_slider').value = Math.min(2400, t);
+                    }
+                    window.durationSliderChanged = function(val) {
+                        durationUpdateFromTicks(parseInt(val));
                     };
-
-                    window.freqNumberChanged = function(val) {
-                        document.getElementById('freq_slider').value = freqToSlider(val);
+                    window.durationPartsChanged = function() {
+                        var t = displayToTicks(
+                            document.getElementById('duration_min').value,
+                            document.getElementById('duration_sec').value,
+                            document.getElementById('duration_ticks_part').value
+                        );
+                        document.getElementById('param_duration').value = t;
+                        document.getElementById('duration_slider').value = Math.min(2400, t);
                     };
-
-                    // Initialise slider position from stored value
-                    var initVal = document.getElementById('freq_number').value;
-                    document.getElementById('freq_slider').value = freqToSlider(initVal || '1');
+                    durationUpdateFromTicks(parseInt(document.getElementById('param_duration').value) || 40);
                 })();
                 </script>
             </div>
             {% endif %}
-            {% if param == "duration" %}
+            {% if param == "period" %}
             <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
-                <label class="form-label mb-1" for="param_duration">Duration</label>
-                <input type="number" class="form-control" name="param_duration" id="param_duration"
-                       value="{{ param_val_duration }}"
-                       placeholder="e.g., 100" min="1" max="1000" step="1" style="max-width: 200px;">
-                <small class="text-muted">Number of ticks before the effect ends.</small>
+                <label class="form-label mb-1">Period</label>
+                <div class="d-flex align-items-center gap-2 mb-2" style="max-width: 480px;">
+                    <span class="small text-muted" style="white-space:nowrap">1 tick</span>
+                    <div style="flex: 1; min-width: 120px;">
+                        <input type="range" class="form-range w-100" id="period_slider"
+                               min="1" max="2400" step="1"
+                               oninput="periodSliderChanged(this.value)">
+                    </div>
+                    <span class="small text-muted">1 min</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <input type="number" class="form-control form-control-sm" id="period_min"
+                           min="0" step="1" style="width: 75px;"
+                           oninput="periodPartsChanged()">
+                    <span class="small text-muted">min</span>
+                    <input type="number" class="form-control form-control-sm" id="period_sec"
+                           min="0" max="59" step="1" style="width: 75px;"
+                           oninput="periodPartsChanged()">
+                    <span class="small text-muted">sec</span>
+                    <input type="number" class="form-control form-control-sm" id="period_ticks_part"
+                           min="0" max="39" step="1" style="width: 75px;"
+                           oninput="periodPartsChanged()">
+                    <span class="small text-muted">ticks</span>
+                    <input type="hidden" name="param_period" id="param_period" value="{{ param_val_period }}">
+                </div>
+                <small class="text-muted">Full cycle period (on-time + off-time). 40 ticks = 1 second.</small>
+                <script>
+                (function() {
+                    function ticksToDisplay(t) {
+                        t = Math.max(1, parseInt(t) || 1);
+                        return { min: Math.floor(t / 2400), sec: Math.floor((t % 2400) / 40), ticks: t % 40 };
+                    }
+                    function displayToTicks(min, sec, ticks) {
+                        return Math.max(1, (parseInt(min) || 0) * 2400 + (parseInt(sec) || 0) * 40 + (parseInt(ticks) || 0));
+                    }
+                    function periodUpdateFromTicks(t) {
+                        var d = ticksToDisplay(t);
+                        document.getElementById('period_min').value = d.min;
+                        document.getElementById('period_sec').value = d.sec;
+                        document.getElementById('period_ticks_part').value = d.ticks;
+                        document.getElementById('param_period').value = t;
+                        document.getElementById('period_slider').value = Math.min(2400, t);
+                    }
+                    window.periodSliderChanged = function(val) {
+                        periodUpdateFromTicks(parseInt(val));
+                    };
+                    window.periodPartsChanged = function() {
+                        var t = displayToTicks(
+                            document.getElementById('period_min').value,
+                            document.getElementById('period_sec').value,
+                            document.getElementById('period_ticks_part').value
+                        );
+                        document.getElementById('param_period').value = t;
+                        document.getElementById('period_slider').value = Math.min(2400, t);
+                    };
+                    periodUpdateFromTicks(parseInt(document.getElementById('param_period').value) || 40);
+                })();
+                </script>
             </div>
             {% endif %}
             {% if param == "width" %}
