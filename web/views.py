@@ -64,9 +64,15 @@ def _animation_context():
 def _scenes_context():
     """Return a context dict with the scenes list and current scene."""
 
+    scene_names = sorted(lights.settings["scenes"].keys())
+    ongoing_scenes = [name for name in scene_names if lights.is_scene_ongoing(name)]
+    immediate_scenes = [name for name in scene_names if not lights.is_scene_ongoing(name)]
+
     return {
-        "scenes": sorted(lights.settings["scenes"].keys()),
+        "scenes": scene_names,
         "current_scene": lights.scene_name,
+        "ongoing_scenes": ongoing_scenes,
+        "immediate_scenes": immediate_scenes,
     }
 
 
@@ -86,11 +92,17 @@ class SetSceneView(View):
     """Handle POST requests to set the current lighting scene."""
 
     def post(self):
-        """Set the current lighting scene based on the POST data."""
+        """Set the current lighting scene based on the POST data.
+
+        Any form fields other than ``scene`` are forwarded as keyword arguments
+        to ``set_scene``, allowing scene functions to receive extra parameters.
+        """
+
         scene_name = self.request.form_data.get("scene")
         if scene_name in lights.settings["scenes"]:
-            lights.set_scene(scene_name)
-            return render_template("scenes/buttons.html", _scenes_context())
+            extra_kwargs = {key: value for key, value in self.request.form_data.items() if key != "scene"}
+            lights.set_scene(scene_name, **extra_kwargs)
+            return None
         else:
             return "Invalid scene", 400
 
@@ -366,6 +378,22 @@ class StatusView(View):
             wifi_connected = "No"
             ip_address = "N/A"
 
+        # Check for restore result from redirect.
+        restore_status: str = self.request.query_params.get("restore", "")
+        restore_message: str = ""
+        restore_class: str = ""
+        if restore_status == "ok":
+            restore_message = "Storage restored successfully."
+            restore_class = "success"
+
+        elif restore_status == "invalid":
+            restore_message = "Restore failed: invalid JSON data."
+            restore_class = "danger"
+
+        elif restore_status == "empty":
+            restore_message = "Restore failed: no data provided."
+            restore_class = "danger"
+
         return render_template(
             "status.html",
             {
@@ -386,8 +414,72 @@ class StatusView(View):
                 "animation_running": str(lights.animation.running),
                 "current_scene": lights.scene_name,
                 "tick_number": lights.animation.tick_number,
+                "restore_message": restore_message,
+                "restore_class": restore_class,
                 "page_title": "Status",
             },
+        )
+
+
+class BackupView(View):
+    """Serve the persistent storage as a downloadable JSON file."""
+
+    def get(self) -> Response:
+        """Return the storage dict as a JSON download."""
+
+        storage = PersistentDict()
+        storage_dict: dict = {k: v for k, v in storage.items()}
+        json_body: str = json.dumps(storage_dict)
+
+        return Response(
+            body=json_body,
+            content_type="application/json",
+            headers={"Content-Disposition": 'attachment; filename="lightmotron_backup.json"'},
+        )
+
+
+class RestoreView(View):
+    """Restore persistent storage from uploaded JSON."""
+
+    def post(self) -> Response:
+        """Parse JSON from the form textarea and overwrite storage."""
+
+        json_text: str = self.request.form_data.get("backup_json", "").strip()
+        if not json_text:
+            return Response(
+                status=302,
+                reason="Found",
+                headers={"Location": "/status?restore=empty"},
+            )
+
+        try:
+            restored_data: dict = json.loads(json_text)
+        except (ValueError, TypeError):
+            return Response(
+                status=302,
+                reason="Found",
+                headers={"Location": "/status?restore=invalid"},
+            )
+
+        if not isinstance(restored_data, dict):
+            return Response(
+                status=302,
+                reason="Found",
+                headers={"Location": "/status?restore=invalid"},
+            )
+
+        storage = PersistentDict()
+        storage.clear()
+        storage.update(restored_data)
+        storage.store()
+
+        # Reload lighting settings from the restored data.
+        lights.settings = storage["lighting_settings"]
+
+        return Response(
+            status=302,
+            reason="Found",
+            headers={"Location": "/status?restore=ok"},
         )
 
 
@@ -681,6 +773,7 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
         context["edit_entry_name"] = edit_entry_name
         context["edit_entry_effect"] = entry_dict.get("effect", "")
         context["edit_entry_target"] = str(entry_dict.get("target", ""))
+        context["edit_entry_cycles"] = str(entry_dict["cycles"]) if "cycles" in entry_dict else ""
         context["old_entry_name"] = edit_entry_name
 
     return context
@@ -770,6 +863,7 @@ def _effect_edit_context(effect_name: str = None) -> dict:
         pattern: str = effect_dict.get("pattern", "")
         context["edit_effect_name"] = effect_name
         context["edit_effect_pattern"] = pattern
+        context["edit_effect_cycles"] = str(effect_dict["cycles"]) if "cycles" in effect_dict else ""
         context["old_effect_name"] = effect_name
         if pattern and pattern in lights.get_pattern_metadata():
             context.update(_pattern_params_context(pattern, effect_dict, show_target=False))
@@ -1088,10 +1182,19 @@ class SceneEditView(View):
                 ):
                     del lights.settings["scenes"][scene_name][old_entry_name]
 
-                lights.settings["scenes"][scene_name][entry_name] = {
+                entry_dict: dict = {
                     "effect": effect_name,
                     "target": target or "all",
                 }
+
+                cycles_value: str = self.request.form_data.get("cycles", "").strip()
+                if cycles_value:
+                    try:
+                        entry_dict["cycles"] = int(cycles_value)
+                    except ValueError:
+                        pass
+
+                lights.settings["scenes"][scene_name][entry_name] = entry_dict
                 lights.settings_object.store()
 
             elif action == "delete_entry" and entry_name:

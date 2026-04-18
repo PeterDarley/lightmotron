@@ -2,6 +2,13 @@
 <div class="container mt-4">
     <h1>Status</h1>
 
+    {% if restore_message %}
+    <div class="alert alert-{{ restore_class }} alert-dismissible fade show mt-3" role="alert">
+        {{ restore_message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
     <div class="row mt-3">
         <div class="col-md-6">
             <div class="card mb-3">
@@ -66,6 +73,24 @@
                         <tr><th>Scene</th><td>{{ current_scene }}</td></tr>
                         <tr><th>Tick</th><td>{{ tick_number }}</td></tr>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">Backup &amp; Restore</div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">Download or restore all settings (scenes, effects, filters, colors, ranges).</p>
+                    <a href="/backup" class="btn btn-outline-primary btn-sm mb-3">Download Backup</a>
+                    <form method="POST" action="/restore" onsubmit="return confirm('This will overwrite all current settings. Continue?');">
+                        <div class="mb-2">
+                            <label for="backup-json" class="form-label small">Paste backup JSON to restore:</label>
+                            <textarea class="form-control form-control-sm" id="backup-json" name="backup_json"
+                                      rows="3" placeholder='{"lighting_settings": {...}}'></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-outline-danger btn-sm">Restore</button>
+                    </form>
                 </div>
             </div>
         </div>

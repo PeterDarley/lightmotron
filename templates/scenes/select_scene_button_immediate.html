@@ -1,0 +1,7 @@
+<button class="btn btn-outline-warning"
+        hx-post="/set_scene"
+        hx-vals='{"scene": "{{ scene }}"}'
+        hx-swap="none"
+        hx-on:htmx:after-request="setActiveScene('{{ scene }}', this, false)">
+    {{ scene }}
+</button>

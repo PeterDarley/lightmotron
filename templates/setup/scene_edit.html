@@ -113,6 +113,14 @@
                     <small class="text-muted">Single LED (0), range (0-5), all LEDs (all), or named range</small>
                 </div>
 
+                <div class="mb-3">
+                    <label for="cycles-{{ scene_name_id }}" class="form-label">Cycles Override</label>
+                    <input type="number" class="form-control" id="cycles-{{ scene_name_id }}" name="cycles"
+                           value="{{ edit_entry_cycles }}"
+                           placeholder="Leave empty to use effect default" min="1" step="1" style="max-width: 200px;">
+                    <small class="text-muted">Overrides the effect's cycle count for this scene entry. Empty = use effect default.</small>
+                </div>
+
                 <div class="d-flex gap-2 mt-3">
                     <button type="submit" class="btn btn-primary">
                         {% if edit_entry_name %}Update Entry{% else %}Save Entry{% endif %}

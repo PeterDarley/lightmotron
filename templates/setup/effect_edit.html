@@ -40,6 +40,14 @@
             {% include 'setup/pattern_params.html' %}
         </div>
 
+        <div class="mb-3">
+            <label for="param-cycles" class="form-label">Cycles</label>
+            <input type="number" class="form-control" id="param-cycles" name="param_cycles"
+                   value="{{ edit_effect_cycles }}"
+                   placeholder="Leave empty for infinite" min="1" step="1" style="max-width: 200px;">
+            <small class="text-muted">Number of times the effect repeats before stopping. Empty = repeat forever.</small>
+        </div>
+
         <div class="d-flex gap-2 mt-3">
             <button type="submit" class="btn btn-primary">Save Effect</button>
             <button type="button"

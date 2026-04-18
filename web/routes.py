@@ -28,6 +28,8 @@ web_server.add_routes(
         "/filters": views.FiltersView,
         "/filters/edit": views.FilterEditView,
         "/filters/summary": views.FiltersSummaryView,
+        "/backup": views.BackupView,
+        "/restore": views.RestoreView,
     }
 )
 

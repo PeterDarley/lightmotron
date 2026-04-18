@@ -1,7 +1,7 @@
-<button class="btn {% if scene == current_scene %}btn-primary{% else %}btn-outline-primary{% endif %}"
+<button class="btn ongoing-scene-btn {% if scene == current_scene %}btn-primary{% endif %}{% if scene != current_scene %}btn-outline-primary{% endif %}"
         hx-post="/set_scene"
         hx-vals='{"scene": "{{ scene }}"}'
-        hx-target="#scene_buttons"
-        hx-swap="outerHTML">
+        hx-swap="none"
+        hx-on:htmx:after-request="setActiveScene('{{ scene }}', this, true)">
     {{ scene }}
 </button>

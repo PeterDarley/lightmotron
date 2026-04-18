@@ -1,5 +1,18 @@
 <div id="scene_buttons">
-    {% for scene in scenes %}
-        {% include 'scenes/select_scene_button.html' %}
-    {% endfor %}
+    <div class="mb-3">
+        <h6 class="scenes-section-heading">Ongoing</h6>
+        <div class="d-flex flex-wrap gap-2">
+            {% for scene in ongoing_scenes %}
+                {% include 'scenes/select_scene_button.html' %}
+            {% endfor %}
+        </div>
+    </div>
+    <div>
+        <h6 class="scenes-section-heading">Immediate</h6>
+        <div class="d-flex flex-wrap gap-2">
+            {% for scene in immediate_scenes %}
+                {% include 'scenes/select_scene_button_immediate.html' %}
+            {% endfor %}
+        </div>
+    </div>
 </div>

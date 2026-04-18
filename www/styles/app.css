@@ -6,3 +6,14 @@
 /* Frequency slider track */
 #freq_slider::-webkit-slider-runnable-track { background: #dee2e6; border-radius: 4px; height: 6px; }
 #freq_slider::-moz-range-track { background: #dee2e6; border-radius: 4px; height: 6px; }
+
+/* Home page */
+.home-scene-name { font-size: 1.75rem; font-weight: 500; }
+.scenes-section-heading {
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+}
