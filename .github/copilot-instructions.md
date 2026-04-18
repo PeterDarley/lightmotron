@@ -68,6 +68,9 @@ Upgrading from ESP32-WROOM-32 to ESP32-S3-WROOM-1 (N16R8 variant with 8MB octal 
 ### CSS in separate files
 Do not use inline `<style>` blocks in templates. All CSS must go in files under `www/styles/` and be linked via `base/imports.html`.
 
+### Lighting filter design
+Filters always receive both the **target color** (from the pattern) and the **current color** (from `logical_colors`). Differences are calculated against the target color but applied to the current color. This makes filters order-independent — the result is the same regardless of which order filters are applied in.
+
 
 
 
