@@ -51,7 +51,7 @@ The web server uses a custom templating system (defined in `lib/webserver.py`), 
 - `{% for var in list %}...{% endfor %}` loops
 - `{% for i in range(n) %}` where `n` is an integer literal or a context variable
 - `{% for key, value in dict.items() %}`, `{% for key in dict.keys() %}`, `{% for val in dict.values() %}`
-- `{% if expression %}...{% endif %}` conditionals (including `==` comparisons)
+- `{% if expression %}...{% endif %}` conditionals (including `==` comparisons, `in`/`not in` membership tests, `and`/`or` connectives, and `not` prefix). Simple variable truthiness uses Python semantics: empty lists/dicts are falsy.
 - `{% include 'filename' %}` for template inclusion
 
 When working with templates, remember this is a minimal custom implementation, not a full templating engine.
