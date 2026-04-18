@@ -18,6 +18,8 @@
                 <th>Effect</th>
                 <th>Pattern</th>
                 <th>Target</th>
+                <th>After</th>
+                <th>Inherit</th>
                 <th style="width: 140px;"></th>
             </tr>
         </thead>
@@ -28,6 +30,8 @@
                 <td>{{ entry_details.effect }}</td>
                 <td><span class="text-muted">{{ entry_details.pattern }}</span></td>
                 <td><span class="text-muted">{{ entry_details.target }}</span></td>
+                <td><span class="text-muted">{{ entry_details.after }}</span></td>
+                <td>{% if entry_details.inherit_target %}<span class="text-muted">target</span>{% endif %}</td>
                 <td class="text-end">
                     <button class="btn btn-sm btn-outline-primary me-1"
                             hx-get="/scenes/edit?scene={{ scene_name }}&edit_entry={{ entry_name }}"
@@ -119,6 +123,23 @@
                            value="{{ edit_entry_cycles }}"
                            placeholder="Leave empty to use effect default" min="1" step="1" style="max-width: 200px;">
                     <small class="text-muted">Overrides the effect's cycle count for this scene entry. Empty = use effect default.</small>
+                </div>
+
+                <div class="mb-3">
+                    <label for="after-{{ scene_name_id }}" class="form-label">Start After</label>
+                    <select class="form-select" id="after-{{ scene_name_id }}" name="after" style="max-width: 300px;">
+                        <option value="">Immediately (no dependency)</option>
+                        {% for other_entry in chainable_entries %}
+                        <option value="{{ other_entry }}"{% if edit_entry_after == other_entry %} selected{% endif %}>{{ other_entry }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Wait for another entry to finish before starting this one. The predecessor must have a cycle limit.</small>
+                </div>
+
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="inherit-target-{{ scene_name_id }}" name="inherit_target" value="1"{% if edit_entry_inherit_target %} checked{% endif %}>
+                    <label class="form-check-label" for="inherit-target-{{ scene_name_id }}">Inherit target from predecessor</label>
+                    <br><small class="text-muted">Use the target LED passed by the predecessor effect instead of the configured target above.</small>
                 </div>
 
                 <div class="d-flex gap-2 mt-3">

@@ -755,9 +755,15 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
                     "effect": effect_name,
                     "target": entry.get("target", "all"),
                     "pattern": effect_pattern,
+                    "after": entry.get("after", ""),
+                    "inherit_target": entry.get("inherit_target", False),
                 },
             )
         )
+
+    # Build list of entry names that can be chained after (all entries except the one being edited).
+    all_entry_names: list = sorted(scene_data.keys())
+    chainable_entries: list = [n for n in all_entry_names if n != edit_entry_name]
 
     context: dict = {
         "scene_name": scene_name,
@@ -765,6 +771,7 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
         "scene_entries": scene_entries,
         "available_effects": sorted(effects_dict.keys()),
         "named_ranges": lights.settings.get("named_ranges", {}),
+        "chainable_entries": chainable_entries,
         "page_title": "Edit Scene",
     }
 
@@ -774,6 +781,8 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
         context["edit_entry_effect"] = entry_dict.get("effect", "")
         context["edit_entry_target"] = str(entry_dict.get("target", ""))
         context["edit_entry_cycles"] = str(entry_dict["cycles"]) if "cycles" in entry_dict else ""
+        context["edit_entry_after"] = entry_dict.get("after", "")
+        context["edit_entry_inherit_target"] = entry_dict.get("inherit_target", False)
         context["old_entry_name"] = edit_entry_name
 
     return context
@@ -1193,6 +1202,14 @@ class SceneEditView(View):
                         entry_dict["cycles"] = int(cycles_value)
                     except ValueError:
                         pass
+
+                after_value: str = self.request.form_data.get("after", "").strip()
+                if after_value:
+                    entry_dict["after"] = after_value
+
+                inherit_target_value: str = self.request.form_data.get("inherit_target", "").strip()
+                if inherit_target_value == "1":
+                    entry_dict["inherit_target"] = True
 
                 lights.settings["scenes"][scene_name][entry_name] = entry_dict
                 lights.settings_object.store()
