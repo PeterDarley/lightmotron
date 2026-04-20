@@ -3,16 +3,28 @@
     <form hx-post="/theme"
           hx-target="#theme-picker"
           hx-swap="outerHTML">
-        <div class="list-group" style="max-width: 400px;">
+        <div class="list-group" style="max-width: 480px;">
             <label class="list-group-item list-group-item-action d-flex align-items-center gap-2">
                 <input type="radio" name="theme" value="" {% if not current_theme %}checked{% endif %}>
                 Default
             </label>
             {% for theme_file in theme_files %}
-            <label class="list-group-item list-group-item-action d-flex align-items-center gap-2">
-                <input type="radio" name="theme" value="{{ theme_file.0 }}" {% if current_theme == theme_file.0 %}checked{% endif %}>
-                {{ theme_file.1 }}
-            </label>
+            <div class="list-group-item d-flex align-items-center gap-2">
+                <label class="d-flex align-items-center gap-2 flex-grow-1 mb-0" style="cursor: pointer;">
+                    <input type="radio" name="theme" value="{{ theme_file.0 }}" {% if current_theme == theme_file.0 %}checked{% endif %}>
+                    {{ theme_file.1 }}
+                </label>
+                {% if current_theme != theme_file.0 %}
+                <button type="button" class="btn btn-outline-danger btn-sm"
+                        hx-post="/theme/delete"
+                        hx-vals='{"theme": "{{ theme_file.0 }}"}'
+                        hx-target="#theme-picker"
+                        hx-swap="outerHTML"
+                        hx-confirm="Delete theme '{{ theme_file.1 }}'? This cannot be undone.">
+                    Delete
+                </button>
+                {% endif %}
+            </div>
             {% endfor %}
         </div>
         <button type="submit" class="btn btn-primary mt-3">Apply Theme</button>

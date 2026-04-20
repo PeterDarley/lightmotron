@@ -1,0 +1,18 @@
+/* =========================================================
+   Klingon True theme for Lightmotron
+   Inherits all styling from klingon.css and overrides
+   the font to use the Klingon pIqaD-style Latin typeface.
+   ========================================================= */
+
+@import url('/themes/klingon.css');
+
+@font-face {
+    font-family: 'Klingon';
+    src: url('/themes/fonts/Klingon.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+body {
+    font-family: 'Klingon', sans-serif;
+}

@@ -703,6 +703,37 @@ class ThemeView(View):
         return Response(status=200, reason="OK", body="", headers={"HX-Redirect": "/setup"})
 
 
+class ThemeDeleteView(View):
+    """Delete a theme CSS file from www/themes/."""
+
+    def post(self) -> str:
+        """Delete the named theme file and return the updated picker fragment.
+
+        Refuses to delete the currently active theme or any filename that
+        contains path separators (basic path-traversal guard).
+        """
+
+        theme_filename: str = self.request.form_data.get("theme", "").strip()
+
+        if not theme_filename or not theme_filename.endswith(".css"):
+            return Response(status=400, reason="Bad Request", body="Invalid theme filename.")
+
+        if "/" in theme_filename or "\\" in theme_filename or ".." in theme_filename:
+            return Response(status=400, reason="Bad Request", body="Invalid theme filename.")
+
+        current_theme: str = PersistentDict().get("ui_settings", {}).get("theme", "")
+        if theme_filename == current_theme:
+            return Response(status=400, reason="Bad Request", body="Cannot delete the active theme.")
+
+        file_path: str = "www/themes/" + theme_filename
+        try:
+            os.remove(file_path)
+        except OSError:
+            return Response(status=404, reason="Not Found", body="Theme file not found.")
+
+        return _theme_response()
+
+
 def _scenes_list(scenes_dict: dict) -> list:
     """Build a list of scene summary dicts for template rendering, sorted alphabetically."""
 

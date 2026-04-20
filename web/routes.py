@@ -36,6 +36,7 @@ web_server.add_routes(
         "/backup": views.BackupView,
         "/restore": views.RestoreView,
         "/theme": views.ThemeView,
+        "/theme/delete": views.ThemeDeleteView,
     }
 )
 

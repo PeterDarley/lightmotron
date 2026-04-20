@@ -4,6 +4,13 @@
    panels inspired by Klingon computer interfaces.
    ========================================================= */
 
+@font-face {
+    font-family: 'Klingon';
+    src: url('/themes/fonts/Klingon.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
 /* ---- Palette ---- */
 :root {
     --kli-bg:          #0a0604;
@@ -25,6 +32,7 @@
 body {
     background-color: var(--kli-bg);
     color: var(--kli-text);
+    font-family: 'Klingon', sans-serif;
 }
 
 /* ---- Navbar — heavy embossed bar ---- */
