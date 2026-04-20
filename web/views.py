@@ -54,6 +54,65 @@ except Exception:
 lights = Lighting()
 
 
+def _rename_named_range_refs(old_name: str, new_name: str) -> None:
+    """Update all target fields that reference a named range by its old name."""
+
+    old_ref: str = "named:" + old_name
+    new_ref: str = "named:" + new_name
+    for scene in lights.settings.get("scenes", {}).values():
+        for entry in scene.values():
+            if entry.get("target") == old_ref:
+                entry["target"] = new_ref
+
+
+def _rename_effect_refs(old_name: str, new_name: str) -> None:
+    """Update all scene entries that reference an effect by its old name."""
+
+    for scene in lights.settings.get("scenes", {}).values():
+        for entry in scene.values():
+            if entry.get("effect") == old_name:
+                entry["effect"] = new_name
+
+
+def _rename_filter_refs(old_name: str, new_name: str) -> None:
+    """Update all effects whose filter lists reference a filter by its old name."""
+
+    for effect in lights.settings.get("effects", {}).values():
+        filters: list = effect.get("filters")
+        if isinstance(filters, list):
+            for i, item in enumerate(filters):
+                if item == old_name:
+                    filters[i] = new_name
+
+
+def _rename_scene_refs(old_name: str, new_name: str) -> None:
+    """Update scene_settings key and kills lists that reference a scene by its old name."""
+
+    scene_settings: dict = lights.settings.get("scene_settings", {})
+    if old_name in scene_settings:
+        scene_settings[new_name] = scene_settings.pop(old_name)
+
+    for meta in scene_settings.values():
+        kills: list = meta.get("kills")
+        if isinstance(kills, list):
+            for i, item in enumerate(kills):
+                if item == old_name:
+                    kills[i] = new_name
+
+
+def _rename_color_refs(old_name: str, new_name: str) -> None:
+    """Update all effect color lists that reference a custom color by its old name."""
+
+    old_ref: str = "custom:" + old_name
+    new_ref: str = "custom:" + new_name
+    for effect in lights.settings.get("effects", {}).values():
+        colors_list: list = effect.get("colors")
+        if isinstance(colors_list, list):
+            for i, item in enumerate(colors_list):
+                if item == old_ref:
+                    colors_list[i] = new_ref
+
+
 def _animation_context():
     """Return a context dict with the current animation running state."""
 
@@ -313,6 +372,7 @@ class NamedRangeView(View):
             lights.settings["named_ranges"][range_name] = selected_leds
             if old_name != range_name and old_name in lights.settings.get("named_ranges", {}):
                 del lights.settings["named_ranges"][old_name]
+                _rename_named_range_refs(old_name, range_name)
 
         lights.settings_object.store()
 
@@ -547,6 +607,11 @@ class CustomColorsView(View):
                 r = int(hex_color[0:2], 16)
                 g = int(hex_color[2:4], 16)
                 b = int(hex_color[4:6], 16)
+                old_color_name: str = self.request.form_data.get("old_color_name", "").strip()
+                if action == "update" and old_color_name and old_color_name != color_name:
+                    if old_color_name in lights.settings["custom_colors"]:
+                        del lights.settings["custom_colors"][old_color_name]
+                    _rename_color_refs(old_color_name, color_name)
                 lights.settings["custom_colors"][color_name] = (r, g, b)
             except (ValueError, IndexError):
                 pass
@@ -572,6 +637,70 @@ def _scene_name_id(scene_name: str) -> str:
             result += "-"
 
     return result
+
+
+def _list_theme_files() -> list:
+    """Return sorted list of CSS filenames found in www/themes/.
+
+    Returns an empty list if the directory does not exist.
+    """
+
+    try:
+        entries = os.listdir("www/themes")
+    except OSError:
+        return []
+
+    return sorted(name for name in entries if name.endswith(".css"))
+
+
+def _theme_display_name(filename: str) -> str:
+    """Convert a theme filename to a human-readable display name.
+
+    Strips the ``.css`` extension and replaces underscores with spaces.
+    """
+
+    name = filename
+    if name.endswith(".css"):
+        name = name[:-4]
+
+    return name.replace("_", " ")
+
+
+def _theme_response() -> str:
+    """Render the theme picker fragment with current theme and available files."""
+
+    current_theme: str = PersistentDict().get("ui_settings", {}).get("theme", "")
+    theme_pairs: list = [[filename, _theme_display_name(filename)] for filename in _list_theme_files()]
+    return render_template(
+        "setup/theme.html",
+        {
+            "theme_files": theme_pairs,
+            "current_theme": current_theme,
+        },
+    )
+
+
+class ThemeView(View):
+    """Display theme picker and save theme selection to persistent storage."""
+
+    def get(self) -> str:
+        """Return the theme picker fragment."""
+
+        return _theme_response()
+
+    def post(self) -> str:
+        """Save the selected theme and return the updated picker fragment."""
+
+        theme_filename: str = self.request.form_data.get("theme", "").strip()
+
+        storage: PersistentDict = PersistentDict()
+        if "ui_settings" not in storage:
+            storage["ui_settings"] = {}
+
+        storage["ui_settings"]["theme"] = theme_filename
+        storage.store()
+
+        return _theme_response()
 
 
 def _scenes_list(scenes_dict: dict) -> list:
@@ -986,6 +1115,7 @@ class EffectEditView(View):
             # If renaming, delete the old entry first
             if old_effect_name and old_effect_name != effect_name and old_effect_name in lights.settings["effects"]:
                 del lights.settings["effects"][old_effect_name]
+                _rename_effect_refs(old_effect_name, effect_name)
 
             lights.settings["effects"][effect_name] = effect_dict
             lights.settings_object.store()
@@ -1114,6 +1244,7 @@ class FilterEditView(View):
 
             if old_filter_name and old_filter_name != filter_name and old_filter_name in lights.settings["filters"]:
                 del lights.settings["filters"][old_filter_name]
+                _rename_filter_refs(old_filter_name, filter_name)
 
             lights.settings["filters"][filter_name] = filter_def
             lights.settings_object.store()
@@ -1181,6 +1312,7 @@ class ScenesView(View):
                 lights.settings["scenes"][new_scene_name] = lights.settings["scenes"].pop(scene_name)
                 if lights.settings.get("default_scene") == scene_name:
                     lights.settings["default_scene"] = new_scene_name
+                _rename_scene_refs(scene_name, new_scene_name)
                 lights.settings_object.store()
                 scene_name = new_scene_name
 

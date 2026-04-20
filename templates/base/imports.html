@@ -4,6 +4,9 @@
 <!-- App CSS -->
 <link href="/styles/app.css" rel="stylesheet">
 
+<!-- Theme CSS (injected by context processor; empty when no theme selected) -->
+{% if theme_css %}<link href="/{{ theme_css }}" rel="stylesheet">{% endif %}
+
 <!-- HTMX -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.7/htmx.min.js"></script>
 

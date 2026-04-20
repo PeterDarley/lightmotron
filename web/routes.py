@@ -1,5 +1,10 @@
-from webserver import WebServer
+from webserver import WebServer, set_context_processor
 import web.views as views
+import web.context_processors as context_processors
+
+# Wire the global context processor so every render_template call automatically
+# receives theme and other shared context values.
+set_context_processor(context_processors.get_context)
 
 # Register views with the web server
 web_server = WebServer()
@@ -30,6 +35,7 @@ web_server.add_routes(
         "/filters/summary": views.FiltersSummaryView,
         "/backup": views.BackupView,
         "/restore": views.RestoreView,
+        "/theme": views.ThemeView,
     }
 )
 

@@ -16,7 +16,7 @@ function toggleActiveScene(sceneName, clickedButton) {
     }
 
     // Update the active scene label to show all active scenes.
-    var activeScenes = Array.from(document.querySelectorAll('.ongoing-scene-btn.btn-primary'))
+    var activeScenes = Array.from(document.querySelectorAll('.theme-ongoing-btn.btn-primary'))
         .map(function(btn) { return btn.dataset.scene; });
     var label = activeScenes.length > 0 ? activeScenes.join(', ') : '—';
     var nameEl = document.getElementById('active-scene-name');

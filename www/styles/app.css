@@ -8,8 +8,19 @@
 #freq_slider::-moz-range-track { background: #dee2e6; border-radius: 4px; height: 6px; }
 
 /* Home page */
-.home-scene-name { font-size: 1.75rem; font-weight: 500; }
-.scenes-section-heading {
+.theme-page {}
+.theme-animation-panel {}
+.theme-animation-label {}
+.theme-animation-controls {}
+.theme-start-btn {}
+.theme-stop-btn {}
+.theme-active-scene-panel {}
+.theme-active-scene-label {}
+.theme-scene-name { font-size: 1.75rem; font-weight: 500; }
+.theme-scene-buttons {}
+.theme-ongoing-section {}
+.theme-immediate-section {}
+.theme-section-heading {
     text-transform: uppercase;
     font-size: 0.72rem;
     font-weight: 600;
@@ -17,3 +28,5 @@
     color: #6c757d;
     margin-bottom: 0.5rem;
 }
+.theme-ongoing-btn {}
+.theme-immediate-btn {}

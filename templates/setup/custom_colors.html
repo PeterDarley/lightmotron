@@ -5,8 +5,9 @@
           id="custom-colors-form">
         {% if edit_name %}
         <input type="hidden" name="action" value="update">
+        <input type="hidden" name="old_color_name" value="{{ edit_name }}">
         <div class="input-group mb-2" style="max-width: 400px;">
-            <input type="text" class="form-control" name="color_name" value="{{ edit_name }}" readonly>
+            <input type="text" class="form-control" name="color_name" value="{{ edit_name }}" required>
             <input type="color" class="form-control form-control-color" name="color_value" value="{{ edit_hex }}" required style="max-width: 80px;">
             <button type="submit" class="btn btn-primary">Update</button>
             <button type="button" class="btn btn-outline-secondary"

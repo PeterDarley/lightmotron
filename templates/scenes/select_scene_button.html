@@ -1,4 +1,4 @@
-<button class="btn ongoing-scene-btn {% if scene in active_scenes %}btn-primary{% else %}btn-outline-primary{% endif %}"
+<button class="theme-ongoing-btn btn {% if scene in active_scenes %}btn-primary{% else %}btn-outline-primary{% endif %}"
         data-scene="{{ scene }}"
         hx-post="/set_scene"
         hx-vals='{% if scene in active_scenes %}{"scene": "{{ scene }}", "action": "remove"}{% else %}{"scene": "{{ scene }}", "action": "add"}{% endif %}'
