@@ -85,7 +85,7 @@ body {
     background: var(--lcars-panel);
     border-top-left-radius: var(--lcars-r-in);
     margin-left: var(--lcars-bar-w);
-    padding: 1rem;
+    padding: 1rem 1rem 1rem 1.5rem;
 }
 /* No header: top bar is the margin above card-body */
 .card > .card-body:first-child {
@@ -157,6 +157,7 @@ body {
     position: relative;
     z-index: 1;
     padding-right: 1rem;
+    padding-left: 1.5rem;
 }
 .theme-active-scene-panel > *:last-child  { padding-bottom: 0.75rem; }
 .theme-active-scene-panel .theme-active-scene-label {
@@ -191,7 +192,7 @@ body {
 .theme-ongoing-section,
 .theme-immediate-section {
     position: relative;
-    padding-left: var(--lcars-label-w);
+    padding-left: calc(var(--lcars-label-w) + 1.5rem);
 }
 .theme-ongoing-section::before,
 .theme-immediate-section::before {
@@ -421,7 +422,7 @@ body {
     background: var(--lcars-panel);
     border-top-left-radius: var(--lcars-r-in);
     margin-left: var(--lcars-bar-w);
-    padding: 1rem;
+    padding: 1rem 1rem 1rem 1.5rem;
 }
 .modal-footer {
     background: var(--lcars-panel);
