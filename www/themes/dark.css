@@ -1,0 +1,159 @@
+/* =========================================================
+   Dark theme for Lightmotron
+   ========================================================= */
+
+body {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+.navbar {
+    background-color: #1e1e1e !important;
+    border-bottom: 1px solid #333;
+
+    & .navbar-brand,
+    & .nav-link { color: #b0b0b0 !important; }
+
+    & .nav-link:hover,
+    & .nav-link.active { color: #ffffff !important; }
+}
+
+.card {
+    background-color: #1e1e1e;
+    border-color: #333;
+
+    & .card-header { background-color: #252525; border-bottom-color: #333; color: #e0e0e0; }
+}
+
+/* Home page */
+.theme-animation-panel { background-color: #1e1e1e; border-color: #333; }
+
+.theme-animation-label,
+.theme-active-scene-label { color: #999 !important; }
+
+.theme-scene-name { color: #ffffff; }
+
+.theme-section-heading { color: #777 !important; }
+
+/* Ongoing scene buttons */
+.theme-ongoing-btn {
+    &.btn-primary        { background-color: #2a6bb5; border-color: #2a6bb5; color: #fff; }
+    &.btn-primary:hover  { background-color: #3580d0; border-color: #3580d0; }
+    &.btn-outline-primary { border-color: #2a6bb5; color: #6aacf0; }
+    &.btn-outline-primary:hover { background-color: #1a2a40; }
+}
+
+/* Immediate scene buttons */
+.theme-immediate-btn {
+    border-color: #888;
+    color: #aaa;
+
+    &:hover { background-color: #2a2a2a; }
+}
+
+/* Animation control buttons */
+.theme-start-btn {
+    &.btn-success         { background-color: #1a6a30; border-color: #228a3e; color: #b0f0c0; }
+    &.btn-outline-success { border-color: #228a3e; color: #50c070; }
+}
+
+.theme-stop-btn {
+    &.btn-danger          { background-color: #8b2020; border-color: #a52a2a; }
+    &.btn-outline-danger  { border-color: #a52a2a; color: #e07070; }
+}
+
+/* Bootstrap utility overrides */
+.text-muted { color: #777 !important; }
+
+.btn-secondary {
+    background-color: #2a2a2a;
+    border-color: #444;
+    color: #e0e0e0;
+
+    &:hover { background-color: #363636; }
+}
+
+.btn-primary {
+    background-color: #2a6bb5;
+    border-color: #2a6bb5;
+
+    &:hover { background-color: #3580d0; border-color: #3580d0; }
+}
+
+/* Inputs */
+.form-control,
+.form-select {
+    background-color: #1a1a1a;
+    border-color: #444;
+    color: #e0e0e0;
+
+    &:focus {
+        background-color: #222;
+        border-color: #2a6bb5;
+        color: #fff;
+        box-shadow: 0 0 0 0.2rem rgba(42, 107, 181, 0.25);
+    }
+
+    &::placeholder { color: #666; }
+}
+
+/* Tables */
+.table {
+    color: #e0e0e0;
+    border-color: #333;
+
+    & thead th {
+        background-color: #252525;
+        color: #ccc;
+        border-color: #444;
+    }
+
+    & tbody tr:hover { background-color: #252525; }
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+}
+
+/* Modals */
+.modal-content {
+    background-color: #1e1e1e;
+    border-color: #444;
+    color: #e0e0e0;
+
+    & .modal-header { background-color: #252525; border-bottom-color: #333; }
+    & .modal-footer { background-color: #1e1e1e; border-top-color: #333; }
+    & .modal-title  { color: #e0e0e0; }
+}
+
+/* List groups */
+.list-group-item {
+    background-color: #1e1e1e;
+    border-color: #333;
+    color: #e0e0e0;
+
+    &-action:hover { background-color: #252525; color: #fff; }
+
+    &.active {
+        background-color: #2a6bb5;
+        border-color: #2a6bb5;
+        color: #fff;
+    }
+}
+
+/* Alerts */
+.alert {
+    &-success { background-color: #0d2818; border-color: #1a6a30; color: #70d090; }
+    &-danger  { background-color: #2a0e0e; border-color: #8b2020; color: #e07070; }
+    &-warning { background-color: #2a2008; border-color: #8a7020; color: #d0b050; }
+}
+
+/* Scrollbar (webkit) */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #1a1a1a; }
+::-webkit-scrollbar-thumb {
+    background: #444;
+
+    &:hover { background: #555; }
+}

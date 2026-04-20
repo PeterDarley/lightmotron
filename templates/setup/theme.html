@@ -1,4 +1,10 @@
 <div id="theme-picker">
+    {% if error %}
+    <div class="alert alert-danger small py-2">{{ error }}</div>
+    {% endif %}
+    {% if message %}
+    <div class="alert alert-success small py-2">{{ message }}</div>
+    {% endif %}
     <p class="text-muted small mb-3">Select a theme to apply to all pages. Choose "Default" to use the built-in Bootstrap styling.</p>
     <form hx-post="/theme"
           hx-target="#theme-picker"
@@ -28,5 +34,20 @@
             {% endfor %}
         </div>
         <button type="submit" class="btn btn-primary mt-3">Apply Theme</button>
+    </form>
+    <hr class="my-4">
+    <h6>Upload Theme Files</h6>
+    <p class="text-muted small mb-3">Upload CSS theme files or font files (.ttf, .woff, .woff2, .otf).</p>
+    <form hx-post="/theme/upload"
+          hx-target="#theme-picker"
+          hx-swap="outerHTML"
+          hx-encoding="multipart/form-data">
+        <div class="d-flex align-items-end gap-2" style="max-width: 480px;">
+            <div class="flex-grow-1">
+                <input type="file" class="form-control form-control-sm" name="file"
+                       accept=".css,.ttf,.woff,.woff2,.otf">
+            </div>
+            <button type="submit" class="btn btn-outline-primary btn-sm">Upload</button>
+        </div>
     </form>
 </div>

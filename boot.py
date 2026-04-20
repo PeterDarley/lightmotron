@@ -10,6 +10,7 @@ micropython.alloc_emergency_exception_buf(100)
 
 from comms import WIFIManager, I2CManager  # type: ignore
 from webserver import WebServer  # type: ignore
+import network  # type: ignore
 
 try:
     import esp
@@ -24,10 +25,19 @@ print("\nBooting...")
 if hasattr(settings, "BOARD") and "CPU_Frequency" in settings.BOARD:
     machine.freq(settings.BOARD["CPU_Frequency"])
 
+# Set mDNS hostname so the device is reachable at <hostname>.local
+from storage import PersistentDict  # type: ignore
+
+_stored_hostname = PersistentDict().get("ui_settings", {}).get("hostname", "")
+network.hostname(_stored_hostname if _stored_hostname else "lightmotron")
 
 # Start the WIFI and begin the web server after the connection is established
 # WIFIManager(callback=web_server.start_in_thread)
 WIFIManager(block=True)
+
+_active_hostname = network.hostname()
+print("Hostname:", _active_hostname)
+print("Home URL: http://" + _active_hostname + ".local/")
 
 # Create the web server
 web_server = WebServer()

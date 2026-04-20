@@ -1,6 +1,7 @@
 from webserver import View, render_template, Response
 from storage import PersistentDict
 from lighting import Lighting
+from comms import WIFIManager
 import gc
 import io
 import json
@@ -666,8 +667,12 @@ def _theme_display_name(filename: str) -> str:
     return name.replace("_", " ")
 
 
-def _theme_response() -> str:
-    """Render the theme picker fragment with current theme and available files."""
+def _theme_response(message: str = "", error: str = "") -> str:
+    """Render the theme picker fragment with current theme and available files.
+
+    Optional *message* or *error* strings are passed to the template for
+    inline feedback after actions like upload or delete.
+    """
 
     current_theme: str = PersistentDict().get("ui_settings", {}).get("theme", "")
     theme_pairs: list = [[filename, _theme_display_name(filename)] for filename in _list_theme_files()]
@@ -676,6 +681,8 @@ def _theme_response() -> str:
         {
             "theme_files": theme_pairs,
             "current_theme": current_theme,
+            "message": message,
+            "error": error,
         },
     )
 
@@ -732,6 +739,162 @@ class ThemeDeleteView(View):
             return Response(status=404, reason="Not Found", body="Theme file not found.")
 
         return _theme_response()
+
+
+class ThemeUploadView(View):
+    """Handle theme CSS and font file uploads."""
+
+    _ALLOWED_EXTENSIONS: tuple = (".css", ".ttf", ".woff", ".woff2", ".otf")
+    _FONT_EXTENSIONS: tuple = (".ttf", ".woff", ".woff2", ".otf")
+    _MAX_FILE_SIZE: int = 512 * 1024
+
+    def post(self) -> str:
+        """Save an uploaded theme or font file and return the updated picker fragment.
+
+        Validates the file extension, rejects path traversal attempts, and
+        saves CSS files to ``www/themes/`` and font files to ``www/themes/fonts/``.
+        """
+
+        uploaded: dict = self.request.files.get("file")
+        if not uploaded:
+            return _theme_response(error="No file selected.")
+
+        filename: str = uploaded["filename"].strip()
+        if not filename:
+            return _theme_response(error="No filename provided.")
+
+        # Security: reject path separators and directory traversal
+        if "/" in filename or "\\" in filename or ".." in filename:
+            return _theme_response(error="Invalid filename.")
+
+        # Validate extension
+        lower_name: str = filename.lower()
+        if not any(lower_name.endswith(ext) for ext in self._ALLOWED_EXTENSIONS):
+            return _theme_response(error="Only .css, .ttf, .woff, .woff2, and .otf files are allowed.")
+
+        # Check file size
+        file_data: bytes = uploaded["data"]
+        if len(file_data) > self._MAX_FILE_SIZE:
+            return _theme_response(error="File too large (max 512 KB).")
+
+        # Determine target directory
+        if any(lower_name.endswith(ext) for ext in self._FONT_EXTENSIONS):
+            target_dir = "www/themes/fonts"
+        else:
+            target_dir = "www/themes"
+
+        # Ensure target directory exists
+        try:
+            os.stat(target_dir)
+        except OSError:
+            os.mkdir(target_dir)
+
+        # Write file to disk
+        file_path: str = target_dir + "/" + filename
+        with open(file_path, "wb") as destination:
+            destination.write(file_data)
+
+        return _theme_response(message="Uploaded " + filename)
+
+
+_HOSTNAME_RE_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
+
+
+def _hostname_response(message: str = "", error: str = "") -> str:
+    """Render the hostname form fragment."""
+
+    hostname: str = PersistentDict().get("ui_settings", {}).get("hostname", "")
+    return render_template(
+        "setup/hostname.html",
+        {
+            "hostname": hostname,
+            "message": message,
+            "error": error,
+        },
+    )
+
+
+class HostnameView(View):
+    """Display and save the local mDNS hostname."""
+
+    def get(self) -> str:
+        """Return the hostname form fragment."""
+
+        return _hostname_response()
+
+    def post(self) -> str:
+        """Validate, save, apply the hostname, and restart the network.
+
+        After saving, the mDNS hostname is applied immediately and WiFi is
+        restarted in a background thread.  The browser receives a short
+        countdown page that redirects to the new ``<hostname>.local`` URL
+        after five seconds.
+        """
+
+        raw_hostname: str = self.request.form_data.get("hostname", "").strip().lower()
+
+        if not raw_hostname:
+            storage: PersistentDict = PersistentDict()
+            if "ui_settings" not in storage:
+                storage["ui_settings"] = {}
+
+            storage["ui_settings"]["hostname"] = ""
+            storage.store()
+            raw_hostname = "lightmotron"
+            self._apply_and_restart(raw_hostname)
+            return self._redirect_response(raw_hostname)
+
+        if len(raw_hostname) > 32:
+            return _hostname_response(error="Hostname must be 32 characters or fewer.")
+
+        if raw_hostname.startswith("-") or raw_hostname.endswith("-"):
+            return _hostname_response(error="Hostname cannot start or end with a hyphen.")
+
+        if not all(character in _HOSTNAME_RE_CHARS for character in raw_hostname):
+            return _hostname_response(error="Only letters, numbers, and hyphens are allowed.")
+
+        storage: PersistentDict = PersistentDict()
+        if "ui_settings" not in storage:
+            storage["ui_settings"] = {}
+
+        storage["ui_settings"]["hostname"] = raw_hostname
+        storage.store()
+        self._apply_and_restart(raw_hostname)
+        return self._redirect_response(raw_hostname)
+
+    @staticmethod
+    def _apply_and_restart(hostname: str) -> None:
+        """Set the mDNS hostname and restart WiFi in a background thread."""
+
+        import network
+        import _thread
+        from time import sleep
+
+        network.hostname(hostname)
+
+        def _restart_wifi():
+            """Disconnect and reconnect WiFi so mDNS picks up the new name."""
+
+            sleep(0.5)
+            wifi = WIFIManager()
+            wifi.sta_if.disconnect()
+            sleep(1)
+            wifi.sta_if.connect(wifi.ssid, wifi.password)
+
+        _thread.start_new_thread(_restart_wifi, ())
+
+    @staticmethod
+    def _redirect_response(hostname: str) -> str:
+        """Return an HTML fragment that redirects to the new hostname after five seconds."""
+
+        new_url: str = "http://" + hostname + ".local/setup"
+        return (
+            '<div class="alert alert-info small py-2">'
+            "Hostname updated. Reconnecting network&hellip;"
+            "</div>"
+            '<p class="small text-muted">Redirecting to <strong>' + new_url + "</strong> in 5 seconds.</p>"
+            '<script>setTimeout(function(){window.location.href="' + new_url + '";},5000);</script>'
+        )
 
 
 def _scenes_list(scenes_dict: dict) -> list:

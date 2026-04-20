@@ -1,0 +1,18 @@
+<form hx-post="/hostname"
+      hx-target="#hostname-form"
+      hx-swap="innerHTML">
+    {% if error %}
+    <div class="alert alert-danger small py-2">{{ error }}</div>
+    {% endif %}
+    {% if message %}
+    <div class="alert alert-success small py-2">{{ message }}</div>
+    {% endif %}
+    <div class="input-group input-group-sm">
+        <input type="text" class="form-control" name="hostname"
+               value="{{ hostname }}" placeholder="lightmotron"
+               pattern="[a-zA-Z0-9\-]+" maxlength="32">
+        <span class="input-group-text">.local</span>
+    </div>
+    <div class="text-muted small mt-1">Letters, numbers, and hyphens only. Takes effect on reboot.</div>
+    <button type="submit" class="btn btn-primary btn-sm mt-2">Save</button>
+</form>

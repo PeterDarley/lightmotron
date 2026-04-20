@@ -20,10 +20,31 @@
     --lcars-text:       #FFFFFF;
     --lcars-muted:      #AA8855;
     /* Swoop geometry */
-    --lcars-r-out:      3.5rem;   /* outer corner radius */
-    --lcars-r-in:       2.5rem;   /* inner swoop radius */
-    --lcars-bar-w:      1.5rem;   /* top bar thickness on swoops */
-    --lcars-label-w:    7rem;     /* left label bar width */
+    --lcars-r-out:   3.5rem;
+    --lcars-r-in:    2.5rem;
+    --lcars-bar-w:   1.5rem;
+    --lcars-label-w: 7rem;
+    /* Card color palette — 20 LCARS-authentic hues, max-contrast order */
+    --lcars-c1:  #FF7700;  /* orange */
+    --lcars-c2:  #9999FF;  /* periwinkle */
+    --lcars-c3:  #FFCC00;  /* gold */
+    --lcars-c4:  #CC6699;  /* pink */
+    --lcars-c5:  #88CCDD;  /* pale teal */
+    --lcars-c6:  #CC6644;  /* rust */
+    --lcars-c7:  #CC99FF;  /* mauve */
+    --lcars-c8:  #FFDDBB;  /* cream */
+    --lcars-c9:  #6699FF;  /* blue */
+    --lcars-c10: #DD6688;  /* rose */
+    --lcars-c11: #88BBFF;  /* sky blue */
+    --lcars-c12: #FF9933;  /* amber */
+    --lcars-c13: #66CCCC;  /* teal */
+    --lcars-c14: #CC6666;  /* salmon */
+    --lcars-c15: #AA88FF;  /* lavender */
+    --lcars-c16: #FFCC99;  /* tan */
+    --lcars-c17: #7788CC;  /* steel blue */
+    --lcars-c18: #FF9966;  /* peach */
+    --lcars-c19: #CC99CC;  /* mauve-pink */
+    --lcars-c20: #CC88AA;  /* dusty pink */
 }
 
 /* ---- Base ---- */
@@ -40,23 +61,26 @@ body {
     border-bottom: 4px solid var(--lcars-orange);
     padding-top: 0.25rem;
     padding-bottom: 0.25rem;
-}
-.navbar-brand {
-    color: var(--lcars-orange) !important;
-    font-weight: 700;
-    font-size: 1.4rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-}
-.nav-link {
-    color: var(--lcars-tan) !important;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-}
-.nav-link:hover  { color: var(--lcars-orange) !important; }
-.nav-link.active { color: var(--lcars-orange) !important; }
 
-/* ---- Cards — LCARS swoop ---- */
+    & .navbar-brand {
+        color: var(--lcars-orange) !important;
+        font-weight: 700;
+        font-size: 1.4rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    & .nav-link {
+        color: var(--lcars-tan) !important;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+
+        &:hover  { color: var(--lcars-orange) !important; }
+        &.active { color: var(--lcars-orange) !important; }
+    }
+}
+
+/* ---- Cards -- LCARS swoop ---- */
 /*
  * The card IS the colored L-shaped frame.
  * card-header: absolutely positioned in the wide left bar.
@@ -69,76 +93,100 @@ body {
     padding: 0;
     position: relative;
     overflow: hidden;
+
+    & .card-header {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: var(--lcars-label-w);
+        background: transparent;
+        color: var(--lcars-bg);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 0.85rem;
+        border: none;
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-start;
+        padding: 0 0.6rem 0.5rem 1rem;
+        z-index: 2;
+    }
+
+    & .card-body {
+        background: var(--lcars-panel);
+        border-top-left-radius: var(--lcars-r-in);
+        margin-left: var(--lcars-label-w);
+        margin-top: var(--lcars-bar-w);
+        padding: 1rem 1rem 1rem 1.5rem;
+    }
+
+    & .card-footer {
+        background: var(--lcars-panel);
+        border-top: 1px solid #222;
+        margin-left: var(--lcars-label-w);
+        padding: 0.6rem 1rem 0.6rem 1.5rem;
+    }
 }
-.card-header {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: var(--lcars-label-w);
-    background: transparent;
-    color: var(--lcars-bg);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-size: 0.85rem;
-    border: none;
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-start;
-    padding: 0 0.6rem 0.5rem 1rem;
-    z-index: 2;
-}
-/* card-body: dark panel; left margin = label bar, top margin = top orange bar */
-.card-body {
-    background: var(--lcars-panel);
-    border-top-left-radius: var(--lcars-r-in);
-    margin-left: var(--lcars-label-w);
-    margin-top: var(--lcars-bar-w);
-    padding: 1rem 1rem 1rem 1.5rem;
-}
-.card-footer {
-    background: var(--lcars-panel);
-    border-top: 1px solid #222;
-    margin-left: var(--lcars-label-w);
-    padding: 0.6rem 1rem 0.6rem 1.5rem;
-}
+
+/* ---- Per-card color cycling ---- */
+.col:nth-child(20n+1)  > .card { background: var(--lcars-c1); }
+.col:nth-child(20n+2)  > .card { background: var(--lcars-c2); }
+.col:nth-child(20n+3)  > .card { background: var(--lcars-c3); }
+.col:nth-child(20n+4)  > .card { background: var(--lcars-c4); }
+.col:nth-child(20n+5)  > .card { background: var(--lcars-c5); }
+.col:nth-child(20n+6)  > .card { background: var(--lcars-c6); }
+.col:nth-child(20n+7)  > .card { background: var(--lcars-c7); }
+.col:nth-child(20n+8)  > .card { background: var(--lcars-c8); }
+.col:nth-child(20n+9)  > .card { background: var(--lcars-c9); }
+.col:nth-child(20n+10) > .card { background: var(--lcars-c10); }
+.col:nth-child(20n+11) > .card { background: var(--lcars-c11); }
+.col:nth-child(20n+12) > .card { background: var(--lcars-c12); }
+.col:nth-child(20n+13) > .card { background: var(--lcars-c13); }
+.col:nth-child(20n+14) > .card { background: var(--lcars-c14); }
+.col:nth-child(20n+15) > .card { background: var(--lcars-c15); }
+.col:nth-child(20n+16) > .card { background: var(--lcars-c16); }
+.col:nth-child(20n+17) > .card { background: var(--lcars-c17); }
+.col:nth-child(20n+18) > .card { background: var(--lcars-c18); }
+.col:nth-child(20n+19) > .card { background: var(--lcars-c19); }
+.col:nth-child(20n)    > .card { background: var(--lcars-c20); }
 
 /* ---- Home page ---- */
 .theme-page { padding-top: 1rem; }
 
-/* Animation panel: peach frame, wide left bar with horizontal label */
 .theme-animation-panel {
     background: var(--lcars-peach);
     border-radius: var(--lcars-r-out) 0 0 0 !important;
     position: relative;
     overflow: hidden;
-}
-.theme-animation-panel > .card-body {
-    position: relative;
-    z-index: 1;
-}
-.theme-animation-panel .theme-animation-label {
-    position: absolute;
-    left: calc(-1 * var(--lcars-label-w));
-    width: var(--lcars-label-w);
-    top: 0;
-    bottom: 0;
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-start;
-    color: var(--lcars-bg) !important;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-size: 0.85rem;
-    white-space: nowrap;
-    padding: 0 0.6rem 0.5rem 1rem;
-    margin: 0;
-    z-index: 2;
+
+    & > .card-body {
+        position: relative;
+        z-index: 1;
+    }
+
+    & .theme-animation-label {
+        position: absolute;
+        left: calc(-1 * var(--lcars-label-w));
+        width: var(--lcars-label-w);
+        top: 0;
+        bottom: 0;
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-start;
+        color: var(--lcars-bg) !important;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        padding: 0 0.6rem 0.5rem 1rem;
+        margin: 0;
+        z-index: 2;
+    }
 }
 
-/* Active-scene swoop: orange frame with wide left bar + horizontal label */
 .theme-active-scene-panel {
     position: relative;
     background: var(--lcars-orange);
@@ -146,44 +194,49 @@ body {
     overflow: hidden;
     margin-top: 0.5rem;
     padding-left: var(--lcars-label-w);
+
+    &::after {
+        content: '';
+        position: absolute;
+        top: var(--lcars-bar-w);
+        left: var(--lcars-label-w);
+        right: 0;
+        bottom: 0;
+        background: var(--lcars-panel);
+        border-top-left-radius: var(--lcars-r-in);
+        pointer-events: none;
+    }
+
+    & > * {
+        position: relative;
+        z-index: 1;
+        padding-right: 1rem;
+        padding-left: 1.5rem;
+
+        &:last-child { padding-bottom: 0.75rem; }
+    }
+
+    & .theme-active-scene-label {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: var(--lcars-label-w);
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-start;
+        color: var(--lcars-bg) !important;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        padding: 0 0.6rem 0.5rem 1rem;
+        margin: 0;
+        z-index: 2;
+    }
 }
-.theme-active-scene-panel::after {
-    content: '';
-    position: absolute;
-    top: var(--lcars-bar-w);
-    left: var(--lcars-label-w);
-    right: 0;
-    bottom: 0;
-    background: var(--lcars-panel);
-    border-top-left-radius: var(--lcars-r-in);
-    pointer-events: none;
-}
-.theme-active-scene-panel > * {
-    position: relative;
-    z-index: 1;
-    padding-right: 1rem;
-    padding-left: 1.5rem;
-}
-.theme-active-scene-panel > *:last-child  { padding-bottom: 0.75rem; }
-.theme-active-scene-panel .theme-active-scene-label {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: var(--lcars-label-w);
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-start;
-    color: var(--lcars-bg) !important;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-size: 0.85rem;
-    white-space: nowrap;
-    padding: 0 0.6rem 0.5rem 1rem;
-    margin: 0;
-    z-index: 2;
-}
+
 .theme-scene-name {
     padding-top: var(--lcars-bar-w);
     color: var(--lcars-orange);
@@ -193,23 +246,23 @@ body {
     letter-spacing: 0.1em;
 }
 
-/* Section headings: wide coloured left bar */
 .theme-ongoing-section,
 .theme-immediate-section {
     position: relative;
     padding-left: calc(var(--lcars-label-w) + 1.5rem);
+
+    &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: var(--lcars-label-w);
+        border-radius: 0;
+    }
 }
-.theme-ongoing-section::before,
-.theme-immediate-section::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: var(--lcars-label-w);
-    border-radius: 0;
-}
-.theme-ongoing-section::before { background: var(--lcars-periwinkle); }
+
+.theme-ongoing-section::before   { background: var(--lcars-periwinkle); }
 .theme-immediate-section::before { background: var(--lcars-gold); }
 
 .theme-section-heading {
@@ -247,69 +300,67 @@ body {
     border-width: 2px;
 }
 
-/* Ongoing scene buttons */
-.theme-ongoing-btn.btn-primary {
-    background-color: var(--lcars-periwinkle);
-    border-color: var(--lcars-periwinkle);
-    color: var(--lcars-bg);
-}
-.theme-ongoing-btn.btn-primary:hover {
-    background-color: var(--lcars-mauve);
-    border-color: var(--lcars-mauve);
-    color: var(--lcars-bg);
-}
-.theme-ongoing-btn.btn-outline-primary {
-    border-color: var(--lcars-periwinkle);
-    color: var(--lcars-periwinkle);
-    background-color: transparent;
-}
-.theme-ongoing-btn.btn-outline-primary:hover {
-    background-color: #1a1a3a;
-    color: var(--lcars-mauve);
-    border-color: var(--lcars-mauve);
+.theme-ongoing-btn {
+    &.btn-outline-primary {
+        border-color: var(--lcars-periwinkle);
+        color: var(--lcars-periwinkle);
+        background-color: transparent;
+
+        &:hover {
+            background-color: #1a1a3a;
+            color: var(--lcars-mauve);
+            border-color: var(--lcars-mauve);
+        }
+    }
 }
 
-/* Immediate scene buttons */
 .theme-immediate-btn {
     border-color: var(--lcars-gold);
     color: var(--lcars-gold);
     background-color: transparent;
-}
-.theme-immediate-btn:hover {
-    background-color: var(--lcars-gold);
-    color: var(--lcars-bg);
+
+    &:hover {
+        background-color: var(--lcars-gold);
+        color: var(--lcars-bg);
+    }
 }
 
-/* Start button */
-.theme-start-btn.btn-success {
-    background-color: var(--lcars-green);
-    border-color: var(--lcars-green);
-    color: var(--lcars-bg);
-}
-.theme-start-btn.btn-outline-success {
-    border-color: var(--lcars-green);
-    color: var(--lcars-green);
-    background-color: transparent;
-}
-.theme-start-btn.btn-outline-success:hover {
-    background-color: var(--lcars-green);
-    color: var(--lcars-bg);
+.theme-start-btn {
+    &.btn-success {
+        background-color: var(--lcars-green);
+        border-color: var(--lcars-green);
+        color: var(--lcars-bg);
+    }
+
+    &.btn-outline-success {
+        border-color: var(--lcars-green);
+        color: var(--lcars-green);
+        background-color: transparent;
+
+        &:hover {
+            background-color: var(--lcars-green);
+            color: var(--lcars-bg);
+        }
+    }
 }
 
-/* Stop button */
-.theme-stop-btn.btn-danger {
-    background-color: var(--lcars-red);
-    border-color: var(--lcars-red);
-    color: var(--lcars-text);
-}
-.theme-stop-btn.btn-outline-danger {
-    border-color: var(--lcars-red);
-    color: var(--lcars-red);
-    background-color: transparent;
-}
-.theme-stop-btn.btn-outline-danger:hover {
-    background-color: var(--lcars-red);
-    color: var(--lcars-text);
+.theme-stop-btn {
+    &.btn-danger {
+        background-color: var(--lcars-red);
+        border-color: var(--lcars-red);
+        color: var(--lcars-text);
+    }
+
+    &.btn-outline-danger {
+        border-color: var(--lcars-red);
+        color: var(--lcars-red);
+        background-color: transparent;
+
+        &:hover {
+            background-color: var(--lcars-red);
+            color: var(--lcars-text);
+        }
+    }
 }
 
 /* ---- Bootstrap overrides ---- */
@@ -321,198 +372,210 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
+
 .btn-primary {
     background-color: var(--lcars-periwinkle);
     border-color: var(--lcars-periwinkle);
     color: var(--lcars-bg);
+
+    &:hover {
+        background-color: var(--lcars-mauve);
+        border-color: var(--lcars-mauve);
+        color: var(--lcars-bg);
+    }
 }
-.btn-primary:hover {
-    background-color: var(--lcars-mauve);
-    border-color: var(--lcars-mauve);
-    color: var(--lcars-bg);
-}
+
 .btn-secondary {
     background-color: transparent;
     border-color: var(--lcars-tan);
     color: var(--lcars-tan);
+
+    &:hover {
+        background-color: var(--lcars-tan);
+        color: var(--lcars-bg);
+    }
 }
-.btn-secondary:hover {
-    background-color: var(--lcars-tan);
-    color: var(--lcars-bg);
-}
+
 .btn-outline-secondary {
     border-color: var(--lcars-tan);
     color: var(--lcars-tan);
+
+    &:hover {
+        background-color: var(--lcars-tan);
+        color: var(--lcars-bg);
+    }
 }
-.btn-outline-secondary:hover {
-    background-color: var(--lcars-tan);
-    color: var(--lcars-bg);
-}
-.btn-outline-danger {
-    border-color: var(--lcars-red);
-    color: var(--lcars-red);
-}
-.btn-danger {
-    background-color: var(--lcars-red);
-    border-color: var(--lcars-red);
-}
+
+.btn-outline-danger { border-color: var(--lcars-red); color: var(--lcars-red); }
+.btn-danger         { background-color: var(--lcars-red); border-color: var(--lcars-red); }
+
 .btn-warning {
     background-color: var(--lcars-gold);
     border-color: var(--lcars-gold);
     color: var(--lcars-bg);
 }
-.btn-outline-warning {
-    border-color: var(--lcars-gold);
-    color: var(--lcars-gold);
-}
 
-/* Inputs */
-.form-control, .form-select {
+.btn-outline-warning { border-color: var(--lcars-gold); color: var(--lcars-gold); }
+
+/* ---- Inputs ---- */
+.form-control,
+.form-select {
     background-color: #111;
     border: 2px solid var(--lcars-orange);
     color: var(--lcars-text);
     border-radius: 0;
     border-top-left-radius: 0.75rem;
     border-bottom-right-radius: 0.75rem;
-}
-.form-control:focus, .form-select:focus {
-    background-color: #1a0a00;
-    border-color: var(--lcars-peach);
-    color: var(--lcars-text);
-    box-shadow: 0 0 0 0.2rem rgba(255, 119, 0, 0.35);
-}
-.form-control::placeholder { color: var(--lcars-muted); }
 
-/* Tables */
+    &:focus {
+        background-color: #1a0a00;
+        border-color: var(--lcars-peach);
+        color: var(--lcars-text);
+        box-shadow: 0 0 0 0.2rem rgba(255, 119, 0, 0.35);
+    }
+
+    &::placeholder { color: var(--lcars-muted); }
+}
+
+/* ---- Tables ---- */
 .table {
     color: var(--lcars-text);
     border-color: #333;
-}
-.table thead th {
-    background-color: var(--lcars-orange);
-    color: var(--lcars-bg);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    border-color: #FF9900;
-}
-.table tbody tr:hover { background-color: #1a0a00; }
-.table-striped > tbody > tr:nth-of-type(odd) > * { background-color: #0d0500; color: var(--lcars-text); }
 
-/* Modals — color set per section via data-section attribute */
+    & thead th {
+        background-color: var(--lcars-orange);
+        color: var(--lcars-bg);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        border-color: #FF9900;
+    }
+
+    & tbody tr:hover { background-color: #1a0a00; }
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: #0d0500;
+    color: var(--lcars-text);
+}
+
+/* ---- Modals ---- */
 .modal-content {
     background: var(--lcars-mauve);
     border: none;
     border-radius: var(--lcars-r-out) 0 0 0;
     padding: 0;
+
+    &[data-section="custom-colors"] { background: var(--lcars-c1); }
+    &[data-section="named-ranges"]  { background: var(--lcars-c2); }
+    &[data-section="filters"]       { background: var(--lcars-c3); }
+    &[data-section="effects"]       { background: var(--lcars-c4); }
+    &[data-section="scenes"]        { background: var(--lcars-c5); }
+    &[data-section="theme"]         { background: var(--lcars-c6); }
+    &[data-section="hostname"]      { background: var(--lcars-c7); }
+
+    & .modal-header {
+        background: transparent;
+        color: var(--lcars-bg);
+        border: none;
+        padding: 0.45rem 1rem 0.4rem 1.6rem;
+        min-height: 2.6rem;
+        display: flex;
+        align-items: center;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 1.05rem;
+    }
+
+    & .modal-body {
+        background: var(--lcars-panel);
+        border-top-left-radius: var(--lcars-r-in);
+        margin-left: var(--lcars-bar-w);
+        padding: 1rem 1rem 1rem 1.5rem;
+    }
+
+    & .modal-footer {
+        background: var(--lcars-panel);
+        border-top: 1px solid #222;
+        margin-left: var(--lcars-bar-w);
+        padding: 0.6rem 1rem;
+    }
+
+    & .modal-title { font-weight: 700; color: var(--lcars-bg); margin: 0; }
 }
-.modal-content[data-section="custom-colors"] { background: var(--lcars-peach); }
-.modal-content[data-section="named-ranges"]  { background: var(--lcars-tan); }
-.modal-content[data-section="filters"]       { background: var(--lcars-blue); }
-.modal-content[data-section="effects"]       { background: var(--lcars-orange); }
-.modal-content[data-section="scenes"]        { background: var(--lcars-mauve); }
-.modal-content[data-section="theme"]         { background: var(--lcars-gold); }
-.modal-header {
-    background: transparent;
-    color: var(--lcars-bg);
-    border: none;
-    padding: 0.45rem 1rem 0.4rem 1.6rem;
-    min-height: 2.6rem;
-    display: flex;
-    align-items: center;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-size: 1.05rem;
-}
-.modal-body {
-    background: var(--lcars-panel);
-    border-top-left-radius: var(--lcars-r-in);
-    margin-left: var(--lcars-bar-w);
-    padding: 1rem 1rem 1rem 1.5rem;
-}
-.modal-footer {
-    background: var(--lcars-panel);
-    border-top: 1px solid #222;
-    margin-left: var(--lcars-bar-w);
-    padding: 0.6rem 1rem;
-}
-.modal-title { font-weight: 700; color: var(--lcars-bg); margin: 0; }
+
 .btn-close {
     filter: invert(1) drop-shadow(0 0 3px rgba(0,0,0,0.8)) drop-shadow(0 0 6px rgba(0,0,0,0.5));
     opacity: 1;
 }
 
-/* List groups */
+/* ---- List groups ---- */
 .list-group-item {
     background-color: var(--lcars-panel);
     border-color: #333;
     color: var(--lcars-text);
-}
-.list-group-item-action:hover {
-    background-color: #1a0a00;
-    color: var(--lcars-orange);
-}
-.list-group-item.active {
-    background-color: var(--lcars-orange);
-    border-color: var(--lcars-orange);
-    color: var(--lcars-bg);
+
+    &-action:hover {
+        background-color: #1a0a00;
+        color: var(--lcars-orange);
+    }
+
+    &.active {
+        background-color: var(--lcars-orange);
+        border-color: var(--lcars-orange);
+        color: var(--lcars-bg);
+    }
 }
 
-/* Alerts */
-.alert-success { background-color: #001a0a; border-color: var(--lcars-green); color: var(--lcars-green); }
-.alert-danger   { background-color: #1a0000; border-color: var(--lcars-red);   color: var(--lcars-red); }
-.alert-warning  { background-color: #1a1000; border-color: var(--lcars-gold);  color: var(--lcars-gold); }
+/* ---- Nested card reset (shared by card-body and modal-body) ---- */
+:is(.card .card-body, .modal-content .modal-body) {
 
-/* ---- Nested / inline cards inside modal/card bodies ---- */
-/*
- * Small cards nested inside a dark panel (e.g. color swatches, param sections)
- * should not get the full LCARS swoop treatment.
- */
-.card-body .card,
-.modal-body .card {
-    background: #1e1e1e !important;
-    border: 1px solid #444 !important;
-    border-radius: 0.5rem !important;
-    position: static !important;
-    overflow: visible !important;
-}
-.card-body .card .card-header,
-.modal-body .card .card-header {
-    position: static !important;
-    width: auto !important;
-    background: #2a2a2a !important;
-    color: var(--lcars-tan) !important;
-    font-size: 0.8rem !important;
-    padding: 0.4rem 0.75rem !important;
-    border-bottom: 1px solid #444 !important;
-    border-radius: 0.5rem 0.5rem 0 0 !important;
-    min-height: unset !important;
-    letter-spacing: 0.06em !important;
-}
-.card-body .card .card-body,
-.modal-body .card .card-body {
-    background: transparent !important;
-    border-radius: 0 !important;
-    margin-left: 0 !important;
-    margin-top: 0 !important;
-    padding: 0.75rem !important;
-}
-.card-body .card .card-title,
-.modal-body .card .card-title {
-    color: var(--lcars-tan);
-    font-size: 0.85rem;
-    margin-bottom: 0.5rem;
-}
+    & .card {
+        background: #1e1e1e !important;
+        border: 1px solid #444 !important;
+        border-radius: 0.5rem !important;
+        position: static !important;
+        overflow: visible !important;
 
-/* Override hardcoded light grey backgrounds inside dark panels */
-.card-body .rounded.border,
-.modal-body .rounded.border {
-    background-color: #1e1e1e !important;
-    border-color: #444 !important;
-    color: var(--lcars-text) !important;
+        & .card-header {
+            position: static !important;
+            width: auto !important;
+            background: #2a2a2a !important;
+            color: var(--lcars-tan) !important;
+            font-size: 0.8rem !important;
+            padding: 0.4rem 0.75rem !important;
+            border-bottom: 1px solid #444 !important;
+            border-radius: 0.5rem 0.5rem 0 0 !important;
+            min-height: unset !important;
+            letter-spacing: 0.06em !important;
+        }
+
+        & .card-body {
+            background: transparent !important;
+            border-radius: 0 !important;
+            margin-left: 0 !important;
+            margin-top: 0 !important;
+            padding: 0.75rem !important;
+        }
+
+        & .card-title {
+            color: var(--lcars-tan);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+    }
+
+    & .rounded.border {
+        background-color: #1e1e1e !important;
+        border-color: #444 !important;
+        color: var(--lcars-text) !important;
+    }
+
+    & .form-label { color: var(--lcars-tan); }
 }
 
-/* form-label inside dark panels */
-.card-body .form-label,
-.modal-body .form-label {
-    color: var(--lcars-tan);
+/* ---- Alerts ---- */
+.alert {
+    &-success { background-color: #001a0a; border-color: var(--lcars-green); color: var(--lcars-green); }
+    &-danger  { background-color: #1a0000; border-color: var(--lcars-red);   color: var(--lcars-red); }
+    &-warning { background-color: #1a1000; border-color: var(--lcars-gold);  color: var(--lcars-gold); }
 }
