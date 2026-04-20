@@ -1,7 +1,8 @@
-<button class="btn ongoing-scene-btn {% if scene == current_scene %}btn-primary{% endif %}{% if scene != current_scene %}btn-outline-primary{% endif %}"
+<button class="btn ongoing-scene-btn {% if scene in active_scenes %}btn-primary{% else %}btn-outline-primary{% endif %}"
+        data-scene="{{ scene }}"
         hx-post="/set_scene"
-        hx-vals='{"scene": "{{ scene }}"}'
+        hx-vals='{% if scene in active_scenes %}{"scene": "{{ scene }}", "action": "remove"}{% else %}{"scene": "{{ scene }}", "action": "add"}{% endif %}'
         hx-swap="none"
-        hx-on:htmx:after-request="setActiveScene('{{ scene }}', this, true)">
+        hx-on:htmx:after-request="toggleActiveScene('{{ scene }}', this)">
     {{ scene }}
 </button>

@@ -109,7 +109,7 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="#" onclick="document.getElementById('target-{{ scene_name_id }}').value='all'; return false;">all</a></li>
-                            {% for range_name in named_ranges.keys() %}
+                            {% for range_name in named_range_names %}
                             <li><a class="dropdown-item" href="#" onclick="document.getElementById('target-{{ scene_name_id }}').value='named:{{ range_name }}'; return false;">{{ range_name }}</a></li>
                             {% endfor %}
                         </ul>
@@ -164,14 +164,75 @@
     {% endif %}
 
     <div class="border-top mt-3 pt-3">
-        <button type="button"
-                class="btn btn-sm btn-outline-danger"
-                hx-post="/scenes"
-                hx-target="#modal-body"
-                hx-swap="innerHTML"
-                hx-vals='{"scene_name": "{{ scene_name }}", "action": "delete_scene"}'
-                hx-confirm="Delete scene '{{ scene_name }}'?">
-            Delete Scene
-        </button>
+
+        {% if killable_scenes %}
+        <form hx-post="/scenes/edit"
+              hx-target="#modal-body"
+              hx-swap="innerHTML"
+              class="mb-3">
+            <input type="hidden" name="action" value="update_scene_settings">
+            <input type="hidden" name="scene_name" value="{{ scene_name }}">
+            <label class="form-label small fw-semibold">Kill scenes when this starts</label>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                {% for other_scene in killable_scenes %}
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input scene-kill-check" type="checkbox"
+                           id="kill-{{ scene_name_id }}-{{ other_scene }}"
+                           value="{{ other_scene }}"
+                           {% if other_scene in scene_kills %}checked{% endif %}>
+                    <label class="form-check-label small" for="kill-{{ scene_name_id }}-{{ other_scene }}">{{ other_scene }}</label>
+                </div>
+                {% endfor %}
+            </div>
+            <input type="hidden" name="kills" id="kills-hidden-{{ scene_name_id }}" value="{{ scene_kills_csv }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary"
+                    onclick="document.getElementById('kills-hidden-{{ scene_name_id }}').value = Array.from(document.querySelectorAll('.scene-kill-check:checked')).map(function(c){return c.value;}).join(','); return true;">
+                Save
+            </button>
+            <small class="text-muted ms-2">Selected scenes will be stopped when this scene is added.</small>
+        </form>
+        {% endif %}
+
+        <div class="d-flex flex-wrap gap-3 align-items-end">
+
+            <form hx-post="/scenes"
+                  hx-target="#modal-body"
+                  hx-swap="innerHTML"
+                  class="d-flex align-items-end gap-2">
+                <input type="hidden" name="action" value="rename_scene">
+                <input type="hidden" name="scene_name" value="{{ scene_name }}">
+                <div>
+                    <label class="form-label mb-1 small">Rename Scene</label>
+                    <input type="text" class="form-control form-control-sm" name="new_scene_name"
+                           placeholder="New name" required style="max-width: 200px;">
+                </div>
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Rename</button>
+            </form>
+
+            <form hx-post="/scenes"
+                  hx-target="#modal-body"
+                  hx-swap="innerHTML"
+                  class="d-flex align-items-end gap-2">
+                <input type="hidden" name="action" value="copy_scene">
+                <input type="hidden" name="scene_name" value="{{ scene_name }}">
+                <div>
+                    <label class="form-label mb-1 small">Copy Scene</label>
+                    <input type="text" class="form-control form-control-sm" name="new_scene_name"
+                           placeholder="Copy name" required style="max-width: 200px;">
+                </div>
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Copy</button>
+            </form>
+
+            <button type="button"
+                    class="btn btn-sm btn-outline-danger"
+                    hx-post="/scenes"
+                    hx-target="#modal-body"
+                    hx-swap="innerHTML"
+                    hx-vals='{"scene_name": "{{ scene_name }}", "action": "delete_scene"}'
+                    hx-confirm="Delete scene '{{ scene_name }}'?">
+                Delete Scene
+            </button>
+
+        </div>
     </div>
 </div>

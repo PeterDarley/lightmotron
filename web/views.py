@@ -62,15 +62,18 @@ def _animation_context():
 
 
 def _scenes_context():
-    """Return a context dict with the scenes list and current scene."""
+    """Return a context dict with the scenes list and active scenes."""
 
     scene_names = sorted(lights.settings["scenes"].keys())
     ongoing_scenes = [name for name in scene_names if lights.is_scene_ongoing(name)]
     immediate_scenes = [name for name in scene_names if not lights.is_scene_ongoing(name)]
+    active_scenes = list(lights._active_scenes)
 
     return {
         "scenes": scene_names,
         "current_scene": lights.scene_name,
+        "active_scenes": active_scenes,
+        "active_scenes_label": ", ".join(active_scenes) if active_scenes else "—",
         "ongoing_scenes": ongoing_scenes,
         "immediate_scenes": immediate_scenes,
     }
@@ -89,22 +92,33 @@ class HomeView(View):
 
 
 class SetSceneView(View):
-    """Handle POST requests to set the current lighting scene."""
+    """Handle POST requests to set or modify the current lighting scene(s)."""
 
     def post(self):
-        """Set the current lighting scene based on the POST data.
+        """Set, add, or remove an active scene.
 
-        Any form fields other than ``scene`` are forwarded as keyword arguments
-        to ``set_scene``, allowing scene functions to receive extra parameters.
+        action=set (default): replace all active scenes with the given scene.
+        action=add: add the scene to the active set without clearing others.
+        action=remove: remove the scene from the active set.
         """
 
         scene_name = self.request.form_data.get("scene")
-        if scene_name in lights.settings["scenes"]:
-            extra_kwargs = {key: value for key, value in self.request.form_data.items() if key != "scene"}
-            lights.set_scene(scene_name, **extra_kwargs)
-            return None
-        else:
+        action = self.request.form_data.get("action", "set")
+
+        if scene_name not in lights.settings["scenes"]:
             return "Invalid scene", 400
+
+        if action == "add":
+            lights.add_scene(scene_name)
+        elif action == "remove":
+            lights.remove_scene(scene_name)
+        else:
+            extra_kwargs = {
+                key: value for key, value in self.request.form_data.items() if key not in ("scene", "action")
+            }
+            lights.set_scene(scene_name, **extra_kwargs)
+
+        return None
 
 
 class AnimationView(View):
@@ -765,13 +779,23 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
     all_entry_names: list = sorted(scene_data.keys())
     chainable_entries: list = [n for n in all_entry_names if n != edit_entry_name]
 
+    # Scene-level settings (kills list).
+    scene_meta: dict = lights.settings.get("scene_settings", {}).get(scene_name, {})
+    kills: list = scene_meta.get("kills", [])
+    all_scene_names: list = sorted(lights.settings.get("scenes", {}).keys())
+    killable_scenes: list = [n for n in all_scene_names if n != scene_name]
+
     context: dict = {
         "scene_name": scene_name,
         "scene_name_id": _scene_name_id(scene_name),
         "scene_entries": scene_entries,
         "available_effects": sorted(effects_dict.keys()),
         "named_ranges": lights.settings.get("named_ranges", {}),
+        "named_range_names": sorted(lights.settings.get("named_ranges", {}).keys()),
         "chainable_entries": chainable_entries,
+        "killable_scenes": killable_scenes,
+        "scene_kills": kills,
+        "scene_kills_csv": ",".join(kills),
         "page_title": "Edit Scene",
     }
 
@@ -1146,6 +1170,28 @@ class ScenesView(View):
             del lights.settings["scenes"][scene_name]
             lights.settings_object.store()
 
+        elif action == "rename_scene" and scene_name:
+            new_scene_name: str = self.request.form_data.get("new_scene_name", "").strip()
+            if (
+                new_scene_name
+                and new_scene_name != scene_name
+                and scene_name in lights.settings["scenes"]
+                and new_scene_name not in lights.settings["scenes"]
+            ):
+                lights.settings["scenes"][new_scene_name] = lights.settings["scenes"].pop(scene_name)
+                if lights.settings.get("default_scene") == scene_name:
+                    lights.settings["default_scene"] = new_scene_name
+                lights.settings_object.store()
+                scene_name = new_scene_name
+
+        elif action == "copy_scene" and scene_name and scene_name in lights.settings["scenes"]:
+            new_scene_name = self.request.form_data.get("new_scene_name", "").strip()
+            if new_scene_name and new_scene_name not in lights.settings["scenes"]:
+                lights.settings["scenes"][new_scene_name] = json.loads(
+                    json.dumps(lights.settings["scenes"][scene_name])
+                )
+                lights.settings_object.store()
+
         context: dict = {
             "scenes": _scenes_list(lights.settings.get("scenes", {})),
             "page_title": "Scenes",
@@ -1218,6 +1264,23 @@ class SceneEditView(View):
                 if entry_name in lights.settings["scenes"][scene_name]:
                     del lights.settings["scenes"][scene_name][entry_name]
                     lights.settings_object.store()
+
+            elif action == "update_scene_settings":
+                kills_raw: str = self.request.form_data.get("kills", "").strip()
+                kills_list: list = [
+                    s.strip()
+                    for s in kills_raw.split(",")
+                    if s.strip() and s.strip() in lights.settings.get("scenes", {})
+                ]
+                if "scene_settings" not in lights.settings:
+                    lights.settings["scene_settings"] = {}
+                if scene_name not in lights.settings["scene_settings"]:
+                    lights.settings["scene_settings"][scene_name] = {}
+                if kills_list:
+                    lights.settings["scene_settings"][scene_name]["kills"] = kills_list
+                elif "kills" in lights.settings["scene_settings"].get(scene_name, {}):
+                    del lights.settings["scene_settings"][scene_name]["kills"]
+                lights.settings_object.store()
 
         return render_template("setup/scene_edit.html", _scene_edit_context(scene_name))
 
