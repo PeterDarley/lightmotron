@@ -1,7 +1,12 @@
 {% include 'base/base_head.html' %}
 <div class="container mt-4">
     <h1>Storage</h1>
-    <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"><code>{{ storage_json }}</code></pre>
+    <div class="card mt-3">
+        <div class="card-header">Raw Storage</div>
+        <div class="card-body">
+            <pre style="margin: 0; color: #cccccc; overflow-x: auto;"><code>{{ storage_json }}</code></pre>
+        </div>
+    </div>
     <a href="/" class="btn btn-secondary mt-3">Back to Home</a>
 </div>
 {% include 'base/base_foot.html' %}

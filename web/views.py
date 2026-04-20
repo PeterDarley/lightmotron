@@ -700,7 +700,7 @@ class ThemeView(View):
         storage["ui_settings"]["theme"] = theme_filename
         storage.store()
 
-        return _theme_response()
+        return Response(status=200, reason="OK", body="", headers={"HX-Redirect": "/setup"})
 
 
 def _scenes_list(scenes_dict: dict) -> list:

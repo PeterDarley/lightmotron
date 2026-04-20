@@ -58,44 +58,50 @@ body {
 
 /* ---- Cards — LCARS swoop ---- */
 /*
- * The card IS the orange L-shaped frame.
- * card-header: transparent text floating in the orange top bar.
- * card-body:   dark panel with inner concave swoop; left margin = left bar.
+ * The card IS the colored L-shaped frame.
+ * card-header: absolutely positioned in the wide left bar.
+ * card-body:   dark panel offset by the label bar (left) and top bar (top).
  */
 .card {
     background: var(--lcars-orange);
     border: none;
     border-radius: var(--lcars-r-out) 0 0 0;
     padding: 0;
+    position: relative;
+    overflow: hidden;
 }
 .card-header {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--lcars-label-w);
     background: transparent;
     color: var(--lcars-bg);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
+    font-size: 0.85rem;
     border: none;
-    padding: 0.45rem 1rem 0.4rem 1.6rem;
-    min-height: 2.6rem;
     display: flex;
-    align-items: center;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 0 0.6rem 0.5rem 1rem;
+    z-index: 2;
 }
-/* card-body and modal-body left margin use label-w */
+/* card-body: dark panel; left margin = label bar, top margin = top orange bar */
 .card-body {
     background: var(--lcars-panel);
     border-top-left-radius: var(--lcars-r-in);
-    margin-left: var(--lcars-bar-w);
-    padding: 1rem 1rem 1rem 1.5rem;
-}
-/* No header: top bar is the margin above card-body */
-.card > .card-body:first-child {
+    margin-left: var(--lcars-label-w);
     margin-top: var(--lcars-bar-w);
+    padding: 1rem 1rem 1rem 1.5rem;
 }
 .card-footer {
     background: var(--lcars-panel);
     border-top: 1px solid #222;
-    margin-left: var(--lcars-bar-w);
-    padding: 0.6rem 1rem;
+    margin-left: var(--lcars-label-w);
+    padding: 0.6rem 1rem 0.6rem 1.5rem;
 }
 
 /* ---- Home page ---- */
@@ -109,7 +115,6 @@ body {
     overflow: hidden;
 }
 .theme-animation-panel > .card-body {
-    margin-left: var(--lcars-label-w);
     position: relative;
     z-index: 1;
 }
@@ -431,7 +436,10 @@ body {
     padding: 0.6rem 1rem;
 }
 .modal-title { font-weight: 700; color: var(--lcars-bg); margin: 0; }
-.btn-close { filter: invert(1); }
+.btn-close {
+    filter: invert(1) drop-shadow(0 0 3px rgba(0,0,0,0.8)) drop-shadow(0 0 6px rgba(0,0,0,0.5));
+    opacity: 1;
+}
 
 /* List groups */
 .list-group-item {
@@ -449,19 +457,62 @@ body {
     color: var(--lcars-bg);
 }
 
-/* Setup cards — title lives in the swoop header bar */
-.setup-card .card-header {
-    font-size: 1.05rem;
-}
-.setup-card .card-title {
-    color: var(--lcars-bg);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-weight: 700;
-    margin: 0;
-}
-
 /* Alerts */
 .alert-success { background-color: #001a0a; border-color: var(--lcars-green); color: var(--lcars-green); }
 .alert-danger   { background-color: #1a0000; border-color: var(--lcars-red);   color: var(--lcars-red); }
 .alert-warning  { background-color: #1a1000; border-color: var(--lcars-gold);  color: var(--lcars-gold); }
+
+/* ---- Nested / inline cards inside modal/card bodies ---- */
+/*
+ * Small cards nested inside a dark panel (e.g. color swatches, param sections)
+ * should not get the full LCARS swoop treatment.
+ */
+.card-body .card,
+.modal-body .card {
+    background: #1e1e1e !important;
+    border: 1px solid #444 !important;
+    border-radius: 0.5rem !important;
+    position: static !important;
+    overflow: visible !important;
+}
+.card-body .card .card-header,
+.modal-body .card .card-header {
+    position: static !important;
+    width: auto !important;
+    background: #2a2a2a !important;
+    color: var(--lcars-tan) !important;
+    font-size: 0.8rem !important;
+    padding: 0.4rem 0.75rem !important;
+    border-bottom: 1px solid #444 !important;
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+    min-height: unset !important;
+    letter-spacing: 0.06em !important;
+}
+.card-body .card .card-body,
+.modal-body .card .card-body {
+    background: transparent !important;
+    border-radius: 0 !important;
+    margin-left: 0 !important;
+    margin-top: 0 !important;
+    padding: 0.75rem !important;
+}
+.card-body .card .card-title,
+.modal-body .card .card-title {
+    color: var(--lcars-tan);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Override hardcoded light grey backgrounds inside dark panels */
+.card-body .rounded.border,
+.modal-body .rounded.border {
+    background-color: #1e1e1e !important;
+    border-color: #444 !important;
+    color: var(--lcars-text) !important;
+}
+
+/* form-label inside dark panels */
+.card-body .form-label,
+.modal-body .form-label {
+    color: var(--lcars-tan);
+}
