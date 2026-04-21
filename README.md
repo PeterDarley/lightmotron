@@ -95,7 +95,6 @@ Once configured, use the **Home** page to:
 | **Pulse** | Asymmetric flashing (slow on, fast off) | Pulsing beacons |
 | **Fade In** | Smooth color transition | Startup sequences, transitions |
 | **Breathe** | Smooth up-and-down oscillation | Life-like breathing, organic feel |
-| **Sizzle** | Random color variation around a base | Turbulent fires, plasma effects |
 | **Wave** | Moving light across LEDs | Scanning beams, comet sweep |
 | **Cylon** | Wave that bounces back and forth | Iconic bouncing scan effect |
 | **Phaser Strip** | Two waves converge from opposite ends | Sci-fi phaser effects |

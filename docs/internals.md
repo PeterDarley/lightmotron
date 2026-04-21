@@ -122,18 +122,6 @@ Uses a sine wave to smoothly oscillate between two colors, creating a breathing 
 
 ---
 
-### `sizzle`
-Randomly walks each channel around a base color using biased random steps. Gives a fire/sizzle appearance.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `frequency` | 40 | Updates per second |
-| `variation` | 50 | Controls how strongly distance from target biases the random walk — smaller values mean stronger correction |
-| `heat` | 10 | Maximum channel step per update (1 to `heat`) |
-| `colors[0]` | — | Target base color |
-
----
-
 ### `wave`
 A comet or comets sweep across the LEDs. Each peak is set to `colors[1]` for one tick, then fades back to `colors[0]` over `width` LEDs of travel.
 
