@@ -50,12 +50,59 @@ python tools\reset_device.py COM3
 
 Once the device is running and connected to WiFi, open your browser and navigate to the device's IP address (e.g., `http://192.168.1.100/` or use the hostname `http://lightmotron.local/` if mDNS is available).
 
-The web interface provides:
+### Home Page
+Control animation playback and trigger scenes. Start/stop lighting animations and switch between configured scenes.
 
-* **Home** — View active scenes, start/stop animation, trigger immediate scenes
-* **Setup** — Configure custom colors, named LED ranges, effects, filters, and scenes
-* **Status** — View system uptime, memory usage, and WiFi signal
-* **Storage** — Backup/restore configuration and manage device files
+![Home page](docs/screenshots/home.png)
+
+### Setup Page
+Configure all lighting settings in one place. Each section opens a dialog to manage that category.
+
+![Setup page](docs/screenshots/setup.png)
+
+#### Custom Colors
+Define and name your own colors to reuse across effects and scenes.
+
+![Custom Colors](docs/screenshots/setup-colors.png)
+![Edit a color](docs/screenshots/setup-colors-edit.png)
+
+#### Named Ranges
+Group LED indices and give them meaningful names (e.g. "Nacelle", "Hull"). Use the LED picker to visually select LEDs.
+
+![Named Ranges](docs/screenshots/setup-ranges.png)
+![Edit a range](docs/screenshots/setup-ranges-edit.png)
+
+#### Filters
+Create reusable post-processing filters (sparkle, flicker, etc.) that can be applied to any effect.
+
+![Filters](docs/screenshots/setup-filters.png)
+![Edit a filter](docs/screenshots/setup-filters-edit.png)
+
+#### Effects
+Create reusable lighting animations with a pattern, colors, and optional filters.
+
+![Effects](docs/screenshots/setup-effects.png)
+![Edit an effect](docs/screenshots/setup-effects-edit.png)
+
+#### Scenes
+Combine effects into complete lighting scenarios. Each scene contains one or more jobs assigning effects to LED targets.
+
+![Scenes](docs/screenshots/setup-scenes.png)
+![Edit a scene](docs/screenshots/setup-scene-edit.png)
+![Edit a job](docs/screenshots/setup-job-edit.png)
+
+#### Theme
+Choose a CSS theme to customise the look of the interface.
+
+![Theme picker](docs/screenshots/setup-theme.png)
+
+### Status Page
+Monitor system health and performance. View memory usage, storage space, WiFi connection, and animation state. Download/restore all configuration as JSON.
+
+![Status page](docs/screenshots/status.png)
+
+### Storage Page
+View and export the raw JSON configuration of all settings.
 
 For WiFi and hostname configuration, see [docs/settings_template.py](docs/settings_template.py).
 
