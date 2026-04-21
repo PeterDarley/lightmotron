@@ -84,6 +84,14 @@ All CSS files should use native CSS nesting. Group related selectors under their
 ### Lighting filter design
 Filters always receive both the **target color** (from the pattern) and the **current color** (from `logical_colors`). Differences are calculated against the target color but applied to the current color. This makes filters order-independent — the result is the same regardless of which order filters are applied in.
 
+### Audio hardware
+The hardware includes:
+- Up to 3× **WWZMDiB YX5200 MP3 player modules** (serial UART, DFPlayer-compatible protocol)
+- 1× **PAM8403 amplifier module** (analog volume via onboard pot; software volume controlled via YX5200 serial commands)
+- 1–3× **3W 8Ω mini speakers**
+
+Mixing multiple YX5200 DAC_R outputs into the PAM8403 is done with a passive resistor network (one 1kΩ resistor per player). Each YX5200 UART RX line also requires a 1kΩ resistor from the ESP32-S3 TX pin. The ESP32-S3 has 3 hardware UARTs, sufficient for 3 simultaneous players.
+
 
 
 

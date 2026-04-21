@@ -11,9 +11,19 @@ A MicroPython-based lighting controller for plastic model kits, running on an ES
 
 ## Hardware
 
-* ESP-WROOM-32 development board
+### Microcontroller
+* ESP32-S3-WROOM-1 (N16R8 variant — 16MB flash, 8MB octal PSRAM)
+
+### Lighting
 * NeoPixel LED strip (GPIO 32)
-* MAX7219 4-module LED matrix display (SPI)
+* MAX7219 4-module scrolling LED matrix display (SPI: MOSI GPIO 23, SCK GPIO 18, CS GPIO 5)
+
+### Audio
+* Up to 3× WWZMDiB YX5200 MP3 player modules (DFPlayer-compatible, serial UART)
+* 1× PAM8403 stereo amplifier module (analog volume via onboard pot)
+* 1–3× 3W 8Ω mini speakers
+* Passive mix network: one 1kΩ resistor per player on DAC_R → PAM8403 input
+* 1kΩ resistor on each ESP32-S3 TX → YX5200 RX line
 
 ## Setup
 
