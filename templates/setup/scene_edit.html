@@ -137,8 +137,8 @@
                 </div>
 
                 <div class="mb-3 form-check">
-                    <input type="checkbox" class="form-check-input" id="inherit-target-{{ scene_name_id }}" name="inherit_target" value="1"{% if edit_entry_inherit_target %} checked{% endif %}>
-                    <label class="form-check-label" for="inherit-target-{{ scene_name_id }}">Inherit target from predecessor</label>
+                    <input type="checkbox" class="form-check-input theme-check" id="inherit-target-{{ scene_name_id }}" name="inherit_target" value="1"{% if edit_entry_inherit_target %} checked{% endif %}>
+                    <label class="form-check-label theme-check-label" for="inherit-target-{{ scene_name_id }}">Inherit target from predecessor</label>
                     <br><small class="text-muted">Use the target LED passed by the predecessor effect instead of the configured target above.</small>
                 </div>
 
@@ -176,11 +176,11 @@
             <div class="d-flex flex-wrap gap-2 mb-2">
                 {% for other_scene in killable_scenes %}
                 <div class="form-check form-check-inline">
-                    <input class="form-check-input scene-kill-check" type="checkbox"
+                    <input class="form-check-input theme-check scene-kill-check" type="checkbox"
                            id="kill-{{ scene_name_id }}-{{ other_scene }}"
                            value="{{ other_scene }}"
                            {% if other_scene in scene_kills %}checked{% endif %}>
-                    <label class="form-check-label small" for="kill-{{ scene_name_id }}-{{ other_scene }}">{{ other_scene }}</label>
+                    <label class="form-check-label theme-check-label small" for="kill-{{ scene_name_id }}-{{ other_scene }}">{{ other_scene }}</label>
                 </div>
                 {% endfor %}
             </div>

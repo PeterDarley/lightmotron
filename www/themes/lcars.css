@@ -19,6 +19,10 @@
     --lcars-panel:      #111111;
     --lcars-text:       #FFFFFF;
     --lcars-muted:      #AA8855;
+    /* Sound files */
+    --sound-files: "keyok1.mp3|keyok2.mp3|keyok3.mp3|keyok4.mp3|keyok5.mp3|keyok6.mp3";
+    --sound-files-close: "input_failed_clean.mp3|input_failed2_clean.mp3";
+    --sound-files-nav: "input_ok_1_clean.mp3|input_ok_2_clean.mp3|input_ok_3_clean.mp3|input_ok_4.mp3";
     /* Swoop geometry */
     --lcars-r-out:   3.5rem;
     --lcars-r-in:    2.5rem;
@@ -435,6 +439,26 @@ body {
     }
 
     &::placeholder { color: var(--lcars-muted); }
+}
+
+/* ---- Checkboxes ---- */
+.theme-check-label {
+    color: var(--lcars-text);
+}
+
+.theme-check {
+    background-color: #222;
+    border-color: var(--lcars-orange);
+
+    &:checked {
+        background-color: var(--lcars-orange);
+        border-color: var(--lcars-orange);
+    }
+
+    &:focus {
+        border-color: var(--lcars-peach);
+        box-shadow: 0 0 0 0.2rem rgba(255, 119, 0, 0.35);
+    }
 }
 
 /* ---- Tables ---- */

@@ -46,6 +46,19 @@ appearance; your theme only needs to override what it changes.
 | `theme-ongoing-btn` | Each ongoing scene toggle button | Bootstrap `btn-primary` (active) or `btn-outline-primary` (inactive) also applied |
 | `theme-immediate-btn` | Each immediate scene trigger button | Bootstrap `btn-outline-warning` also applied |
 
+### Navigation
+
+| Class | Element | Notes |
+|---|---|---|
+| `theme-nav-link` | Every `<a>` in the navbar (brand + nav items) | Bootstrap `navbar-brand` or `nav-link` also applied |
+
+### Form controls
+
+| Class | Element | Notes |
+|---|---|---|
+| `theme-check` | Checkbox `<input>` | Bootstrap `form-check-input` also applied |
+| `theme-check-label` | Checkbox `<label>` | Bootstrap `form-check-label` also applied |
+
 ### Button state notes
 
 Bootstrap state classes are added/removed dynamically by HTMX and `home.js`:
@@ -84,6 +97,31 @@ Themes can also restyle any Bootstrap component globally. Commonly overridden:
 | `.list-group-item` | List items |
 | `.text-muted` | Muted helper text |
 | `.alert-success`, `.alert-danger`, `.alert-warning` | Alert banners |
+
+> **Note:** Prefer overriding `theme-*` classes rather than Bootstrap classes directly where `theme-*` equivalents exist (e.g. use `.theme-check` instead of `.form-check-input`).
+
+---
+
+## Sound effects
+
+Themes can define CSS custom properties to play sounds when users interact with the UI. Sound files must be placed in `www/sounds/` and referenced by filename only. Each variable takes a pipe-separated list of filenames; a random file from the list is played on each interaction.
+
+| CSS variable | Triggered by |
+|---|---|
+| `--sound-files` | Any `.btn` button click |
+| `--sound-files-close` | Any `.btn-close` button (modal/alert dismiss) |
+| `--sound-files-nav` | Any `.theme-nav-link` navigation link click |
+
+Example:
+```css
+:root {
+    --sound-files: "click1.mp3|click2.mp3|click3.mp3";
+    --sound-files-close: "cancel.mp3";
+    --sound-files-nav: "navigate.mp3";
+}
+```
+
+Omitting a variable disables sounds for that interaction. Sounds are pre-loaded on page load for instant playback.
 
 ---
 
