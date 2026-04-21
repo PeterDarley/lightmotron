@@ -5,3 +5,4 @@ ThinkTank.code-workspace
 **/*.pyo
 .playwright-mcp/
 copilot_working/
+.upload_manifest.json
