@@ -46,6 +46,19 @@ To hard reset the device after uploading:
 python tools\reset_device.py COM3
 ```
 
+## Web Interface
+
+Once the device is running and connected to WiFi, open your browser and navigate to the device's IP address (e.g., `http://192.168.1.100/` or use the hostname `http://lightmotron.local/` if mDNS is available).
+
+The web interface provides:
+
+* **Home** — View active scenes, start/stop animation, trigger immediate scenes
+* **Setup** — Configure custom colors, named LED ranges, effects, filters, and scenes
+* **Status** — View system uptime, memory usage, and WiFi signal
+* **Storage** — Backup/restore configuration and manage device files
+
+For WiFi and hostname configuration, see [docs/settings_template.py](docs/settings_template.py).
+
 ## Lighting System
 
 Lighting is defined by **scenes**, each containing one or more **jobs**. Each job assigns a **pattern** to a set of target LEDs, and optionally a list of **filters** that post-process the result.
@@ -206,6 +219,18 @@ Like `wave` but the peak bounces back and forth (forward sweep then reverse swee
 
 ---
 
+### `phaser_strip`
+Two waves start at opposite ends of the target range and converge on a randomly chosen meeting point, both arriving at the same tick. After meeting, the meeting point holds lit while trails fade, then resets.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `duration` | 40 | Total ticks for the wave convergence phase |
+| `width` | 5 | Fade trail length in LEDs |
+| `colors[0]` | — | Background/trail-end color |
+| `colors[1]` | — | Peak/meeting color |
+
+---
+
 ## Filters
 
 Filters are applied after the pattern has computed its LED list for the tick. Multiple filters can be chained in the `filters` list.
@@ -242,3 +267,11 @@ Like `sizzle` but each LED is adjusted independently, creating a sparkling/twink
 | `frequency` | 40 | Updates per second |
 | `variation` | 50 | Bias strength toward target per LED |
 | `heat` | 10 | Maximum step size per channel per update |
+
+---
+
+## Documentation
+
+* [**Theming Guide**](docs/theming.md) — CSS theming system, custom classes, sound effects
+* [**NeoPixel Wiring**](docs/neopixel-wiring.md) — LED strip pinout and connection details
+* [**Settings Template**](docs/settings_template.py) — Reference configuration file with all options documented
