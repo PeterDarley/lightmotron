@@ -2,9 +2,15 @@
 <div class="container mt-4">
     <h1>Storage</h1>
     <div class="card mt-3">
-        <div class="card-header">Raw Storage</div>
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span>Raw Storage</span>
+            <button class="btn btn-outline-secondary btn-sm"
+                    onclick="navigator.clipboard.writeText(document.getElementById('storage-content').textContent).then(function(){this.textContent='Copied!';var btn=this;setTimeout(function(){btn.textContent='Copy';},2000);}.bind(this))">
+                Copy
+            </button>
+        </div>
         <div class="card-body">
-            <pre style="margin: 0; color: #cccccc; overflow-x: auto;"><code>{{ storage_json }}</code></pre>
+            <pre style="margin: 0; color: #cccccc; overflow-x: auto;"><code id="storage-content">{{ storage_json }}</code></pre>
         </div>
     </div>
     <a href="/" class="btn btn-secondary mt-3">Back to Home</a>
