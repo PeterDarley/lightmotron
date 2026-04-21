@@ -8,10 +8,12 @@ if (-not (Test-Path $mpremote)) {
     exit 1
 }
 
-# Parse arguments: optional port.
+# Parse arguments: optional port, -Force for full upload.
 $port = $null
+$forceUpload = $false
 foreach ($a in $args) {
-    if (-not $port) { $port = $a }
+    if ($a -eq '-Force') { $forceUpload = $true }
+    elseif (-not $port) { $port = $a }
 }
 if (-not $port) { $port = 'COM4' }
 
@@ -20,8 +22,58 @@ if (-not $port) { $port = 'COM4' }
 # To stop the webserver from the REPL: WebServer().stop()
 # Reboot manually with: python tools\reset_device.py COM4 2
 
-# Copy project files to device in a single mpremote session using chained commands.
-Write-Output "Uploading to $port..."
+$manifestPath = Join-Path $PSScriptRoot ".upload_manifest.json"
+
+# Load previous manifest for incremental upload.
+$oldManifest = @{}
+if (-not $forceUpload -and (Test-Path $manifestPath)) {
+    $json = Get-Content $manifestPath -Raw | ConvertFrom-Json
+    foreach ($prop in $json.PSObject.Properties) {
+        $oldManifest[$prop.Name] = $prop.Value
+    }
+}
+
+# Collect all uploadable files and compute MD5 hashes.
+$newManifest = @{}
+
+foreach ($f in (Get-ChildItem -Path $PSScriptRoot -Filter *.py)) {
+    $newManifest[$f.Name] = (Get-FileHash -Path $f.FullName -Algorithm MD5).Hash
+}
+
+$directories = @('lib', 'www', 'templates', 'web')
+foreach ($dir in $directories) {
+    $dirPath = Join-Path $PSScriptRoot $dir
+    if (Test-Path $dirPath) {
+        foreach ($f in (Get-ChildItem -Path $dirPath -File -Recurse)) {
+            $relativePath = $f.FullName.Substring($PSScriptRoot.Length + 1).Replace('\', '/')
+            $newManifest[$relativePath] = (Get-FileHash -Path $f.FullName -Algorithm MD5).Hash
+        }
+    }
+}
+
+# Determine which files have changed.
+$changedFiles = [System.Collections.Generic.List[string]]::new()
+foreach ($path in $newManifest.Keys) {
+    if (-not $oldManifest.ContainsKey($path) -or $oldManifest[$path] -ne $newManifest[$path]) {
+        $changedFiles.Add($path)
+    }
+}
+
+if ($changedFiles.Count -eq 0) {
+    Write-Output "No files changed since last upload."
+    exit 0
+}
+
+Write-Output "Uploading $($changedFiles.Count) changed file(s) to ${port}..."
+
+# Collect unique remote directories that need to exist.
+$remoteDirs = [System.Collections.Generic.HashSet[string]]::new()
+foreach ($path in $changedFiles) {
+    $parts = $path.Split('/')
+    for ($i = 1; $i -lt $parts.Length; $i++) {
+        [void]$remoteDirs.Add(($parts[0..($i-1)] -join '/'))
+    }
+}
 
 # Build a single chained mpremote invocation: connect once, copy everything.
 # mpremote supports chaining commands with '+' in a single session.
@@ -29,26 +81,30 @@ $cpArgs = [System.Collections.Generic.List[string]]::new()
 $cpArgs.Add('connect')
 $cpArgs.Add($port)
 
-$first = $true
-foreach ($f in (Get-ChildItem -Path $PSScriptRoot -Filter *.py)) {
-    Write-Output "  $($f.Name)"
-    if (-not $first) { $cpArgs.Add('+') }
-    $cpArgs.AddRange([string[]]@('fs', 'cp', $f.FullName, ':'))
-    $first = $false
+# Ensure remote directories exist via MicroPython (handles already-existing dirs).
+if ($remoteDirs.Count -gt 0) {
+    $sortedDirs = $remoteDirs | Sort-Object { $_.Length }
+    $mkdirLines = @('import os')
+    foreach ($d in $sortedDirs) {
+        $mkdirLines += "try:`n os.mkdir('$d')`nexcept OSError:`n pass"
+    }
+    $mkdirCode = $mkdirLines -join "`n"
+    $cpArgs.Add('+')
+    $cpArgs.AddRange([string[]]@('exec', $mkdirCode))
 }
 
-$directories = @('lib', 'www', 'templates', "web")
-
-foreach ($dir in $directories) {
-    $dirPath = Join-Path $PSScriptRoot $dir
-    if (Test-Path $dirPath) {
-        Write-Output "  $dir/"
-        $cpArgs.Add('+')
-        $cpArgs.AddRange([string[]]@('fs', 'cp', '-r', $dirPath, ':'))
-    }
+# Chain individual file copies.
+foreach ($path in $changedFiles) {
+    $localPath = Join-Path $PSScriptRoot ($path.Replace('/', '\'))
+    Write-Output "  $path"
+    $cpArgs.Add('+')
+    $cpArgs.AddRange([string[]]@('fs', 'cp', $localPath, ":$path"))
 }
 
 & $mpremote @cpArgs
+
+# Save updated manifest on success.
+$newManifest | ConvertTo-Json | Set-Content $manifestPath
 
 # Soft reset device to reload boot.py/main.py with new files.
 # A fresh connect without --no-soft-reset will trigger soft reset on disconnect.
