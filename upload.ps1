@@ -36,6 +36,11 @@ if (-not $forceUpload -and (Test-Path $manifestPath)) {
 # Collect all uploadable files and compute MD5 hashes.
 $newManifest = @{}
 
+# Files that exist locally but must never be uploaded to the device.
+$excludeUploadPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+[void]$excludeUploadPaths.Add('lib/licence')
+[void]$excludeUploadPaths.Add('lib/README.md')
+
 foreach ($f in (Get-ChildItem -Path $PSScriptRoot -Filter *.py)) {
     $newManifest[$f.Name] = (Get-FileHash -Path $f.FullName -Algorithm MD5).Hash
 }
@@ -46,7 +51,9 @@ foreach ($dir in $directories) {
     if (Test-Path $dirPath) {
         foreach ($f in (Get-ChildItem -Path $dirPath -File -Recurse)) {
             $relativePath = $f.FullName.Substring($PSScriptRoot.Length + 1).Replace('\', '/')
-            $newManifest[$relativePath] = (Get-FileHash -Path $f.FullName -Algorithm MD5).Hash
+            if (-not $excludeUploadPaths.Contains($relativePath)) {
+                $newManifest[$relativePath] = (Get-FileHash -Path $f.FullName -Algorithm MD5).Hash
+            }
         }
     }
 }
