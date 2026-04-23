@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Lightmotron &mdash; Web Installer</title>
+
+    <!-- esp-web-tools: handles Web Serial flashing for ESP32 -->
+    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            color: #f0f6fc;
+            letter-spacing: 0.02em;
+        }
+
+        header .badge {
+            font-size: 0.7rem;
+            background: #1f6feb;
+            color: white;
+            padding: 0.15rem 0.5rem;
+            border-radius: 2rem;
+            font-weight: 500;
+        }
+
+        main {
+            flex: 1;
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+            width: 100%;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .hero h2 {
+            font-size: 2rem;
+            color: #f0f6fc;
+            margin: 0 0 0.75rem;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: #8b949e;
+            max-width: 520px;
+            margin: 0 auto;
+        }
+
+        .install-box {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .install-box h3 {
+            margin: 0 0 0.5rem;
+            color: #f0f6fc;
+            font-size: 1.1rem;
+        }
+
+        .install-box p {
+            color: #8b949e;
+            font-size: 0.9rem;
+            margin: 0 0 1.5rem;
+        }
+
+        esp-web-install-button {
+            --esp-tools-button-color: #1f6feb;
+            --esp-tools-button-text-color: #ffffff;
+        }
+
+        .install-btn {
+            display: inline-block;
+            background: #1f6feb;
+            color: white;
+            border: none;
+            padding: 0.65rem 1.75rem;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .install-btn:hover { background: #388bfd; }
+
+        .after-install {
+            background: #0d2137;
+            border: 1px solid #1f6feb44;
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #79c0ff;
+        }
+
+        .after-install strong { color: #cae8ff; }
+
+        .requirements, .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+        }
+
+        .card h4 {
+            margin: 0 0 0.5rem;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #8b949e;
+        }
+
+        .card ul {
+            margin: 0;
+            padding-left: 1.2rem;
+            font-size: 0.9rem;
+            color: #c9d1d9;
+        }
+
+        .card ul li { margin-bottom: 0.25rem; }
+
+        footer {
+            text-align: center;
+            padding: 1.5rem;
+            color: #484f58;
+            font-size: 0.8rem;
+            border-top: 1px solid #21262d;
+        }
+
+        footer a { color: #58a6ff; text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        .browser-note {
+            font-size: 0.8rem;
+            color: #6e7681;
+            margin-top: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Lightmotron</h1>
+    <span class="badge">ESP32-S3</span>
+</header>
+
+<main>
+    <div class="hero">
+        <h2>Install Lightmotron</h2>
+        <p>MicroPython-based lighting controller for plastic model kits. Control NeoPixel LED strips with dynamic effects via a built-in web interface over WiFi.</p>
+    </div>
+
+    <div class="install-box">
+        <h3>Flash firmware to your ESP32-S3</h3>
+        <p>Connect your ESP32-S3-DevKitC-1 via USB, then click the button below.</p>
+
+        <esp-web-install-button manifest="manifest.json">
+            <button slot="activate" class="install-btn">
+                &#9889; Install Lightmotron
+            </button>
+        </esp-web-install-button>
+
+        <div class="after-install">
+            <strong>After installation:</strong> look for a WiFi network called
+            <strong>lightmotron-setup</strong> on your phone or laptop. Connect to
+            it and follow the on-screen instructions to enter your home WiFi
+            credentials. The device will then be accessible at
+            <strong>http://lightmotron.local/</strong>.
+        </div>
+
+        <p class="browser-note">Requires Google Chrome or Microsoft Edge (Web Serial API). USB cable must support data transfer.</p>
+    </div>
+
+    <div class="requirements">
+        <div class="card">
+            <h4>Hardware</h4>
+            <ul>
+                <li>ESP32-S3-DevKitC-1 (N16R8)</li>
+                <li>NeoPixel LED strip (default GPIO&nbsp;4)</li>
+                <li>USB-C data cable</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h4>Browser</h4>
+            <ul>
+                <li>Google Chrome 89+</li>
+                <li>Microsoft Edge 89+</li>
+                <li>Web Serial API must be enabled</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="features">
+        <div class="card">
+            <h4>Features</h4>
+            <ul>
+                <li>NeoPixel strip lighting effects</li>
+                <li>Scenes, effects, filters, named ranges</li>
+                <li>Browser-based control interface</li>
+                <li>WiFi with captive-portal setup</li>
+                <li>Persistent configuration storage</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h4>Built-in effects</h4>
+            <ul>
+                <li>Solid, Blink, Pulse, Breathe</li>
+                <li>Wave, Cylon, Phaser Strip</li>
+                <li>Fade In, Scintillate, Sizzle</li>
+            </ul>
+        </div>
+    </div>
+</main>
+
+<footer>
+    <a href="https://github.com/yourname/lightmotron">GitHub</a> &mdash;
+    Licensed under GPLv3
+</footer>
+
+</body>
+</html>
