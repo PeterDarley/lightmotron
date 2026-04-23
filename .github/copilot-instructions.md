@@ -7,6 +7,9 @@ Guideline:
 
 ## Notes
 
+### Documentation must be kept in sync
+Whenever code changes are made, update the relevant documentation (README.md, docs/*.md, docs/settings_template.py) in the same session. Do not leave documentation stale after a code change.
+
 ### Deployment scripts
 Do not use `upload.ps1` or `repl.ps1`. These are for manual use by the user only. The AI should never run these scripts.
 
