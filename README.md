@@ -2,6 +2,17 @@
 
 A MicroPython-based lighting controller for plastic model kits, running on an ESP32. Uses NeoPixel LED strips to produce dynamic lighting effects, and exposes a web interface for control over WiFi.
 
+## Liscence
+
+You are welcome to use this project in products, research, kits, and services.
+Selling the software itself, or minor variations of it, as a standalone product is against the spirit of the project.
+
+```
+This software is licensed under GPLv3 with the following additional permission:
+You may sell products or services that include this software, provided the software is not sold independently.
+Distribution of the software itself, except as part of a larger product or service, is not permitted.
+```
+
 ## Features
 
 * NeoPixel LED strip control for model lighting effects
@@ -34,6 +45,19 @@ git submodule init
 git submodule update
 ```
 
+## First Boot — WiFi Setup
+
+On first boot (or whenever WiFi credentials are missing or fail to connect), the device starts a **captive portal** access point:
+
+1. Look for a WiFi network called **`lightmotron-setup`** on your phone or laptop and connect to it.
+2. Your device should automatically open the portal page. If not, navigate to `http://192.168.4.1/`.
+3. The page shows a list of nearby WiFi networks sorted by signal strength. Select yours, enter the password, then tap **Save & Connect**. If your network isn't listed, choose **Other** to enter the SSID manually.
+4. The device reboots and joins your network. You can then access it at `http://lightmotron.local/` (or `http://<hostname>.local/` if you have set a custom hostname).
+
+SSID matching is case-insensitive, so credentials stored with different capitalisation will still connect.
+
+Credentials are stored persistently, so this only needs to be done once. To change them later use the **Initial Settings** card on the Setup page.
+
 ## Uploading to the Device
 
 ```powershell
@@ -56,9 +80,12 @@ Control animation playback and trigger scenes. Start/stop lighting animations an
 ![Home page](docs/screenshots/home.png)
 
 ### Setup Page
-Configure all lighting settings in one place. Each section opens a dialog to manage that category.
+Configure all lighting settings and system configuration in one place. Each section opens a dialog to manage that category.
 
 ![Setup page](docs/screenshots/setup.png)
+
+#### Initial Settings
+Configure WiFi credentials, mDNS hostname, NeoPixel pin/count, MAX7219 billboard pins, and hardware pin assignments. Changes take effect on the next reboot.
 
 #### Custom Colors
 Define and name your own colors to reuse across effects and scenes.
@@ -102,9 +129,9 @@ Monitor system health and performance. View memory usage, storage space, WiFi co
 ![Status page](docs/screenshots/status.png)
 
 ### Storage Page
-View and export the raw JSON configuration of all settings.
+View and export the raw JSON configuration of all settings. The WiFi password is shown as `***` for security.
 
-For WiFi and hostname configuration, see [docs/settings_template.py](docs/settings_template.py).
+The **backup download** (available from the Status page) omits WiFi credentials entirely so that restoring a backup on a different device does not overwrite its network configuration.
 
 ## Lighting System
 
@@ -157,7 +184,7 @@ Filters add visual flavor to effects after they render:
 
 ### Advanced: Direct Configuration
 
-For advanced users, lighting can be configured directly in `settings.py`. See [docs/internals.md](docs/internals.md) for the complete technical reference including all effect parameters, color names, and target specifications.
+For advanced users, lighting can be configured directly via the persistent storage JSON. See [docs/internals.md](docs/internals.md) for the complete technical reference including all effect parameters, color names, and target specifications.
 
 
 ---
@@ -167,4 +194,4 @@ For advanced users, lighting can be configured directly in `settings.py`. See [d
 * [**Theming Guide**](docs/theming.md) — CSS theming system, custom classes, sound effects
 * [**Lighting Internals**](docs/internals.md) — Technical reference for patterns, filters, and configuration
 * [**NeoPixel Wiring**](docs/neopixel-wiring.md) — LED strip pinout and connection details
-* [**Settings Template**](docs/settings_template.py) — Reference configuration file with all options documented
+* [**Storage Format**](docs/settings_template.py) — Reference for the persistent storage JSON structure
