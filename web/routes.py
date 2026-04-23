@@ -39,6 +39,8 @@ web_server.add_routes(
         "/theme/delete": views.ThemeDeleteView,
         "/theme/upload": views.ThemeUploadView,
         "/hostname": views.HostnameView,
+        "/system_settings": views.SystemSettingsView,
+        "/system_settings/summary": views.SystemSettingsSummaryView,
     }
 )
 

@@ -1,0 +1,115 @@
+<div id="system-settings-form">
+    {% if error %}
+    <div class="alert alert-danger small py-2">{{ error }}</div>
+    {% endif %}
+    {% if message %}
+    <div class="alert alert-success small py-2">{{ message }}</div>
+    {% endif %}
+
+    <form hx-post="/system_settings"
+          hx-target="#system-settings-form"
+          hx-swap="outerHTML">
+
+        <h6 class="mt-0 mb-3">WiFi</h6>
+        <div class="row g-2 mb-3">
+            <div class="col-sm-6">
+                <label class="form-label form-label-sm">SSID</label>
+                <input type="text" class="form-control form-control-sm" name="wifi_ssid"
+                       value="{{ ss_wifi_ssid }}" maxlength="64" autocomplete="off">
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label form-label-sm">Password</label>
+                <input type="password" class="form-control form-control-sm" name="wifi_password"
+                       placeholder="(unchanged if blank)" autocomplete="new-password">
+                <div class="form-text">Leave blank to keep the current password.</div>
+            </div>
+        </div>
+
+        <h6 class="mb-3">Network</h6>
+        <div class="row g-2 mb-3">
+            <div class="col-sm-6">
+                <label class="form-label form-label-sm">Hostname</label>
+                <div class="input-group input-group-sm">
+                    <input type="text" class="form-control" name="hostname"
+                           value="{{ ss_hostname }}" placeholder="lightmotron"
+                           pattern="[a-zA-Z0-9\-]+" maxlength="32" autocomplete="off">
+                    <span class="input-group-text">.local</span>
+                </div>
+                <div class="form-text">Letters, numbers, hyphens only.</div>
+            </div>
+        </div>
+
+        <h6 class="mb-3">NeoPixels</h6>
+        <div class="row g-2 mb-3">
+            <div class="col-sm-4">
+                <label class="form-label form-label-sm">GPIO Pin</label>
+                <input type="number" class="form-control form-control-sm" name="neo_pin"
+                       value="{{ ss_neo_pin }}" min="0" max="48">
+            </div>
+            <div class="col-sm-4">
+                <label class="form-label form-label-sm">LED Count</label>
+                <input type="number" class="form-control form-control-sm" name="neo_num"
+                       value="{{ ss_neo_num }}" min="1" max="2048">
+            </div>
+            <div class="col-sm-4 d-flex align-items-end pb-1">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="neo_brightness_curve" value="1"
+                           id="neo-bc" {% if ss_neo_brightness_curve %}checked{% endif %}>
+                    <label class="form-check-label form-label-sm" for="neo-bc">Brightness curve</label>
+                </div>
+            </div>
+        </div>
+
+        <h6 class="mb-3">MAX7219 Billboard</h6>
+        <div class="row g-2 mb-3">
+            <div class="col-sm-3">
+                <label class="form-label form-label-sm">MOSI (DIN)</label>
+                <input type="number" class="form-control form-control-sm" name="bb_mosi"
+                       value="{{ ss_bb_mosi }}" min="0" max="48">
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label form-label-sm">SCK (CLK)</label>
+                <input type="number" class="form-control form-control-sm" name="bb_sck"
+                       value="{{ ss_bb_sck }}" min="0" max="48">
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label form-label-sm">CS</label>
+                <input type="number" class="form-control form-control-sm" name="bb_cs"
+                       value="{{ ss_bb_cs }}" min="0" max="48">
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label form-label-sm">Modules</label>
+                <input type="number" class="form-control form-control-sm" name="bb_num"
+                       value="{{ ss_bb_num }}" min="1" max="16">
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label form-label-sm">Brightness (0–15)</label>
+                <input type="number" class="form-control form-control-sm" name="bb_brightness"
+                       value="{{ ss_bb_brightness }}" min="0" max="15">
+            </div>
+        </div>
+
+        <h6 class="mb-3">Hardware</h6>
+        <div class="row g-2 mb-4">
+            <div class="col-sm-4">
+                <label class="form-label form-label-sm">CPU Frequency (Hz)</label>
+                <select class="form-select form-select-sm" name="cpu_freq">
+                    <option value="80000000" {% if ss_cpu_freq == 80000000 %}selected{% endif %}>80 MHz</option>
+                    <option value="160000000" {% if ss_cpu_freq == 160000000 %}selected{% endif %}>160 MHz</option>
+                    <option value="240000000" {% if ss_cpu_freq == 240000000 %}selected{% endif %}>240 MHz</option>
+                </select>
+            </div>
+            <div class="col-sm-4">
+                <label class="form-label form-label-sm">Onboard LED GPIO</label>
+                <input type="number" class="form-control form-control-sm" name="pin_led"
+                       value="{{ ss_pin_led }}" min="0" max="48">
+            </div>
+        </div>
+
+        <div class="alert alert-warning small py-2">
+            Changes to hardware pins, hostname, or WiFi credentials take effect on the next reboot.
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">Save Settings</button>
+    </form>
+</div>

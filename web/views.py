@@ -197,6 +197,24 @@ class AnimationView(View):
         return render_template("animation/buttons.html", _animation_context())
 
 
+def _redact_system_settings(storage_dict: dict) -> dict:
+    """Return a copy of *storage_dict* with the WiFi password replaced by ``***``.
+
+    Operates on a shallow copy to avoid mutating the live storage object.
+    """
+
+    result = {k: v for k, v in storage_dict.items()}
+    sys_settings = result.get("system_settings")
+    if isinstance(sys_settings, dict):
+        wifi = sys_settings.get("wifi")
+        if isinstance(wifi, dict) and "password" in wifi:
+            redacted_wifi = {k: ("***" if k == "password" else v) for k, v in wifi.items()}
+            redacted_sys = {k: (redacted_wifi if k == "wifi" else v) for k, v in sys_settings.items()}
+            result["system_settings"] = redacted_sys
+
+    return result
+
+
 class StorageView(View):
     """Display the persistent storage dictionary as pretty-printed JSON."""
 
@@ -205,7 +223,7 @@ class StorageView(View):
 
         try:
             storage = PersistentDict()
-            storage_dict = {k: v for k, v in storage.items()}
+            storage_dict = _redact_system_settings({k: v for k, v in storage.items()})
             storage_json = _pretty_json(storage_dict)
 
             return render_template("storage.html", {"storage_json": storage_json, "page_title": "Storage"})
@@ -485,7 +503,7 @@ class StatusView(View):
                 "platform": sys.platform,
                 "wifi_connected": wifi_connected,
                 "ip_address": ip_address,
-                "wifi_ssid": settings.WIFI["SSID"],
+                "wifi_ssid": PersistentDict().get("system_settings", {}).get("wifi", {}).get("ssid", ""),
                 "animation_running": str(lights.animation.running),
                 "current_scene": lights.scene_name,
                 "tick_number": lights.animation.tick_number,
@@ -500,10 +518,22 @@ class BackupView(View):
     """Serve the persistent storage as a downloadable JSON file."""
 
     def get(self) -> Response:
-        """Return the storage dict as a JSON download."""
+        """Return the storage dict as a JSON download.
+
+        WiFi SSID and password are excluded from the download so that
+        restoring a backup on a different device does not overwrite its
+        network credentials.
+        """
 
         storage = PersistentDict()
         storage_dict: dict = {k: v for k, v in storage.items()}
+
+        # Strip WiFi credentials so they are not overwritten by a restore
+        sys_settings: dict = storage_dict.get("system_settings")
+        if isinstance(sys_settings, dict) and "wifi" in sys_settings:
+            scrubbed_sys: dict = {k: v for k, v in sys_settings.items() if k != "wifi"}
+            storage_dict["system_settings"] = scrubbed_sys
+
         json_body: str = json.dumps(storage_dict)
 
         return Response(
@@ -674,7 +704,7 @@ def _theme_response(message: str = "", error: str = "") -> str:
     inline feedback after actions like upload or delete.
     """
 
-    current_theme: str = PersistentDict().get("ui_settings", {}).get("theme", "")
+    current_theme: str = PersistentDict().get("system_settings", {}).get("theme", "")
     theme_pairs: list = [[filename, _theme_display_name(filename)] for filename in _list_theme_files()]
     return render_template(
         "setup/theme.html",
@@ -701,10 +731,10 @@ class ThemeView(View):
         theme_filename: str = self.request.form_data.get("theme", "").strip()
 
         storage: PersistentDict = PersistentDict()
-        if "ui_settings" not in storage:
-            storage["ui_settings"] = {}
+        if "system_settings" not in storage:
+            storage["system_settings"] = {}
 
-        storage["ui_settings"]["theme"] = theme_filename
+        storage["system_settings"]["theme"] = theme_filename
         storage.store()
 
         return Response(status=200, reason="OK", body="", headers={"HX-Redirect": "/setup"})
@@ -728,7 +758,7 @@ class ThemeDeleteView(View):
         if "/" in theme_filename or "\\" in theme_filename or ".." in theme_filename:
             return Response(status=400, reason="Bad Request", body="Invalid theme filename.")
 
-        current_theme: str = PersistentDict().get("ui_settings", {}).get("theme", "")
+        current_theme: str = PersistentDict().get("system_settings", {}).get("theme", "")
         if theme_filename == current_theme:
             return Response(status=400, reason="Bad Request", body="Cannot delete the active theme.")
 
@@ -803,7 +833,7 @@ _HOSTNAME_RE_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
 def _hostname_response(message: str = "", error: str = "") -> str:
     """Render the hostname form fragment."""
 
-    hostname: str = PersistentDict().get("ui_settings", {}).get("hostname", "")
+    hostname: str = PersistentDict().get("system_settings", {}).get("hostname", "")
     return render_template(
         "setup/hostname.html",
         {
@@ -835,10 +865,10 @@ class HostnameView(View):
 
         if not raw_hostname:
             storage: PersistentDict = PersistentDict()
-            if "ui_settings" not in storage:
-                storage["ui_settings"] = {}
+            if "system_settings" not in storage:
+                storage["system_settings"] = {}
 
-            storage["ui_settings"]["hostname"] = ""
+            storage["system_settings"]["hostname"] = ""
             storage.store()
             raw_hostname = "lightmotron"
             self._apply_and_restart(raw_hostname)
@@ -854,10 +884,10 @@ class HostnameView(View):
             return _hostname_response(error="Only letters, numbers, and hyphens are allowed.")
 
         storage: PersistentDict = PersistentDict()
-        if "ui_settings" not in storage:
-            storage["ui_settings"] = {}
+        if "system_settings" not in storage:
+            storage["system_settings"] = {}
 
-        storage["ui_settings"]["hostname"] = raw_hostname
+        storage["system_settings"]["hostname"] = raw_hostname
         storage.store()
         self._apply_and_restart(raw_hostname)
         return self._redirect_response(raw_hostname)
@@ -895,6 +925,183 @@ class HostnameView(View):
             '<p class="small text-muted">Redirecting to <strong>' + new_url + "</strong> in 5 seconds.</p>"
             '<script>setTimeout(function(){window.location.href="' + new_url + '";},5000);</script>'
         )
+
+
+def _system_settings_context() -> dict:
+    """Build template context from current system_settings in persistent storage."""
+
+    sys_settings: dict = PersistentDict().get("system_settings", {})
+    wifi: dict = sys_settings.get("wifi", {})
+    neopixels: dict = sys_settings.get("neopixels", {})
+    billboard: dict = sys_settings.get("billboard", {})
+    board: dict = sys_settings.get("board", {})
+    pins: dict = sys_settings.get("pins", {})
+
+    return {
+        "ss_wifi_ssid": wifi.get("ssid", ""),
+        "ss_hostname": sys_settings.get("hostname", ""),
+        "ss_neo_pin": neopixels.get("pin", 4),
+        "ss_neo_num": neopixels.get("num", 144),
+        "ss_neo_brightness_curve": neopixels.get("brightness_curve", True),
+        "ss_bb_mosi": billboard.get("mosi", 23),
+        "ss_bb_sck": billboard.get("sck", 18),
+        "ss_bb_cs": billboard.get("cs", 5),
+        "ss_bb_num": billboard.get("num", 4),
+        "ss_bb_brightness": billboard.get("brightness", 5),
+        "ss_cpu_freq": board.get("cpu_frequency", 240000000),
+        "ss_pin_led": pins.get("led", 2),
+    }
+
+
+class SystemSettingsSummaryView(View):
+    """Return a summary snippet of system settings for the setup card."""
+
+    def get(self) -> str:
+        """Return system settings summary HTML fragment."""
+
+        return render_template("setup/system_settings_summary.html", _system_settings_context())
+
+
+class SystemSettingsView(View):
+    """Display and edit all system settings stored under ``system_settings``."""
+
+    def get(self) -> str:
+        """Return the system settings edit form fragment."""
+
+        return render_template("setup/system_settings.html", _system_settings_context())
+
+    def post(self) -> str:
+        """Validate and save all system settings fields.
+
+        Fields received from the form are validated before being written to
+        persistent storage.  Unknown or out-of-range values are silently
+        ignored; all other fields are saved.  Returns the updated form
+        fragment on success or the form with error messages on validation
+        failure.
+        """
+
+        fd = self.request.form_data
+        error: str = ""
+
+        # --- WiFi ---
+        ssid: str = fd.get("wifi_ssid", "").strip()
+        submitted_password: str = fd.get("wifi_password", "").strip()
+        # Preserve the existing password when the field is left blank
+        if submitted_password:
+            password: str = submitted_password
+        else:
+            password: str = PersistentDict().get("system_settings", {}).get("wifi", {}).get("password", "")
+
+        # --- Hostname ---
+        raw_hostname: str = fd.get("hostname", "").strip().lower()
+        if raw_hostname and (
+            len(raw_hostname) > 32
+            or raw_hostname.startswith("-")
+            or raw_hostname.endswith("-")
+            or not all(c in _HOSTNAME_RE_CHARS for c in raw_hostname)
+        ):
+            error = "Hostname: only letters, numbers, hyphens; max 32 chars; no leading/trailing hyphens."
+
+        # --- NeoPixels ---
+        try:
+            neo_pin: int = int(fd.get("neo_pin", "4"))
+        except ValueError:
+            neo_pin = 4
+
+        try:
+            neo_num: int = int(fd.get("neo_num", "144"))
+            if neo_num < 1:
+                neo_num = 1
+        except ValueError:
+            neo_num = 144
+
+        neo_brightness_curve: bool = fd.get("neo_brightness_curve", "") == "1"
+
+        # --- Billboard ---
+        try:
+            bb_mosi: int = int(fd.get("bb_mosi", "23"))
+        except ValueError:
+            bb_mosi = 23
+
+        try:
+            bb_sck: int = int(fd.get("bb_sck", "18"))
+        except ValueError:
+            bb_sck = 18
+
+        try:
+            bb_cs: int = int(fd.get("bb_cs", "5"))
+        except ValueError:
+            bb_cs = 5
+
+        try:
+            bb_num: int = int(fd.get("bb_num", "4"))
+            if bb_num < 1:
+                bb_num = 1
+        except ValueError:
+            bb_num = 4
+
+        try:
+            bb_brightness: int = int(fd.get("bb_brightness", "5"))
+            bb_brightness = max(0, min(15, bb_brightness))
+        except ValueError:
+            bb_brightness = 5
+
+        # --- Board ---
+        try:
+            cpu_freq: int = int(fd.get("cpu_freq", "240000000"))
+        except ValueError:
+            cpu_freq = 240000000
+
+        # --- Pins ---
+        try:
+            pin_led: int = int(fd.get("pin_led", "2"))
+        except ValueError:
+            pin_led = 2
+
+        if error:
+            context = _system_settings_context()
+            context["error"] = error
+            return render_template("setup/system_settings.html", context)
+
+        print(
+            "SystemSettings: saving neopixels pin={} num={} brightness_curve={}".format(
+                neo_pin, neo_num, neo_brightness_curve
+            )
+        )
+
+        storage: PersistentDict = PersistentDict()
+        storage["system_settings"] = {
+            "wifi": {
+                "ssid": ssid,
+                "password": password,
+                "blink_on_connect": True,
+                "print_on_connect": True,
+            },
+            "hostname": raw_hostname,
+            "theme": storage.get("system_settings", {}).get("theme", ""),
+            "board": {"cpu_frequency": cpu_freq},
+            "pins": {"led": pin_led, "button": 0, "scl": 22, "sda": 21},
+            "billboard": {
+                "mosi": bb_mosi,
+                "sck": bb_sck,
+                "cs": bb_cs,
+                "num": bb_num,
+                "brightness": bb_brightness,
+            },
+            "neopixels": {
+                "pin": neo_pin,
+                "num": neo_num,
+                "brightness_curve": neo_brightness_curve,
+            },
+        }
+        storage.store()
+        print("SystemSettings: storage saved OK")
+        stored_neo = storage.get("system_settings", {}).get("neopixels", {})
+        print("SystemSettings: verified neopixels in storage:", stored_neo)
+
+        context = _system_settings_context()
+        context["message"] = "Settings saved."
+        return render_template("setup/system_settings.html", context)
 
 
 def _scenes_list(scenes_dict: dict) -> list:

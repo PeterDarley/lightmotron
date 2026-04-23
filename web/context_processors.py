@@ -63,13 +63,13 @@ def get_context() -> dict:
 def _theme_processor() -> dict:
     """Return the active theme CSS path for injection into every page.
 
-    Reads ``ui_settings.theme`` from persistent storage.  Returns an empty
+    Reads ``system_settings.theme`` from persistent storage.  Returns an empty
     string when no theme is configured, so templates can use
     ``{% if theme_css %}`` safely.
     """
 
     storage = PersistentDict()
-    theme_filename: str = storage.get("ui_settings", {}).get("theme", "")
+    theme_filename: str = storage.get("system_settings", {}).get("theme", "")
     return {"theme_css": "themes/" + theme_filename if theme_filename else ""}
 
 
