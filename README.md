@@ -23,11 +23,10 @@ Distribution of the software itself, except as part of a larger product or servi
 ## Hardware
 
 ### Microcontroller
-* ESP32-S3-WROOM-1 (N16R8 variant — 16MB flash, 8MB octal PSRAM)
+* ESP32-S3-DevKitC-1 (ESP32-S3-WROOM-1 N16R8 module — 16MB flash, 8MB octal PSRAM)
 
 ### Lighting
-* NeoPixel LED strip (GPIO 32)
-* MAX7219 4-module scrolling LED matrix display (SPI: MOSI GPIO 23, SCK GPIO 18, CS GPIO 5)
+* NeoPixel LED strip (default GPIO 4; configurable via System Settings)
 
 ### Audio
 * Up to 3× WWZMDiB YX5200 MP3 player modules (DFPlayer-compatible, serial UART)
@@ -56,7 +55,7 @@ On first boot (or whenever WiFi credentials are missing or fail to connect), the
 
 SSID matching is case-insensitive, so credentials stored with different capitalisation will still connect.
 
-Credentials are stored persistently, so this only needs to be done once. To change them later use the **Initial Settings** card on the Setup page.
+Credentials are stored persistently, so this only needs to be done once. To change them later use the **System Settings** card on the Setup page.
 
 ## Uploading to the Device
 
@@ -84,8 +83,8 @@ Configure all lighting settings and system configuration in one place. Each sect
 
 ![Setup page](docs/screenshots/setup.png)
 
-#### Initial Settings
-Configure WiFi credentials, mDNS hostname, NeoPixel pin/count, MAX7219 billboard pins, and hardware pin assignments. Changes take effect on the next reboot.
+#### System Settings
+Configure WiFi credentials, mDNS hostname, and NeoPixel strip settings. Changes take effect on the next reboot.
 
 #### Custom Colors
 Define and name your own colors to reuse across effects and scenes.
