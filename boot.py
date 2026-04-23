@@ -21,10 +21,6 @@ except Exception:
 
 print("\nBooting...")
 
-# Set the CPU frequency
-if hasattr(settings, "BOARD") and "CPU_Frequency" in settings.BOARD:
-    machine.freq(settings.BOARD["CPU_Frequency"])
-
 from storage import PersistentDict  # type: ignore
 
 # Seed all default settings into persistent storage for any missing keys.

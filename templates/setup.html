@@ -3,19 +3,16 @@
     <h1 class="mb-4">Setup</h1>
 
     <div class="row g-4">
-        <!-- Initial Settings Card -->
+        <!-- System Settings Card -->
         <div class="col">
             <div class="card setup-card h-100">
                 <div class="card-header">
-                    <h5 class="card-title">Initial Settings</h5>
+                    <h5 class="card-title">System Settings</h5>
                 </div>
                 <div class="card-body d-flex flex-column">
-                    <p class="card-text text-muted small">WiFi credentials, hostname, NeoPixel, and hardware pin configuration.</p>
-                    <div id="system-settings-summary"
-                         hx-get="/system_settings/summary"
-                         hx-trigger="load"
-                         hx-swap="innerHTML">
-                        <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">Loading...</span></div></div>
+                    <p class="card-text text-muted small">WiFi credentials, hostname, and NeoPixel configuration.</p>
+                    <div id="system-settings-summary" hx-get="/system_settings/summary" hx-swap="innerHTML">
+                        {% include 'setup/system_settings_summary.html' %}
                     </div>
                     <div class="mt-auto pt-3">
                         <button class="btn btn-primary w-100"
@@ -24,9 +21,17 @@
                                 hx-swap="innerHTML"
                                 data-bs-toggle="modal"
                                 data-bs-target="#setup-modal"
-                                onclick="openSetupModal('Initial Settings')">
+                                onclick="openSetupModal('System Settings')">
                             Edit Settings
                         </button>
+                        <form class="mt-2"
+                              hx-post="/system_reboot"
+                              hx-target="#system-reboot-result"
+                              hx-swap="innerHTML"
+                              onsubmit="return confirm('Reboot the system now? The web UI will disconnect briefly.');">
+                            <button type="submit" class="btn btn-outline-danger w-100">Reboot System</button>
+                        </form>
+                        <div id="system-reboot-result" class="mt-2"></div>
                     </div>
                 </div>
             </div>
@@ -40,11 +45,8 @@
                 </div>
                 <div class="card-body d-flex flex-column">
                     <p class="card-text text-muted small">Create custom colors to use in scenes and animations.</p>
-                    <div id="custom-colors-summary"
-                         hx-get="/custom_colors/summary"
-                         hx-trigger="load"
-                         hx-swap="innerHTML">
-                        <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">Loading...</span></div></div>
+                    <div id="custom-colors-summary" hx-get="/custom_colors/summary" hx-swap="innerHTML">
+                        {% include 'setup/custom_colors_summary.html' %}
                     </div>
                     <div class="mt-auto pt-3">
                         <button class="btn btn-primary w-100"
@@ -69,11 +71,8 @@
                 </div>
                 <div class="card-body d-flex flex-column">
                     <p class="card-text text-muted small">Group LEDs into named ranges for use in animations and scenes.</p>
-                    <div id="named-ranges-summary"
-                         hx-get="/named_range/summary"
-                         hx-trigger="load"
-                         hx-swap="innerHTML">
-                        <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">Loading...</span></div></div>
+                    <div id="named-ranges-summary" hx-get="/named_range/summary" hx-swap="innerHTML">
+                        {% include 'setup/named_ranges_summary.html' %}
                     </div>
                     <div class="mt-auto pt-3">
                         <button class="btn btn-primary w-100"
@@ -98,11 +97,8 @@
                 </div>
                 <div class="card-body d-flex flex-column">
                     <p class="card-text text-muted small">Create reusable post-processing filters to overlay on effects.</p>
-                    <div id="filters-summary"
-                         hx-get="/filters/summary"
-                         hx-trigger="load"
-                         hx-swap="innerHTML">
-                        <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">Loading...</span></div></div>
+                    <div id="filters-summary" hx-get="/filters/summary" hx-swap="innerHTML">
+                        {% include 'setup/filters_summary.html' %}
                     </div>
                     <div class="mt-auto pt-3">
                         <button class="btn btn-primary w-100"
@@ -127,11 +123,8 @@
                 </div>
                 <div class="card-body d-flex flex-column">
                     <p class="card-text text-muted small">Create reusable lighting effects with patterns, colors, and parameters.</p>
-                    <div id="effects-summary"
-                         hx-get="/effects/summary"
-                         hx-trigger="load"
-                         hx-swap="innerHTML">
-                        <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">Loading...</span></div></div>
+                    <div id="effects-summary" hx-get="/effects/summary" hx-swap="innerHTML">
+                        {% include 'setup/effects_summary.html' %}
                     </div>
                     <div class="mt-auto pt-3">
                         <button class="btn btn-primary w-100"
@@ -156,11 +149,8 @@
                 </div>
                 <div class="card-body d-flex flex-column">
                     <p class="card-text text-muted small">Create and manage lighting scenes with multiple effects.</p>
-                    <div id="scenes-summary"
-                         hx-get="/scenes/summary"
-                         hx-trigger="load"
-                         hx-swap="innerHTML">
-                        <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">Loading...</span></div></div>
+                    <div id="scenes-summary" hx-get="/scenes/summary" hx-swap="innerHTML">
+                        {% include 'setup/scenes_summary.html' %}
                     </div>
                     <div class="mt-auto pt-3">
                         <button class="btn btn-primary w-100"
@@ -176,6 +166,7 @@
                 </div>
             </div>
         </div>
+
         <!-- Theme Card -->
         <div class="col">
             <div class="card setup-card h-100">
@@ -192,24 +183,6 @@
                                 data-bs-toggle="modal"
                                 data-bs-target="#setup-modal"
                                 onclick="openSetupModal('Theme')">Manage Theme</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Hostname Card -->
-        <div class="col">
-            <div class="card setup-card h-100">
-                <div class="card-header">
-                    <h5 class="card-title">Hostname</h5>
-                </div>
-                <div class="card-body d-flex flex-column">
-                    <p class="card-text text-muted small">Set the local network hostname for this device.</p>
-                    <div id="hostname-form"
-                         hx-get="/hostname"
-                         hx-trigger="load"
-                         hx-swap="innerHTML">
-                        <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">Loading...</span></div></div>
                     </div>
                 </div>
             </div>

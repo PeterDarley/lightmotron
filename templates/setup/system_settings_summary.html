@@ -1,5 +1,7 @@
 <ul class="list-unstyled small mb-0">
     <li><span class="text-muted">WiFi SSID:</span> {% if ss_wifi_ssid %}<strong>{{ ss_wifi_ssid }}</strong>{% else %}<em class="text-warning">not set</em>{% endif %}</li>
     <li><span class="text-muted">Hostname:</span> {% if ss_hostname %}<strong>{{ ss_hostname }}.local</strong>{% else %}<em class="text-muted">lightmotron.local</em>{% endif %}</li>
-    <li><span class="text-muted">NeoPixels:</span> {{ ss_neo_num }} LEDs on GPIO {{ ss_neo_pin }}</li>
+    {% for strip in ss_strips %}
+    <li><span class="text-muted">Strip {{ strip.pin }}:</span> {{ strip.num }} LEDs &middot; {{ strip.color_order }}</li>
+    {% endfor %}
 </ul>

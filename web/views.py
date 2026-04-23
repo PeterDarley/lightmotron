@@ -239,9 +239,30 @@ class SetupView(View):
     """Display the setup page."""
 
     def get(self) -> str:
-        """Return the setup page."""
+        """Return the setup page with all summary data rendered inline."""
 
-        return render_template("setup.html", {"page_title": "Setup"})
+        context: dict = {"page_title": "Setup"}
+        context.update(_system_settings_context())
+
+        # Include all summary card data so the browser receives everything in one
+        # request rather than firing 5+ lazy HTMX loads after page paint.
+        named_ranges: dict = lights.settings.get("named_ranges", {})
+        context["named_range_names"] = sorted(named_ranges.keys())
+
+        custom_colors_dict: dict = lights.settings.get("custom_colors", {})
+        context["custom_colors"] = sorted(
+            [
+                (name, tuple(value) if isinstance(value, (list, tuple)) else value)
+                for name, value in custom_colors_dict.items()
+            ],
+            key=lambda item: item[0],
+        )
+
+        context["scenes"] = _scenes_list(lights.settings.get("scenes", {}))
+        context["effect_names"] = sorted(lights.settings.get("effects", {}).keys())
+        context["filter_names"] = sorted(lights.settings.get("filters", {}).keys())
+
+        return render_template("setup.html", context)
 
 
 class NamedRangeSummaryView(View):
@@ -927,29 +948,59 @@ class HostnameView(View):
         )
 
 
+_COLOR_ORDERS: list = ["GRB", "RGB", "BGR", "BRG", "RBG", "GBR", "GRBW", "RGBW"]
+
+
+def _parse_neopixels_storage(raw) -> list:
+    """Normalise whatever is in storage for 'neopixels' into a list of strip dicts.
+
+    Accepts the legacy single-dict format ``{pin, num, brightness_curve}`` or the
+    new list-of-dicts format ``[{pin, num, color_order, brightness_curve}, ...]``.
+    Always returns a non-empty list.
+    """
+
+    if isinstance(raw, list) and raw:
+        strips = []
+        for item in raw:
+            if isinstance(item, dict) and "pin" in item and "num" in item:
+                strips.append(
+                    {
+                        "pin": int(item.get("pin", 4)),
+                        "num": int(item.get("num", 30)),
+                        "color_order": item.get("color_order", "GRB").upper(),
+                        "brightness_curve": bool(item.get("brightness_curve", True)),
+                    }
+                )
+        if strips:
+            return strips
+
+    if isinstance(raw, dict):
+        return [
+            {
+                "pin": int(raw.get("pin", 4)),
+                "num": int(raw.get("num", 144)),
+                "color_order": raw.get("color_order", "GRB").upper(),
+                "brightness_curve": bool(raw.get("brightness_curve", True)),
+            }
+        ]
+
+    # Fallback default
+    return [{"pin": 4, "num": 144, "color_order": "GRB", "brightness_curve": True}]
+
+
 def _system_settings_context() -> dict:
     """Build template context from current system_settings in persistent storage."""
 
     sys_settings: dict = PersistentDict().get("system_settings", {})
     wifi: dict = sys_settings.get("wifi", {})
-    neopixels: dict = sys_settings.get("neopixels", {})
-    billboard: dict = sys_settings.get("billboard", {})
-    board: dict = sys_settings.get("board", {})
-    pins: dict = sys_settings.get("pins", {})
+    strips: list = _parse_neopixels_storage(sys_settings.get("neopixels"))
 
     return {
         "ss_wifi_ssid": wifi.get("ssid", ""),
         "ss_hostname": sys_settings.get("hostname", ""),
-        "ss_neo_pin": neopixels.get("pin", 4),
-        "ss_neo_num": neopixels.get("num", 144),
-        "ss_neo_brightness_curve": neopixels.get("brightness_curve", True),
-        "ss_bb_mosi": billboard.get("mosi", 23),
-        "ss_bb_sck": billboard.get("sck", 18),
-        "ss_bb_cs": billboard.get("cs", 5),
-        "ss_bb_num": billboard.get("num", 4),
-        "ss_bb_brightness": billboard.get("brightness", 5),
-        "ss_cpu_freq": board.get("cpu_frequency", 240000000),
-        "ss_pin_led": pins.get("led", 2),
+        "ss_strips": strips,
+        "ss_color_orders": _COLOR_ORDERS,
+        "ss_color_orders_json": json.dumps(_COLOR_ORDERS),
     }
 
 
@@ -1002,98 +1053,71 @@ class SystemSettingsView(View):
         ):
             error = "Hostname: only letters, numbers, hyphens; max 32 chars; no leading/trailing hyphens."
 
-        # --- NeoPixels ---
-        try:
-            neo_pin: int = int(fd.get("neo_pin", "4"))
-        except ValueError:
-            neo_pin = 4
+        # --- NeoPixel strips (multi-strip: parallel arrays from repeated fields) ---
+        def _as_list(val, default):
+            if val is None:
+                return [default]
+            return val if isinstance(val, list) else [val]
 
-        try:
-            neo_num: int = int(fd.get("neo_num", "144"))
-            if neo_num < 1:
-                neo_num = 1
-        except ValueError:
-            neo_num = 144
+        strip_pins = _as_list(fd.get("strip_pin"), "4")
+        strip_nums = _as_list(fd.get("strip_num"), "144")
+        strip_orders = _as_list(fd.get("strip_order"), "GRB")
+        strip_bc = _as_list(fd.get("strip_brightness_curve"), "")
 
-        neo_brightness_curve: bool = fd.get("neo_brightness_curve", "") == "1"
+        # Pad shorter lists so all are the same length as strip_pins
+        n_strips: int = max(1, len(strip_pins))
 
-        # --- Billboard ---
-        try:
-            bb_mosi: int = int(fd.get("bb_mosi", "23"))
-        except ValueError:
-            bb_mosi = 23
+        def _pad(lst, length, default):
+            return list(lst) + [default] * (length - len(lst))
 
-        try:
-            bb_sck: int = int(fd.get("bb_sck", "18"))
-        except ValueError:
-            bb_sck = 18
+        strip_nums = _pad(strip_nums, n_strips, "30")
+        strip_orders = _pad(strip_orders, n_strips, "GRB")
+        strip_bc = _pad(strip_bc, n_strips, "")
 
-        try:
-            bb_cs: int = int(fd.get("bb_cs", "5"))
-        except ValueError:
-            bb_cs = 5
+        strips: list = []
+        for i in range(n_strips):
+            try:
+                pin_val: int = int(strip_pins[i])
+            except (ValueError, IndexError):
+                pin_val = 4
+            try:
+                num_val: int = max(1, int(strip_nums[i]))
+            except (ValueError, IndexError):
+                num_val = 30
+            order_val: str = (strip_orders[i] if i < len(strip_orders) else "GRB").upper()
+            if order_val not in _COLOR_ORDERS:
+                order_val = "GRB"
+            bc_val: bool = (strip_bc[i] if i < len(strip_bc) else "") == "1"
+            strips.append({"pin": pin_val, "num": num_val, "color_order": order_val, "brightness_curve": bc_val})
 
-        try:
-            bb_num: int = int(fd.get("bb_num", "4"))
-            if bb_num < 1:
-                bb_num = 1
-        except ValueError:
-            bb_num = 4
-
-        try:
-            bb_brightness: int = int(fd.get("bb_brightness", "5"))
-            bb_brightness = max(0, min(15, bb_brightness))
-        except ValueError:
-            bb_brightness = 5
-
-        # --- Board ---
-        try:
-            cpu_freq: int = int(fd.get("cpu_freq", "240000000"))
-        except ValueError:
-            cpu_freq = 240000000
-
-        # --- Pins ---
-        try:
-            pin_led: int = int(fd.get("pin_led", "2"))
-        except ValueError:
-            pin_led = 2
+        if not strips:
+            strips = [{"pin": 4, "num": 144, "color_order": "GRB", "brightness_curve": True}]
 
         if error:
             context = _system_settings_context()
             context["error"] = error
             return render_template("setup/system_settings.html", context)
 
-        print(
-            "SystemSettings: saving neopixels pin={} num={} brightness_curve={}".format(
-                neo_pin, neo_num, neo_brightness_curve
-            )
-        )
+        print("SystemSettings: saving {} strip(s)".format(len(strips)))
+        for strip in strips:
+            print("  strip:", strip)
 
         storage: PersistentDict = PersistentDict()
-        storage["system_settings"] = {
-            "wifi": {
-                "ssid": ssid,
-                "password": password,
-                "blink_on_connect": True,
-                "print_on_connect": True,
-            },
-            "hostname": raw_hostname,
-            "theme": storage.get("system_settings", {}).get("theme", ""),
-            "board": {"cpu_frequency": cpu_freq},
-            "pins": {"led": pin_led, "button": 0, "scl": 22, "sda": 21},
-            "billboard": {
-                "mosi": bb_mosi,
-                "sck": bb_sck,
-                "cs": bb_cs,
-                "num": bb_num,
-                "brightness": bb_brightness,
-            },
-            "neopixels": {
-                "pin": neo_pin,
-                "num": neo_num,
-                "brightness_curve": neo_brightness_curve,
-            },
-        }
+        # Preserve any keys not managed by this form (pins, billboard, etc.)
+        existing: dict = dict(storage.get("system_settings", {}))
+        existing.update(
+            {
+                "wifi": {
+                    "ssid": ssid,
+                    "password": password,
+                    "blink_on_connect": True,
+                    "print_on_connect": True,
+                },
+                "hostname": raw_hostname,
+                "neopixels": strips,
+            }
+        )
+        storage["system_settings"] = existing
         storage.store()
         print("SystemSettings: storage saved OK")
         stored_neo = storage.get("system_settings", {}).get("neopixels", {})
@@ -1102,6 +1126,29 @@ class SystemSettingsView(View):
         context = _system_settings_context()
         context["message"] = "Settings saved."
         return render_template("setup/system_settings.html", context)
+
+
+class SystemRebootView(View):
+    """Trigger a delayed device reboot so the HTTP response can be sent first."""
+
+    def post(self) -> str:
+        """Queue a reboot and return a status message fragment."""
+
+        import _thread
+        from time import sleep
+
+        def _delayed_reset() -> None:
+            """Wait briefly, then reboot the MCU."""
+
+            sleep(0.75)
+            machine.reset()
+
+        _thread.start_new_thread(_delayed_reset, ())
+        return (
+            '<div class="alert alert-warning small py-2 mb-0">'
+            "Rebooting now. Reconnect to the device in a few seconds."
+            "</div>"
+        )
 
 
 def _scenes_list(scenes_dict: dict) -> list:

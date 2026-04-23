@@ -370,6 +370,17 @@ body {
 /* ---- Bootstrap overrides ---- */
 .text-muted { color: var(--lcars-muted) !important; }
 
+/* In card bodies the dark panel background needs readable text — override muted
+   and Bootstrap's small/card-text which inherit the muted colour. */
+.card-body {
+    & .text-muted,
+    & .card-text,
+    & small,
+    & .small { color: #bbbbbb !important; }
+
+    & .form-text { color: #999999 !important; }
+}
+
 .btn {
     border-radius: 999px;
     font-family: 'Antonio', sans-serif;

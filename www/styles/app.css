@@ -7,6 +7,18 @@
     & .card-body { padding: 1.25rem; }
 }
 
+/* Storage page raw JSON block */
+.storage-pre {
+    margin: 0;
+    padding: 0.75rem;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
 /* Frequency slider track */
 #freq_slider {
     &::-webkit-slider-runnable-track { background: #dee2e6; border-radius: 4px; height: 6px; }

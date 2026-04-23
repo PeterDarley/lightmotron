@@ -39,77 +39,66 @@
             </div>
         </div>
 
-        <h6 class="mb-3">NeoPixels</h6>
-        <div class="row g-2 mb-3">
-            <div class="col-sm-4">
-                <label class="form-label form-label-sm">GPIO Pin</label>
-                <input type="number" class="form-control form-control-sm" name="neo_pin"
-                       value="{{ ss_neo_pin }}" min="0" max="48">
-            </div>
-            <div class="col-sm-4">
-                <label class="form-label form-label-sm">LED Count</label>
-                <input type="number" class="form-control form-control-sm" name="neo_num"
-                       value="{{ ss_neo_num }}" min="1" max="2048">
-            </div>
-            <div class="col-sm-4 d-flex align-items-end pb-1">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="neo_brightness_curve" value="1"
-                           id="neo-bc" {% if ss_neo_brightness_curve %}checked{% endif %}>
-                    <label class="form-check-label form-label-sm" for="neo-bc">Brightness curve</label>
-                </div>
-            </div>
-        </div>
-
-        <h6 class="mb-3">MAX7219 Billboard</h6>
-        <div class="row g-2 mb-3">
-            <div class="col-sm-3">
-                <label class="form-label form-label-sm">MOSI (DIN)</label>
-                <input type="number" class="form-control form-control-sm" name="bb_mosi"
-                       value="{{ ss_bb_mosi }}" min="0" max="48">
-            </div>
-            <div class="col-sm-3">
-                <label class="form-label form-label-sm">SCK (CLK)</label>
-                <input type="number" class="form-control form-control-sm" name="bb_sck"
-                       value="{{ ss_bb_sck }}" min="0" max="48">
-            </div>
-            <div class="col-sm-3">
-                <label class="form-label form-label-sm">CS</label>
-                <input type="number" class="form-control form-control-sm" name="bb_cs"
-                       value="{{ ss_bb_cs }}" min="0" max="48">
-            </div>
-            <div class="col-sm-3">
-                <label class="form-label form-label-sm">Modules</label>
-                <input type="number" class="form-control form-control-sm" name="bb_num"
-                       value="{{ ss_bb_num }}" min="1" max="16">
-            </div>
-            <div class="col-sm-3">
-                <label class="form-label form-label-sm">Brightness (0–15)</label>
-                <input type="number" class="form-control form-control-sm" name="bb_brightness"
-                       value="{{ ss_bb_brightness }}" min="0" max="15">
-            </div>
-        </div>
-
-        <h6 class="mb-3">Hardware</h6>
-        <div class="row g-2 mb-4">
-            <div class="col-sm-4">
-                <label class="form-label form-label-sm">CPU Frequency (Hz)</label>
-                <select class="form-select form-select-sm" name="cpu_freq">
-                    <option value="80000000" {% if ss_cpu_freq == 80000000 %}selected{% endif %}>80 MHz</option>
-                    <option value="160000000" {% if ss_cpu_freq == 160000000 %}selected{% endif %}>160 MHz</option>
-                    <option value="240000000" {% if ss_cpu_freq == 240000000 %}selected{% endif %}>240 MHz</option>
-                </select>
-            </div>
-            <div class="col-sm-4">
-                <label class="form-label form-label-sm">Onboard LED GPIO</label>
-                <input type="number" class="form-control form-control-sm" name="pin_led"
-                       value="{{ ss_pin_led }}" min="0" max="48">
-            </div>
+        <h6 class="mb-3">NeoPixel Strips</h6>
+        <div class="mb-2">
+            <table class="table table-sm table-borderless mb-2" id="strips-table">
+                <thead>
+                    <tr>
+                        <th class="form-label-sm ps-0">GPIO Pin</th>
+                        <th class="form-label-sm">LED Count</th>
+                        <th class="form-label-sm">Color Order</th>
+                        <th class="form-label-sm">Brightness Curve</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="strips-tbody">
+                    {% for strip in ss_strips %}
+                    <tr>
+                        <td class="ps-0"><input type="number" class="form-control form-control-sm" name="strip_pin" value="{{ strip.pin }}" min="0" max="48" required></td>
+                        <td><input type="number" class="form-control form-control-sm" name="strip_num" value="{{ strip.num }}" min="1" max="2048" required></td>
+                        <td>
+                            <select class="form-select form-select-sm" name="strip_order">
+                                {% for order in ss_color_orders %}
+                                <option value="{{ order }}" {% if order == strip.color_order %}selected{% endif %}>{{ order }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td class="text-center align-middle">
+                            <input class="form-check-input" type="checkbox" name="strip_brightness_curve" value="1" {% if strip.brightness_curve %}checked{% endif %}>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    onclick="this.closest('tr').remove()">✕</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addStripRow()">+ Add Strip</button>
         </div>
 
         <div class="alert alert-warning small py-2">
-            Changes to hardware pins, hostname, or WiFi credentials take effect on the next reboot.
+            Changes to hostname or WiFi credentials take effect on the next reboot.
         </div>
 
         <button type="submit" class="btn btn-primary btn-sm">Save Settings</button>
     </form>
 </div>
+
+<script>
+var COLOR_ORDERS = {{ ss_color_orders_json }};
+function addStripRow() {
+    var tbody = document.getElementById('strips-tbody');
+    var options = COLOR_ORDERS.map(function(o) {
+        return '<option value="' + o + '"' + (o === 'GRB' ? ' selected' : '') + '>' + o + '</option>';
+    }).join('');
+    var row = '<tr>' +
+        '<td class="ps-0"><input type="number" class="form-control form-control-sm" name="strip_pin" value="4" min="0" max="48" required></td>' +
+        '<td><input type="number" class="form-control form-control-sm" name="strip_num" value="30" min="1" max="2048" required></td>' +
+        '<td><select class="form-select form-select-sm" name="strip_order">' + options + '</select></td>' +
+        '<td class="text-center align-middle"><input class="form-check-input" type="checkbox" name="strip_brightness_curve" value="1" checked></td>' +
+        '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()">✕</button></td>' +
+        '</tr>';
+    tbody.insertAdjacentHTML('beforeend', row);
+}
+</script>
