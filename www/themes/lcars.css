@@ -251,9 +251,11 @@ body {
 }
 
 .theme-ongoing-section,
-.theme-immediate-section {
+.theme-immediate-section,
+.theme-sounds-section {
     position: relative;
     padding-left: calc(var(--lcars-label-w) + 1.5rem);
+    min-height: 3.75rem;
 
     &::before {
         content: '';
@@ -268,6 +270,11 @@ body {
 
 .theme-ongoing-section::before   { background: var(--lcars-periwinkle); }
 .theme-immediate-section::before { background: var(--lcars-gold); }
+.theme-sounds-section::before    { background: var(--lcars-orange); }
+
+.theme-sounds-section {
+    margin-top: 0.5rem;
+}
 
 .theme-section-heading {
     position: absolute;
@@ -293,6 +300,7 @@ body {
 /* ---- Pill buttons ---- */
 .theme-ongoing-btn,
 .theme-immediate-btn,
+.theme-sound-btn,
 .theme-start-btn,
 .theme-stop-btn {
     border-radius: 999px;
@@ -304,7 +312,8 @@ body {
     border-width: 2px;
 }
 
-.theme-ongoing-btn {
+.theme-ongoing-btn,
+.theme-sound-btn {
     &.btn-outline-primary {
         border-color: var(--lcars-periwinkle);
         color: var(--lcars-periwinkle);

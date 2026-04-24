@@ -35,8 +35,16 @@ body {
 
 .theme-section-heading { color: #777 !important; }
 
+.theme-ongoing-section,
+.theme-immediate-section,
+.theme-sounds-section {
+    border-left: 3px solid #444;
+    padding-left: 0.75rem;
+}
+
 /* Ongoing scene buttons */
-.theme-ongoing-btn {
+.theme-ongoing-btn,
+.theme-sound-btn {
     &.btn-primary        { background-color: #2a6bb5; border-color: #2a6bb5; color: #fff; }
     &.btn-primary:hover  { background-color: #3580d0; border-color: #3580d0; }
     &.btn-outline-primary { border-color: #2a6bb5; color: #6aacf0; }
@@ -49,6 +57,10 @@ body {
     color: #aaa;
 
     &:hover { background-color: #2a2a2a; }
+}
+
+.theme-sounds-section {
+    border-left-color: #2a6bb5;
 }
 
 /* Animation control buttons */

@@ -167,9 +167,14 @@ body {
 
 /* ---- Section bars ---- */
 .theme-ongoing-section,
-.theme-immediate-section {
+.theme-immediate-section,
+.theme-sounds-section {
     border-left: 3px solid var(--imp-red);
     background: linear-gradient(90deg, var(--imp-red-soft) 0%, transparent 40%);
+}
+
+.theme-sounds-section {
+    border-left-color: var(--imp-border-hi);
 }
 
 /* ---- Buttons ---- */
@@ -182,6 +187,7 @@ body {
 
 .theme-ongoing-btn,
 .theme-immediate-btn,
+.theme-sound-btn,
 .theme-start-btn,
 .theme-stop-btn {
     border-radius: 0;
@@ -190,7 +196,8 @@ body {
     letter-spacing: 0.08em;
 }
 
-.theme-ongoing-btn {
+.theme-ongoing-btn,
+.theme-sound-btn {
     &.btn-primary {
         background: linear-gradient(180deg, #2a0808 0%, #180404 100%);
         border-color: var(--imp-border-hi);

@@ -147,6 +147,7 @@ class HomeView(View):
         context = {"message": "Lighting", "page_title": "Home"}
         context.update(_scenes_context())
         context.update(_animation_context())
+        context.update(_sounds_context())
 
         return render_template("home.html", context)
 
@@ -994,6 +995,7 @@ def _system_settings_context() -> dict:
     sys_settings: dict = PersistentDict().get("system_settings", {})
     wifi: dict = sys_settings.get("wifi", {})
     strips: list = _parse_neopixels_storage(sys_settings.get("neopixels"))
+    audio_players: list = sys_settings.get("audio_players", [])
 
     return {
         "ss_wifi_ssid": wifi.get("ssid", ""),
@@ -1001,6 +1003,7 @@ def _system_settings_context() -> dict:
         "ss_strips": strips,
         "ss_color_orders": _COLOR_ORDERS,
         "ss_color_orders_json": json.dumps(_COLOR_ORDERS),
+        "ss_audio_players": audio_players,
     }
 
 
@@ -1093,6 +1096,27 @@ class SystemSettingsView(View):
         if not strips:
             strips = [{"pin": 4, "num": 144, "color_order": "GRB", "brightness_curve": True}]
 
+        # --- Audio players (multi-player: parallel arrays from repeated fields) ---
+        audio_uarts = _as_list(fd.get("audio_uart"), None)
+        audio_tx_pins = _as_list(fd.get("audio_tx_pin"), None)
+        audio_rx_pins = _as_list(fd.get("audio_rx_pin"), None)
+        audio_hq = _as_list(fd.get("audio_high_quality"), "")
+
+        # Filter out incomplete entries (all three pins must be present)
+        audio_players: list = []
+        for i in range(max(len(audio_uarts), len(audio_tx_pins), len(audio_rx_pins))):
+            try:
+                uart_val: int = int(audio_uarts[i] if i < len(audio_uarts) else 0)
+                tx_val: int = int(audio_tx_pins[i] if i < len(audio_tx_pins) else 0)
+                rx_val: int = int(audio_rx_pins[i] if i < len(audio_rx_pins) else 0)
+                hq_val: bool = (audio_hq[i] if i < len(audio_hq) else "") == "1"
+                if uart_val >= 0 and tx_val > 0 and rx_val > 0:
+                    audio_players.append(
+                        {"uart": uart_val, "tx_pin": tx_val, "rx_pin": rx_val, "high_quality": hq_val}
+                    )
+            except (ValueError, IndexError):
+                pass
+
         if error:
             context = _system_settings_context()
             context["error"] = error
@@ -1101,6 +1125,9 @@ class SystemSettingsView(View):
         print("SystemSettings: saving {} strip(s)".format(len(strips)))
         for strip in strips:
             print("  strip:", strip)
+        print("SystemSettings: saving {} audio player(s)".format(len(audio_players)))
+        for player in audio_players:
+            print("  player:", player)
 
         storage: PersistentDict = PersistentDict()
         # Preserve any keys not managed by this form (pins, billboard, etc.)
@@ -1115,6 +1142,7 @@ class SystemSettingsView(View):
                 },
                 "hostname": raw_hostname,
                 "neopixels": strips,
+                "audio_players": audio_players,
             }
         )
         storage["system_settings"] = existing
@@ -1905,3 +1933,159 @@ class ColorSelectView(View):
         }
 
         return render_template("setup/color_select.html", context)
+
+
+def _sounds_list(sounds_dict: dict) -> list:
+    """Build a list of sound summary dicts for template rendering, sorted alphabetically."""
+
+    result: list = []
+    for sound_title in sorted(sounds_dict.keys()):
+        sound = sounds_dict[sound_title]
+        result.append(
+            {
+                "title": sound_title,
+                "file": sound.get("file", 0),
+                "duration_ms": sound.get("duration_ms", 0),
+                "high_quality": bool(sound.get("high_quality", False)),
+            }
+        )
+
+    return result
+
+
+def _sounds_context() -> dict:
+    """Build template context from sounds in persistent storage."""
+
+    storage: PersistentDict = PersistentDict()
+    sounds: dict = storage.get("sounds", {})
+    return {
+        "sounds": _sounds_list(sounds),
+    }
+
+
+class SoundsSummaryView(View):
+    """Return a summary snippet of sounds for the setup card."""
+
+    def get(self) -> str:
+        """Return sounds summary HTML fragment."""
+
+        return render_template("setup/sounds_summary.html", _sounds_context())
+
+
+class SoundsView(View):
+    """Display and edit sound titles, files, and metadata."""
+
+    def get(self) -> str:
+        """Return the sounds edit form fragment."""
+
+        return render_template("setup/sounds.html", _sounds_context())
+
+    def post(self) -> str:
+        """Validate and save all sound definitions.
+
+        Accepts arrays of sound_title[], sound_file[], sound_duration_minutes[],
+        sound_duration_seconds[], sound_duration_ticks[], and sound_high_quality[].
+        """
+
+        fd = self.request.form_data
+
+        def _as_list(val, default):
+            if val is None:
+                return [default]
+            return val if isinstance(val, list) else [val]
+
+        titles = _as_list(fd.get("sound_title"), "")
+        files = _as_list(fd.get("sound_file"), "1")
+        durations_min = _as_list(fd.get("sound_duration_minutes"), "0")
+        durations_sec = _as_list(fd.get("sound_duration_seconds"), "0")
+        durations_ticks = _as_list(fd.get("sound_duration_ticks"), "0")
+        hq_flags = _as_list(fd.get("sound_high_quality"), "")
+
+        sounds: dict = {}
+        error: str = ""
+
+        for i in range(
+            max(len(titles), len(files), len(durations_min), len(durations_sec), len(durations_ticks), len(hq_flags))
+        ):
+            title = (titles[i] if i < len(titles) else "").strip()
+            if not title:
+                continue
+
+            try:
+                file_num: int = int(files[i] if i < len(files) else 1)
+                if file_num < 1 or file_num > 9999:
+                    file_num = 1
+            except (ValueError, IndexError):
+                file_num = 1
+
+            try:
+                mins: int = int(durations_min[i] if i < len(durations_min) else 0)
+                secs: int = int(durations_sec[i] if i < len(durations_sec) else 0)
+                ticks: int = int(durations_ticks[i] if i < len(durations_ticks) else 0)
+                duration_ms: int = (mins * 60 + secs) * 1000 + ticks * 100
+            except (ValueError, IndexError):
+                duration_ms = 0
+
+            hq: bool = (hq_flags[i] if i < len(hq_flags) else "") == "1"
+
+            sounds[title] = {
+                "file": file_num,
+                "duration_ms": duration_ms,
+                "high_quality": hq,
+            }
+
+        if error:
+            context = _sounds_context()
+            context["error"] = error
+            return render_template("setup/sounds.html", context)
+
+        print("Sounds: saving {} sound(s)".format(len(sounds)))
+        for title, sound in sounds.items():
+            print("  {}: {}".format(title, sound))
+
+        storage: PersistentDict = PersistentDict()
+        storage["sounds"] = sounds
+        storage.store()
+        print("Sounds: storage saved OK")
+
+        context = _sounds_context()
+        context["message"] = "Sounds saved."
+        return render_template("setup/sounds.html", context)
+
+
+class PlaySoundView(View):
+    """Handle requests to play a sound by title."""
+
+    def post(self) -> str:
+        """Play a sound and return status.
+
+        Form data:
+            title: Sound title to play
+        """
+
+        title: str = self.request.form_data.get("title", "").strip()
+
+        if not title:
+            return '<div class="alert alert-danger small py-2 mb-0">No sound title provided</div>'
+
+        try:
+            from sounds import SoundManager
+
+            manager: SoundManager = SoundManager()
+            module_idx: int = manager.play_sound(title)
+            return (
+                '<div class="alert alert-success small py-2 mb-0">'
+                f"Playing '{title}' on module {module_idx}"
+                "</div>"
+            )
+        except ImportError:
+            return '<div class="alert alert-warning small py-2 mb-0">Audio system not available</div>'
+        except ValueError:
+            return '<div class="alert alert-danger small py-2 mb-0">' f"Sound '{title}' not found" "</div>"
+        except Exception as err:
+            from audio import NoPlayersAvailable
+
+            if isinstance(err, NoPlayersAvailable):
+                return '<div class="alert alert-danger small py-2 mb-0">' "All audio modules are busy" "</div>"
+            else:
+                return '<div class="alert alert-danger small py-2 mb-0">' f"Error: {str(err)}" "</div>"

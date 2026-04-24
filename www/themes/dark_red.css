@@ -34,8 +34,16 @@ body {
 
 .theme-section-heading { color: #a04040 !important; }
 
+.theme-ongoing-section,
+.theme-immediate-section,
+.theme-sounds-section {
+    border-left: 3px solid #6a2020;
+    padding-left: 0.75rem;
+}
+
 /* Ongoing scene buttons */
-.theme-ongoing-btn {
+.theme-ongoing-btn,
+.theme-sound-btn {
     &.btn-primary        { background-color: #8b0000; border-color: #8b0000; color: #fff; }
     &.btn-primary:hover  { background-color: #a50000; border-color: #a50000; }
     &.btn-outline-primary { border-color: #8b0000; color: #c07070; }
@@ -48,6 +56,10 @@ body {
     color: #c08030;
 
     &:hover { background-color: #3a1800; }
+}
+
+.theme-sounds-section {
+    border-left-color: #8b0000;
 }
 
 /* Animation control buttons */

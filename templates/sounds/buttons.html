@@ -1,0 +1,21 @@
+<div id="sound_buttons" class="theme-scene-buttons theme-sound-buttons">
+    {% if sounds %}
+    <section class="theme-home-subsection theme-sounds-section">
+        <h6 class="theme-section-heading theme-home-subsection-heading">Sounds</h6>
+        <div class="theme-section-actions d-flex flex-wrap gap-2">
+            {% for sound in sounds %}
+            <div id="sound-{{ sound.file }}-result">
+                <form hx-post="/sounds/play"
+                      hx-target="#sound-{{ sound.file }}-result"
+                      hx-swap="innerHTML">
+                    <input type="hidden" name="title" value="{{ sound.title }}">
+                    <button type="submit" class="theme-sound-btn btn btn-sm btn-outline-primary">
+                        {{ sound.title }}
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</div>

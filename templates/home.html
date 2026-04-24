@@ -1,17 +1,24 @@
 {% include 'base/base_head.html' %}
 <div class="theme-page container mt-4">
-    <div class="theme-animation-panel card mb-4">
-        <div class="card-body d-flex align-items-center gap-3">
+    <div class="theme-home-stack">
+        <section class="theme-home-section theme-animation-panel card">
+            <div class="card-body d-flex align-items-center gap-3 theme-home-section-body">
             <div class="theme-animation-label text-muted small">Animation</div>
             <div class="d-flex gap-2">
                 {% include 'animation/buttons.html' %}
             </div>
-        </div>
+            </div>
+        </section>
+        <section class="theme-home-section theme-active-scene-panel">
+            <div class="theme-active-scene-label text-muted small mb-1">Active Scenes</div>
+            <div class="theme-scene-name" id="active-scene-name">{{ active_scenes_label }}</div>
+        </section>
+        <section class="theme-home-section theme-scenes-panel">
+            {% include 'scenes/buttons.html' %}
+        </section>
+        <section class="theme-home-section theme-sounds-panel">
+            {% include 'sounds/buttons.html' %}
+        </section>
     </div>
-    <div class="theme-active-scene-panel mb-4">
-        <div class="theme-active-scene-label text-muted small mb-1">Active Scenes</div>
-        <div class="theme-scene-name" id="active-scene-name">{{ active_scenes_label }}</div>
-    </div>
-    {% include 'scenes/buttons.html' %}
 </div>
 {% include 'base/base_foot.html' %}

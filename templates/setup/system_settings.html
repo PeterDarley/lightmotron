@@ -81,6 +81,39 @@
             Changes to hostname or WiFi credentials take effect on the next reboot.
         </div>
 
+        <h6 class="mb-3">Audio Players (YX5200 MP3 Modules)</h6>
+        <div class="mb-2">
+            <table class="table table-sm table-borderless mb-2" id="audio-table">
+                <thead>
+                    <tr>
+                        <th class="form-label-sm ps-0">UART</th>
+                        <th class="form-label-sm">TX Pin</th>
+                        <th class="form-label-sm">RX Pin</th>
+                        <th class="form-label-sm">High Quality</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="audio-tbody">
+                    {% for player in ss_audio_players %}
+                    <tr>
+                        <td class="ps-0"><input type="number" class="form-control form-control-sm" name="audio_uart" value="{{ player.uart }}" min="0" max="2"></td>
+                        <td><input type="number" class="form-control form-control-sm" name="audio_tx_pin" value="{{ player.tx_pin }}" min="1" max="48"></td>
+                        <td><input type="number" class="form-control form-control-sm" name="audio_rx_pin" value="{{ player.rx_pin }}" min="1" max="48"></td>
+                        <td class="text-center align-middle">
+                            <input class="form-check-input" type="checkbox" name="audio_high_quality" value="1" {% if player.high_quality %}checked{% endif %}>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    onclick="this.closest('tr').remove()">✕</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addAudioRow()">+ Add Audio Module</button>
+            <div class="form-text">Configure up to 3 YX5200 modules. Each module connects to a separate UART with its own TX/RX pins.</div>
+        </div>
+
         <button type="submit" class="btn btn-primary btn-sm">Save Settings</button>
     </form>
 </div>
@@ -97,6 +130,18 @@ function addStripRow() {
         '<td><input type="number" class="form-control form-control-sm" name="strip_num" value="30" min="1" max="2048" required></td>' +
         '<td><select class="form-select form-select-sm" name="strip_order">' + options + '</select></td>' +
         '<td class="text-center align-middle"><input class="form-check-input" type="checkbox" name="strip_brightness_curve" value="1" checked></td>' +
+        '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()">✕</button></td>' +
+        '</tr>';
+    tbody.insertAdjacentHTML('beforeend', row);
+}
+
+function addAudioRow() {
+    var tbody = document.getElementById('audio-tbody');
+    var row = '<tr>' +
+        '<td class="ps-0"><input type="number" class="form-control form-control-sm" name="audio_uart" value="1" min="0" max="2"></td>' +
+        '<td><input type="number" class="form-control form-control-sm" name="audio_tx_pin" value="10" min="1" max="48"></td>' +
+        '<td><input type="number" class="form-control form-control-sm" name="audio_rx_pin" value="11" min="1" max="48"></td>' +
+        '<td class="text-center align-middle"><input class="form-check-input" type="checkbox" name="audio_high_quality" value="1"></td>' +
         '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()">✕</button></td>' +
         '</tr>';
     tbody.insertAdjacentHTML('beforeend', row);

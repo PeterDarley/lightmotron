@@ -1,0 +1,14 @@
+<div class="card-body py-2">
+    {% if sounds %}
+    <div class="mb-2">
+        <strong>{{ sounds | length }} sound(s) configured</strong>
+        <ul class="list-unstyled mb-0 small text-muted">
+            {% for sound in sounds %}
+            <li>{{ sound.title }} (file {{ sound.file }})</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% else %}
+    <div class="text-muted small">No sounds configured</div>
+    {% endif %}
+</div>

@@ -74,7 +74,7 @@ python tools\reset_device.py COM3
 Once the device is running and connected to WiFi, open your browser and navigate to the device's IP address (e.g., `http://192.168.1.100/` or use the hostname `http://lightmotron.local/` if mDNS is available).
 
 ### Home Page
-Control animation playback and trigger scenes. Start/stop lighting animations and switch between configured scenes.
+Control animation playback and trigger scenes. Start/stop lighting animations, switch between configured scenes, and play sounds from the audio modules.
 
 ![Home page](docs/screenshots/home.png)
 
@@ -84,7 +84,7 @@ Configure all lighting settings and system configuration in one place. Each sect
 ![Setup page](docs/screenshots/setup.png)
 
 #### System Settings
-Configure WiFi credentials, mDNS hostname, and NeoPixel strip settings. Changes take effect on the next reboot.
+Configure WiFi credentials, mDNS hostname, NeoPixel strip settings, and audio player UART pins. Changes take effect on the next reboot.
 
 #### Custom Colors
 Define and name your own colors to reuse across effects and scenes.
@@ -116,6 +116,9 @@ Combine effects into complete lighting scenarios. Each scene contains one or mor
 ![Scenes](docs/screenshots/setup-scenes.png)
 ![Edit a scene](docs/screenshots/setup-scene-edit.png)
 ![Edit a job](docs/screenshots/setup-job-edit.png)
+
+#### Sounds
+Create named sounds that map to MP3 file numbers on the SD cards in your audio modules. Associate titles with files, set durations, and mark sounds as high quality for preferential playback on high-quality modules.
 
 #### Theme
 Choose a CSS theme to customise the look of the interface.

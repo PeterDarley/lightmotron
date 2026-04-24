@@ -1,18 +1,18 @@
 <div id="scene_buttons" class="theme-scene-buttons">
-    <div class="theme-ongoing-section mb-3">
-        <h6 class="theme-section-heading">Ongoing</h6>
-        <div class="d-flex flex-wrap gap-2">
+    <section class="theme-home-subsection theme-ongoing-section">
+        <h6 class="theme-section-heading theme-home-subsection-heading">Ongoing</h6>
+        <div class="theme-section-actions d-flex flex-wrap gap-2">
             {% for scene in ongoing_scenes %}
                 {% include 'scenes/select_scene_button.html' %}
             {% endfor %}
         </div>
-    </div>
-    <div class="theme-immediate-section">
-        <h6 class="theme-section-heading">Immediate</h6>
-        <div class="d-flex flex-wrap gap-2">
+    </section>
+    <section class="theme-home-subsection theme-immediate-section">
+        <h6 class="theme-section-heading theme-home-subsection-heading">Immediate</h6>
+        <div class="theme-section-actions d-flex flex-wrap gap-2">
             {% for scene in immediate_scenes %}
                 {% include 'scenes/select_scene_button_immediate.html' %}
             {% endfor %}
         </div>
-    </div>
+    </section>
 </div>

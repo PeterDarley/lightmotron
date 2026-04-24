@@ -27,6 +27,15 @@
 
 /* Home page */
 .theme-page {}
+.theme-home-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.theme-home-section {}
+.theme-home-section-body {}
+.theme-scenes-panel {}
+.theme-sounds-panel {}
 .theme-animation-panel {}
 .theme-animation-label {}
 .theme-animation-controls {}
@@ -36,8 +45,16 @@
 .theme-active-scene-label {}
 .theme-scene-name { font-size: 1.75rem; font-weight: 500; }
 .theme-scene-buttons {}
+.theme-sound-buttons {}
+.theme-home-subsection {
+    margin: 0;
+}
+.theme-home-subsection + .theme-home-subsection {
+    margin-top: 1rem;
+}
 .theme-ongoing-section {}
 .theme-immediate-section {}
+.theme-sounds-section {}
 .theme-section-heading {
     text-transform: uppercase;
     font-size: 0.72rem;
@@ -46,5 +63,8 @@
     color: #6c757d;
     margin-bottom: 0.5rem;
 }
+.theme-home-subsection-heading {}
+.theme-section-actions {}
 .theme-ongoing-btn {}
 .theme-immediate-btn {}
+.theme-sound-btn {}

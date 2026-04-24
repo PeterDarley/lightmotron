@@ -216,7 +216,8 @@ body {
 
 /* ---- Section bars ---- */
 .theme-ongoing-section,
-.theme-immediate-section {
+.theme-immediate-section,
+.theme-sounds-section {
     border-left: 5px solid var(--kli-frame);
     background: linear-gradient(90deg, rgba(107,52,16,0.15) 0%, transparent 50%);
     position: relative;
@@ -235,6 +236,10 @@ body {
     }
 }
 
+.theme-sounds-section {
+    border-left-color: var(--kli-accent);
+}
+
 /* ---- Buttons -- angular / beveled ---- */
 .btn {
     border-radius: 0;
@@ -249,6 +254,7 @@ body {
 
 .theme-ongoing-btn,
 .theme-immediate-btn,
+.theme-sound-btn,
 .theme-start-btn,
 .theme-stop-btn {
     clip-path: polygon(0.6rem 0, 100% 0, calc(100% - 0.6rem) 100%, 0 100%);
@@ -256,7 +262,8 @@ body {
     letter-spacing: 0.1em;
 }
 
-.theme-ongoing-btn {
+.theme-ongoing-btn,
+.theme-sound-btn {
     &.btn-outline-primary {
         border-color: var(--kli-frame);
         color: var(--kli-text);

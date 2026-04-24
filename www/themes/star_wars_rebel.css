@@ -179,9 +179,14 @@ body {
 
 /* ---- Section bars ---- */
 .theme-ongoing-section,
-.theme-immediate-section {
+.theme-immediate-section,
+.theme-sounds-section {
     border-left: 3px solid var(--sw-accent);
     background: linear-gradient(90deg, var(--sw-glow-soft) 0%, transparent 40%);
+}
+
+.theme-sounds-section {
+    border-left-color: var(--sw-yellow);
 }
 
 /* ---- Buttons ---- */
@@ -194,6 +199,7 @@ body {
 
 .theme-ongoing-btn,
 .theme-immediate-btn,
+.theme-sound-btn,
 .theme-start-btn,
 .theme-stop-btn {
     border-radius: 0;
@@ -202,7 +208,8 @@ body {
     letter-spacing: 0.08em;
 }
 
-.theme-ongoing-btn {
+.theme-ongoing-btn,
+.theme-sound-btn {
     &.btn-primary {
         background-color: transparent;
         border: 1px solid var(--sw-accent);
