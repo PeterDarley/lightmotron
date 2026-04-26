@@ -79,6 +79,40 @@
 
         <div class="col">
             <div class="card h-100">
+                <div class="card-header">Audio Modules</div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">{{ audio_health_summary }}</p>
+                    {% if audio_health %}
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr><th>Module</th><th>UART</th><th>Responsive</th><th>State</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for m in audio_health %}
+                            <tr>
+                                <td>{{ m.index }}</td>
+                                <td>{{ m.uart }}</td>
+                                <td>{% if m.ok %}Yes{% else %}No{% endif %}</td>
+                                <td>
+                                    {% if m.state %}
+                                        File {{ m.state.0 }}{% if m.state.1 %} (HQ){% endif %}
+                                    {% else %}
+                                        idle
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                        <div class="text-muted small">No audio modules configured</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card h-100">
                 <div class="card-header">Backup &amp; Restore</div>
                 <div class="card-body">
                     <p class="small text-muted mb-2">Download or restore all settings (scenes, effects, filters, colors, ranges).</p>

@@ -504,10 +504,32 @@ class StatusView(View):
         elif restore_status == "invalid":
             restore_message = "Restore failed: invalid JSON data."
             restore_class = "danger"
+        # Gather audio health from the SoundManager (if available)
+        audio_health_list = []
+        audio_health_summary = "No audio modules configured"
+        try:
+            from sounds import SoundManager
 
-        elif restore_status == "empty":
-            restore_message = "Restore failed: no data provided."
-            restore_class = "danger"
+            sm = SoundManager()
+            raw_health = sm.get_last_health() or {}
+            # Convert to sorted list for templating
+            keys = sorted(raw_health.keys())
+            for k in keys:
+                info = raw_health.get(k, {})
+                audio_health_list.append(
+                    {
+                        "index": k,
+                        "uart": info.get("uart"),
+                        "ok": bool(info.get("ok")),
+                        "state": info.get("state"),
+                    }
+                )
+            if audio_health_list:
+                healthy = sum(1 for it in audio_health_list if it.get("ok"))
+                audio_health_summary = f"{healthy}/{len(audio_health_list)} responsive"
+        except Exception:
+            audio_health_list = []
+            audio_health_summary = "Audio health not available"
 
         return render_template(
             "status.html",
@@ -531,6 +553,8 @@ class StatusView(View):
                 "tick_number": lights.animation.tick_number,
                 "restore_message": restore_message,
                 "restore_class": restore_class,
+                "audio_health": audio_health_list,
+                "audio_health_summary": audio_health_summary,
                 "page_title": "Status",
             },
         )
@@ -2072,6 +2096,18 @@ class PlaySoundView(View):
             from sounds import SoundManager
 
             manager: SoundManager = SoundManager()
+            print(f"PlaySoundView: play request received: '{title}'")
+            try:
+                sound_info = manager.get_sound_by_title(title)
+                print("PlaySoundView: sound_info:", sound_info)
+            except Exception:
+                print("PlaySoundView: could not read sound_info")
+
+            try:
+                print("PlaySoundView: audio player state:", manager.audio_player.get_playing_state())
+            except Exception:
+                pass
+
             module_idx: int = manager.play_sound(title)
             return (
                 '<div class="alert alert-success small py-2 mb-0">'
