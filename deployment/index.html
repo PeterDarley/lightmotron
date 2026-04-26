@@ -197,6 +197,11 @@
             </button>
         </esp-web-install-button>
 
+        <div id="serial-control" style="margin-top:1rem;">
+            <div id="serial-status" style="color:#8b949e;font-size:0.95rem;margin-bottom:0.5rem;"></div>
+            <button id="select-serial" class="install-btn" style="background:#2ea44f;border:0;padding:0.5rem 1rem;display:inline-block;">Select serial port</button>
+        </div>
+
         <div class="after-install">
             <strong>After installation:</strong> look for a WiFi network called
             <strong>lightmotron-setup</strong> on your phone or laptop. Connect to
@@ -253,6 +258,53 @@
     <a href="https://github.com/yourname/lightmotron">GitHub</a> &mdash;
     Licensed under GPLv3
 </footer>
+
+<script>
+// Serial helper: allow user to explicitly select a serial port before installing.
+(async function () {
+    const status = document.getElementById('serial-status');
+    const selBtn = document.getElementById('select-serial');
+
+    function setStatus(msg) {
+        if (status) status.textContent = msg;
+    }
+
+    if (!('serial' in navigator)) {
+        if (selBtn) selBtn.style.display = 'none';
+        setStatus('Web Serial API not supported in this browser. Use the local upload scripts instead.');
+        return;
+    }
+
+    try {
+        const ports = await navigator.serial.getPorts();
+        if (!ports || ports.length === 0) {
+            setStatus('No previously-granted serial ports. Click "Select serial port" to choose your device.');
+        } else {
+            setStatus(ports.length + ' serial port(s) available. You can click Install or select a specific port.');
+        }
+    } catch (e) {
+        setStatus('Unable to query serial ports. Click "Select serial port" to choose a device.');
+    }
+
+    if (selBtn) {
+        selBtn.addEventListener('click', async () => {
+            try {
+                await navigator.serial.requestPort();
+                setStatus('Serial port permission granted. Click "Install" to proceed.');
+            } catch (err) {
+                setStatus('No serial port selected.');
+            }
+        });
+    }
+
+    // If esp-web-install-button reports an error it will show its own UI.
+    // Add a developer console hook so users can open DevTools for more info.
+    window.addEventListener('error', (e) => {
+        // Keep the error visible in the page status for quick feedback.
+        setStatus('Installation error: ' + (e && e.message ? e.message : 'unknown'));
+    });
+})();
+</script>
 
 </body>
 </html>
