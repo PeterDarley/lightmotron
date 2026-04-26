@@ -1,6 +1,7 @@
 {
   "name": "Lightmotron",
   "version": "1.0",
+  "firmware_source": "ESP32_GENERIC_S3-SPIRAM_OCT-20251209-v1.27.0.bin",
   "new_install_prompt_erase": true,
   "builds": [
     {

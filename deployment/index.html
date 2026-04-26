@@ -201,6 +201,7 @@
             <div id="serial-status" style="color:#8b949e;font-size:0.95rem;margin-bottom:0.5rem;"></div>
             <button id="select-serial" class="install-btn" style="background:#2ea44f;border:0;padding:0.5rem 1rem;display:inline-block;">Select serial port</button>
         </div>
+        <div id="manifest-info" style="margin-top:0.75rem;color:#8b949e;font-size:0.95rem;"></div>
 
         <div class="after-install">
             <strong>After installation:</strong> look for a WiFi network called
@@ -260,18 +261,29 @@
 </footer>
 
 <script>
-// Serial helper: allow user to explicitly select a serial port before installing.
+// Serial helper: require user to grant serial permission before installing.
 (async function () {
     const status = document.getElementById('serial-status');
     const selBtn = document.getElementById('select-serial');
+    const installWrapper = document.querySelector('esp-web-install-button');
+    const installBtn = installWrapper ? installWrapper.querySelector('button[slot="activate"]') : null;
 
     function setStatus(msg) {
         if (status) status.textContent = msg;
     }
 
+    function setInstallEnabled(enabled) {
+        if (!installBtn) return;
+        installBtn.disabled = !enabled;
+        installBtn.style.opacity = enabled ? '1' : '0.6';
+        installBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+    }
+
     if (!('serial' in navigator)) {
         if (selBtn) selBtn.style.display = 'none';
         setStatus('Web Serial API not supported in this browser. Use the local upload scripts instead.');
+        // allow the installer button to remain usable; it will show its own errors
+        setInstallEnabled(true);
         return;
     }
 
@@ -279,30 +291,64 @@
         const ports = await navigator.serial.getPorts();
         if (!ports || ports.length === 0) {
             setStatus('No previously-granted serial ports. Click "Select serial port" to choose your device.');
+            setInstallEnabled(false);
         } else {
-            setStatus(ports.length + ' serial port(s) available. You can click Install or select a specific port.');
+            setStatus(ports.length + ' previously-granted serial port(s). You can click Install or select a different port.');
+            setInstallEnabled(true);
         }
     } catch (e) {
         setStatus('Unable to query serial ports. Click "Select serial port" to choose a device.');
+        setInstallEnabled(false);
     }
 
     if (selBtn) {
         selBtn.addEventListener('click', async () => {
             try {
-                await navigator.serial.requestPort();
-                setStatus('Serial port permission granted. Click "Install" to proceed.');
+                const port = await navigator.serial.requestPort();
+                // Permission granted for a port
+                let infoText = 'Serial permission granted';
+                try {
+                    const info = port.getInfo ? port.getInfo() : {};
+                    if (info && (info.usbVendorId || info.usbProductId)) {
+                        infoText += ` (VID:${info.usbVendorId || '??'} PID:${info.usbProductId || '??'})`;
+                    }
+                } catch (er) {
+                    // ignore
+                }
+                setStatus(infoText + '. Click "Install" to proceed.');
+                setInstallEnabled(true);
             } catch (err) {
                 setStatus('No serial port selected.');
             }
         });
     }
 
-    // If esp-web-install-button reports an error it will show its own UI.
-    // Add a developer console hook so users can open DevTools for more info.
     window.addEventListener('error', (e) => {
-        // Keep the error visible in the page status for quick feedback.
         setStatus('Installation error: ' + (e && e.message ? e.message : 'unknown'));
     });
+
+    // Load and display manifest info (image name and firmware source) for clarity
+    (async function loadManifest() {
+        const infoEl = document.getElementById('manifest-info');
+        if (!infoEl) return;
+        try {
+            const resp = await fetch('manifest.json', { cache: 'no-store' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const manifest = await resp.json();
+            const imagePath = manifest?.builds?.[0]?.parts?.[0]?.path || 'lightmotron.bin';
+            const firmware = manifest?.firmware_source || '';
+            let text = 'Image: ' + imagePath;
+            if (firmware) text += ' — Firmware: ' + firmware;
+            if (manifest?.version) text += ' (manifest v' + manifest.version + ')';
+            infoEl.textContent = text;
+        } catch (err) {
+            console.warn('Could not load manifest.json', err);
+        }
+    })();
+
+    // Protect against accidental installs: if the install button exists but is
+    // not controllable by script (shadow DOM), the guard above still helps
+    // because users are encouraged to select a port first.
 })();
 </script>
 
