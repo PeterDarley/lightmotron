@@ -129,11 +129,15 @@ def _scenes_context():
     immediate_scenes = [name for name in scene_names if not lights.is_scene_ongoing(name)]
     active_scenes = list(lights._active_scenes)
 
+    # Ensure label construction is robust: convert non-string entries to
+    # strings so join() does not raise if a malformed value appears.
+    active_label = ", ".join([str(s) for s in active_scenes]) if active_scenes else "—"
+
     return {
         "scenes": scene_names,
         "current_scene": lights.scene_name,
         "active_scenes": active_scenes,
-        "active_scenes_label": ", ".join(active_scenes) if active_scenes else "—",
+        "active_scenes_label": active_label,
         "ongoing_scenes": ongoing_scenes,
         "immediate_scenes": immediate_scenes,
     }
@@ -1130,15 +1134,22 @@ class SystemSettingsView(View):
         audio_players: list = []
         for i in range(max(len(audio_uarts), len(audio_tx_pins), len(audio_rx_pins))):
             try:
-                uart_val: int = int(audio_uarts[i] if i < len(audio_uarts) else 0)
-                tx_val: int = int(audio_tx_pins[i] if i < len(audio_tx_pins) else 0)
-                rx_val: int = int(audio_rx_pins[i] if i < len(audio_rx_pins) else 0)
+                # Coerce missing/None values to 0 before int() to avoid TypeError
+                raw_uart = audio_uarts[i] if i < len(audio_uarts) else 0
+                raw_tx = audio_tx_pins[i] if i < len(audio_tx_pins) else 0
+                raw_rx = audio_rx_pins[i] if i < len(audio_rx_pins) else 0
+
+                uart_val: int = int(raw_uart) if raw_uart is not None and raw_uart != "" else 0
+                tx_val: int = int(raw_tx) if raw_tx is not None and raw_tx != "" else 0
+                rx_val: int = int(raw_rx) if raw_rx is not None and raw_rx != "" else 0
+
                 hq_val: bool = (audio_hq[i] if i < len(audio_hq) else "") == "1"
                 if uart_val >= 0 and tx_val > 0 and rx_val > 0:
                     audio_players.append(
                         {"uart": uart_val, "tx_pin": tx_val, "rx_pin": rx_val, "high_quality": hq_val}
                     )
-            except (ValueError, IndexError):
+            except (ValueError, IndexError, TypeError):
+                # Skip invalid/incomplete audio player entries
                 pass
 
         if error:
