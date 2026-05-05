@@ -86,6 +86,9 @@ Configure all lighting settings and system configuration in one place. Each sect
 #### System Settings
 Configure WiFi credentials, mDNS hostname, NeoPixel strip settings, and audio player UART pins. Changes take effect on the next reboot.
 
+#### Models
+Manage multiple named "Models" — each Model is a self-contained collection of lighting configuration (scenes, effects, filters, named ranges, custom colors, and optional per-model sounds). Use the Models card on the Setup page to create, rename, delete, or switch the active model. The device stores the active model in persistent settings; older single-model installations are automatically migrated into a default model named "Model".
+
 #### Custom Colors
 Define and name your own colors to reuse across effects and scenes.
 

@@ -1,0 +1,6 @@
+<div class="alert alert-warning small py-2 mb-2">This will overwrite all current settings. This action is irreversible.</div>
+<form method="POST" action="/restore">
+    <textarea name="backup_json" style="display:none;">{{ backup_json }}</textarea>
+    <button type="submit" class="btn btn-danger btn-sm">Confirm Restore</button>
+    <a href="/status" class="btn btn-secondary btn-sm ms-2">Cancel</a>
+</form>

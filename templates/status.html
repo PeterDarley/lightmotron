@@ -71,6 +71,7 @@
                     <table class="table table-sm mb-0">
                         <tr><th>Running</th><td>{{ animation_running }}</td></tr>
                         <tr><th>Scene</th><td>{{ current_scene }}</td></tr>
+                            <tr><th>Model</th><td>{{ active_model }}</td></tr>
                         <tr><th>Tick</th><td>{{ tick_number }}</td></tr>
                     </table>
                 </div>
@@ -117,14 +118,15 @@
                 <div class="card-body">
                     <p class="small text-muted mb-2">Download or restore all settings (scenes, effects, filters, colors, ranges).</p>
                     <a href="/backup" class="btn btn-outline-primary btn-sm mb-3">Download Backup</a>
-                    <form method="POST" action="/restore" onsubmit="return confirm('This will overwrite all current settings. Continue?');">
+                    <form hx-post="/restore/confirm" hx-target="#restore-confirm-area" hx-swap="innerHTML" class="mb-2">
                         <div class="mb-2">
                             <label for="backup-json" class="form-label small">Paste backup JSON to restore:</label>
                             <textarea class="form-control form-control-sm" id="backup-json" name="backup_json"
                                       rows="3" placeholder='{"lighting_settings": {...}}'></textarea>
                         </div>
-                        <button type="submit" class="btn btn-outline-danger btn-sm">Restore</button>
+                        <button type="submit" class="btn btn-outline-danger btn-sm">Review Restore</button>
                     </form>
+                    <div id="restore-confirm-area"></div>
                 </div>
             </div>
         </div>

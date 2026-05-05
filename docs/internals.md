@@ -19,6 +19,23 @@ Lighting is defined by **scenes**, each containing one or more **jobs**. Each jo
 }
 ```
 
+## Models
+
+The system supports multiple named Models. Each Model is a top-level container that holds a complete lighting configuration — for example `scenes`, `effects`, `filters`, `named_ranges`, `custom_colors`, and (optionally) a per-model `sounds` mapping. The persistent storage layout used by the device is::
+
+    "lighting_settings": {
+        "models": {
+            "ModelName": { ... },
+            "OtherModel": { ... }
+        },
+        "current_model": "ModelName"
+    }
+
+On first load the runtime will automatically migrate older single-model installations (where `scenes`, `effects`, etc. lived directly under `lighting_settings`) into a single model named "Model". There's also a helper API available on the `Lighting` singleton: `wrap_current_settings_into_model("Model")` which explicitly performs this wrapping and will raise an error if the settings already use the models container.
+
+At runtime the `Lighting` instance binds `self.settings` to the active model dictionary and all UI and runtime operations (scene start/stop, named-range edits, effect updates, etc.) operate within that active model. When a model contains a `sounds` mapping it is preferred for playback; otherwise the top-level `sounds` mapping is used.
+
+
 ## Target Specification
 
 | Value | Meaning |
@@ -27,6 +44,13 @@ Lighting is defined by **scenes**, each containing one or more **jobs**. Each jo
 | `[0, 2, 5]` | Explicit list of indices |
 | `"0-7"` | Inclusive range |
 | `"all"` | All LEDs |
+| `"named:range_name"` | Look up range in `named_ranges` (may reference other named ranges)
+
+Named ranges may include references to other named ranges using the `named:OtherRange`
+syntax in member lists (for example: `"engine": [0, "named:wing"]`). The lighting
+runtime expands these references recursively when resolving targets. The setup UI
+validates named-range edits and will reject circular references to prevent infinite
+recursion at runtime.
 
 ## Colors
 

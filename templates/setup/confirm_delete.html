@@ -1,0 +1,9 @@
+<div class="alert alert-warning small py-2 mb-2">{{ message }}</div>
+<form hx-post="{{ action_url }}" hx-target="#modal-body" hx-swap="innerHTML" method="POST">
+    {% for k, v in fields.items() %}
+    <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endfor %}
+    <input type="hidden" name="action" value="delete">
+    <button type="submit" class="btn btn-danger btn-sm">Confirm Delete</button>
+    <button type="button" class="btn btn-secondary btn-sm ms-2" hx-get="{{ cancel_url }}" hx-target="#modal-body" hx-swap="innerHTML">Cancel</button>
+</form>

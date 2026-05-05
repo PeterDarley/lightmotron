@@ -64,6 +64,13 @@ def _rename_named_range_refs(old_name: str, new_name: str) -> None:
         for entry in scene.values():
             if entry.get("target") == old_ref:
                 entry["target"] = new_ref
+    # Also update references inside other named ranges
+    nr = lights.settings.get("named_ranges", {})
+    for name, members in nr.items():
+        if isinstance(members, list):
+            for i, item in enumerate(members):
+                if isinstance(item, str) and item == old_ref:
+                    members[i] = new_ref
 
 
 def _rename_effect_refs(old_name: str, new_name: str) -> None:
@@ -121,6 +128,66 @@ def _animation_context():
     return {"animation_running": running, "animation_stopped": not running}
 
 
+def _parse_selected_tokens(selected_leds_str: str) -> list:
+    """Parse a comma-separated selected_leds string into a list of ints and named refs.
+
+    Accepts tokens like "10", "3" or "named:engine". Invalid tokens are ignored.
+    """
+    if not selected_leds_str:
+        return []
+
+    tokens = []
+    for t in (x.strip() for x in selected_leds_str.split(",")):
+        if not t:
+            continue
+        if t.startswith("named:"):
+            name = t[6:]
+            if name:
+                tokens.append("named:" + name)
+        else:
+            try:
+                tokens.append(int(t))
+            except Exception:
+                # ignore malformed entries
+                pass
+
+    return tokens
+
+
+def _named_ranges_has_cycle(named_ranges: dict) -> bool:
+    """Detect cycles in the named_ranges graph. Returns True if a cycle exists."""
+
+    # Build adjacency map where edges point from a range to any named ranges it references
+    adj = {name: [] for name in named_ranges.keys()}
+    for name, members in named_ranges.items():
+        if isinstance(members, list):
+            for item in members:
+                if isinstance(item, str) and item.startswith("named:"):
+                    adj.setdefault(name, []).append(item[6:])
+
+    visited = set()
+    recstack = set()
+
+    def _dfs(node: str) -> bool:
+        if node in recstack:
+            return True
+        if node in visited:
+            return False
+        visited.add(node)
+        recstack.add(node)
+        for child in adj.get(node, []):
+            if _dfs(child):
+                return True
+        recstack.remove(node)
+        return False
+
+    for n in adj.keys():
+        if _dfs(n):
+            return True
+
+    return False
+
+
 def _scenes_context():
     """Return a context dict with the scenes list and active scenes."""
 
@@ -141,6 +208,95 @@ def _scenes_context():
         "ongoing_scenes": ongoing_scenes,
         "immediate_scenes": immediate_scenes,
     }
+
+
+def _models_context():
+    """Return a context dict describing available models and the current model."""
+
+    try:
+        model_names = lights.get_model_names()
+        current = lights.current_model_name
+    except Exception:
+        model_names = []
+        current = None
+
+    return {"models": model_names, "current_model": current}
+
+
+class ModelsSummaryView(View):
+    """Return a small summary snippet for the Models card in Setup."""
+
+    def get(self) -> str:
+        ctx = _models_context()
+        return render_template(
+            "setup/models_summary.html", {"current_model": ctx["current_model"], "model_count": len(ctx["models"])}
+        )
+
+
+class ModelsView(View):
+    """Full modal view for managing models."""
+
+    def get(self) -> str:
+        ctx = _models_context()
+        return render_template(
+            "setup/models.html",
+            {"models": ctx["models"], "current_model": ctx["current_model"], "page_title": "Models"},
+        )
+
+    def post(self) -> str:
+        action = self.request.form_data.get("action", "set").strip()
+        name = self.request.form_data.get("name", "").strip()
+        new_name = self.request.form_data.get("new_name", "").strip()
+
+        if action == "set" and name:
+            try:
+                lights.set_current_model(name)
+                # Instruct HTMX to reload the setup page so summaries update
+                return Response(status=200, reason="OK", body="", headers={"HX-Redirect": "/setup"})
+            except Exception:
+                pass
+        elif action == "create" and name:
+            try:
+                lights.create_model(name)
+            except Exception:
+                pass
+        elif action == "delete" and name:
+            try:
+                lights.delete_model(name)
+            except Exception as e:
+                return str(e), 400
+        elif action == "rename" and name and new_name:
+            try:
+                lights.rename_model(name, new_name)
+            except Exception as e:
+                return str(e), 400
+
+        # Return updated modal
+        return self.get()
+
+
+class ModelsSetView(View):
+    def post(self) -> str:
+        name = self.request.form_data.get("model", "").strip()
+        if name:
+            try:
+                lights.set_current_model(name)
+            except Exception:
+                pass
+
+        # Ask the client to reload the setup page so the UI reflects the new active model.
+        return Response(status=200, reason="OK", body="", headers={"HX-Redirect": "/setup"})
+
+
+class ModelsWrapView(View):
+    """Wrap legacy top-level lighting_settings into a model called 'Model'."""
+
+    def post(self) -> str:
+        try:
+            lights.wrap_current_settings_into_model("Model")
+            return self.get()
+        except Exception as e:
+            return str(e), 400
 
 
 class HomeView(View):
@@ -347,8 +503,18 @@ _editing_range_name = None
 
 def _named_range_context() -> dict:
     """Build template context for the LED picker from current server-side selection state."""
+    # Resolve any named: references in the server-side selection into a set
+    resolved = []
+    for item in _selected_leds:
+        try:
+            targets = lights.get_targets(item)
+        except Exception:
+            targets = []
+        for t in targets:
+            if t not in resolved:
+                resolved.append(t)
 
-    selected_set = set(_selected_leds)
+    selected_set = set(resolved)
     led_list = [
         {
             "index": i,
@@ -358,10 +524,18 @@ def _named_range_context() -> dict:
     ]
     named_range_names = sorted(lights.settings.get("named_ranges", {}).keys())
 
+    # Prepare a comma-separated representation of the raw selected tokens
+    try:
+        selected_tokens_str = ",".join([str(x) for x in _selected_leds])
+    except Exception:
+        selected_tokens_str = ""
+
     return {
         "led_list": led_list,
         "named_range_names": named_range_names,
         "range_name": _editing_range_name,
+        "selected_tokens": list(_selected_leds),
+        "selected_tokens_str": selected_tokens_str,
     }
 
 
@@ -387,7 +561,17 @@ class NamedRangeView(View):
 
         lights.leds.clear()
         if _selected_leds:
-            lights.leds.identify(_selected_leds)
+            # Expand named: refs for hardware identification
+            resolved = []
+            for item in _selected_leds:
+                try:
+                    targets = lights.get_targets(item)
+                except Exception:
+                    targets = []
+                for t in targets:
+                    if t not in resolved:
+                        resolved.append(t)
+            lights.leds.identify(resolved)
         lights.leds.show()
 
         context = _named_range_context()
@@ -403,18 +587,20 @@ class NamedRangeView(View):
         range_name = self.request.form_data.get("range_name", "").strip()
         selected_leds_str = self.request.form_data.get("selected_leds", "").strip()
 
-        selected_leds = []
-        if selected_leds_str:
-            try:
-                selected_leds = [int(x) for x in selected_leds_str.split(",") if x]
-            except ValueError:
-                pass
+        # Parse tokens which may include ints and named:refs
+        selected_tokens = _parse_selected_tokens(selected_leds_str)
 
         # Determine if saving new or editing existing
         if action == "delete" and old_name and old_name in lights.settings.get("named_ranges", {}):
             del lights.settings["named_ranges"][old_name]
-        elif range_name and selected_leds:
-            lights.settings["named_ranges"][range_name] = selected_leds
+        elif range_name:
+            # Prepare a candidate mapping and validate for circular refs
+            candidate = dict(lights.settings.get("named_ranges", {}))
+            candidate[range_name] = selected_tokens
+            if _named_ranges_has_cycle(candidate):
+                return Response(status=400, reason="Bad Request", body="Circular named-range reference detected")
+
+            lights.settings["named_ranges"][range_name] = selected_tokens
             if old_name != range_name and old_name in lights.settings.get("named_ranges", {}):
                 del lights.settings["named_ranges"][old_name]
                 _rename_named_range_refs(old_name, range_name)
@@ -440,23 +626,28 @@ class NamedRangeSetView(View):
 
         global _selected_leds
         selected_leds_str = self.request.form_data.get("selected_leds", "").strip()
+        # Accept ints and named:refs; keep token list server-side and return
+        # the resolved integer LED indices so the client can update highlights.
+        tokens = _parse_selected_tokens(selected_leds_str)
+        _selected_leds = tokens
 
-        selected_leds = []
-        if selected_leds_str:
+        resolved = []
+        for item in tokens:
             try:
-                selected_leds = [int(x) for x in selected_leds_str.split(",") if x]
-            except ValueError:
-                pass
+                targets = lights.get_targets(item)
+            except Exception:
+                targets = []
+            for t in targets:
+                if t not in resolved:
+                    resolved.append(t)
 
-        _selected_leds = selected_leds
-
-        if _selected_leds:
-            lights.leds.identify(_selected_leds)
+        if resolved:
+            lights.leds.identify(resolved)
         else:
             lights.leds.clear()
             lights.leds.show()
 
-        return None
+        return Response(body=json.dumps(resolved), content_type="application/json")
 
 
 class StatusView(View):
@@ -554,6 +745,7 @@ class StatusView(View):
                 "wifi_ssid": PersistentDict().get("system_settings", {}).get("wifi", {}).get("ssid", ""),
                 "animation_running": str(lights.animation.running),
                 "current_scene": lights.scene_name,
+                "active_model": getattr(lights, "current_model_name", None),
                 "tick_number": lights.animation.tick_number,
                 "restore_message": restore_message,
                 "restore_class": restore_class,
@@ -629,12 +821,71 @@ class RestoreView(View):
         storage.store()
 
         # Reload lighting settings from the restored data.
-        lights.settings = storage["lighting_settings"]
+        try:
+            lights._load_lighting_root()
+        except Exception:
+            pass
 
         return Response(
             status=302,
             reason="Found",
             headers={"Location": "/status?restore=ok"},
+        )
+
+
+class RestoreConfirmView(View):
+    """Return a small confirmation fragment for restoring settings."""
+
+    def post(self) -> str:
+        backup_json = self.request.form_data.get("backup_json", "")
+        if not backup_json:
+            return '<div class="alert alert-warning small py-2 mb-2">No backup JSON provided.</div>'
+
+        return render_template("setup/restore_confirm.html", {"backup_json": backup_json})
+
+
+class ConfirmView(View):
+    """Generic confirmation fragment for destructive actions.
+
+    Expects POST fields:
+    - object_type: human-friendly type (e.g., 'Model', 'Named Range')
+    - object_name: name of the object
+    - action_path: URL to POST the final delete to (e.g., '/models')
+    Any additional fields sent are preserved and emitted as hidden inputs
+    in the confirmation form so the final POST contains the same data.
+    """
+
+    def post(self) -> str:
+        form = self.request.form_data
+        object_type = form.get("object_type", "item")
+        object_name = form.get("object_name", "")
+        action_path = form.get("action_path", "")
+
+        # Fallback guesses for object_name if not provided
+        if not object_name:
+            for key in ("name", "range_name", "old_name", "color_name", "theme"):
+                if key in form:
+                    object_name = form.get(key)
+                    break
+
+        if not action_path:
+            # Infer a reasonable default mapping
+            mapping = {"Model": "/models", "Named Range": "/named_range", "named_range": "/named_range"}
+            action_path = mapping.get(object_type, "/")
+
+        # Collect remaining fields to re-post on confirmation
+        fields = {}
+        for k, v in form.items():
+            if k in ("object_type", "object_name", "action_path"):
+                continue
+            fields[k] = v
+
+        message = "Delete {} '{}' ? This action cannot be undone.".format(object_type, object_name)
+        cancel_url = action_path
+
+        return render_template(
+            "setup/confirm_delete.html",
+            {"message": message, "action_url": action_path, "fields": fields, "cancel_url": cancel_url},
         )
 
 
@@ -1212,6 +1463,13 @@ class SystemRebootView(View):
             "Rebooting now. Reconnect to the device in a few seconds."
             "</div>"
         )
+
+
+class SystemRebootConfirmView(View):
+    """Return a confirmation fragment for rebooting the system."""
+
+    def post(self) -> str:
+        return render_template("setup/system_reboot_confirm.html", {})
 
 
 def _scenes_list(scenes_dict: dict) -> list:
@@ -1990,9 +2248,18 @@ def _sounds_list(sounds_dict: dict) -> list:
 
 def _sounds_context() -> dict:
     """Build template context from sounds in persistent storage."""
-
     storage: PersistentDict = PersistentDict()
-    sounds: dict = storage.get("sounds", {})
+    # Prefer per-model sounds when available
+    lighting_root = storage.get("lighting_settings", {})
+    sounds: dict = {}
+    if isinstance(lighting_root, dict) and "models" in lighting_root:
+        current = lighting_root.get("current_model")
+        models = lighting_root.get("models", {})
+        if current and current in models and isinstance(models[current], dict):
+            sounds = models[current].get("sounds", {})
+    if not sounds:
+        sounds = storage.get("sounds", {})
+
     return {
         "sounds": _sounds_list(sounds),
     }
@@ -2079,8 +2346,20 @@ class SoundsView(View):
             print("  {}: {}".format(title, sound))
 
         storage: PersistentDict = PersistentDict()
-        storage["sounds"] = sounds
-        storage.store()
+        # Save into the current model if models container exists, otherwise top-level
+        lighting_root = storage.get("lighting_settings", {})
+        if isinstance(lighting_root, dict) and "models" in lighting_root:
+            current = lighting_root.get("current_model")
+            if current and current in lighting_root.get("models", {}):
+                lighting_root["models"][current]["sounds"] = sounds
+                storage["lighting_settings"] = lighting_root
+                storage.store()
+            else:
+                storage["sounds"] = sounds
+                storage.store()
+        else:
+            storage["sounds"] = sounds
+            storage.store()
         print("Sounds: storage saved OK")
 
         context = _sounds_context()

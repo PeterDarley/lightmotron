@@ -6,7 +6,28 @@ the ESP32 filesystem, managed by PersistentDict (lib/storage.py).
 The top-level keys are:
 
     system_settings   -- device / network / hardware configuration (see below)
-    lighting_settings -- scenes, effects, filters, named ranges, custom colors
+    lighting_settings -- lighting configuration. New installations store multiple
+    "Models" under this key; the structure is::
+
+        "lighting_settings": {
+            "models": {
+                "ModelName": {
+                    "default_scene": ...,
+                    "scenes": { ... },
+                    "named_ranges": { ... },
+                    "effects": { ... },
+                    "filters": { ... },
+                    "custom_colors": { ... },
+                    "scene_settings": { ... }
+                },
+                "OtherModel": { ... }
+            },
+            "current_model": "ModelName"
+        }
+
+    Older single-model installations stored the scenes/effects/etc directly
+    at the top-level under ``lighting_settings``; on first load the system will
+    migrate that legacy layout into a single model named "Model".
     sounds            -- sound titles and MP3 file mappings for audio playback
     ui_settings       -- (legacy key, migrated to system_settings)
 
@@ -113,3 +134,8 @@ Notes
   file structures.
 * When playing a sound with high_quality=true, the system will prefer to play
   it on a module marked as high_quality if one is available.
+* Named ranges (``named_ranges``) may include references to other named ranges
+    using the ``"named:OtherRange"`` syntax in addition to explicit LED indices
+    or ranges. The web setup UI and runtime will expand these references when
+    resolving targets. Circular references are rejected by the UI and will not
+    be saved.
