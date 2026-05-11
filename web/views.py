@@ -121,7 +121,7 @@ def _rename_color_refs(old_name: str, new_name: str) -> None:
                     colors_list[i] = new_ref
 
 
-def _animation_context():
+def _animation_context() -> dict:
     """Return a context dict with the current animation running state."""
 
     running = lights.animation.running
@@ -147,7 +147,7 @@ def _parse_selected_tokens(selected_leds_str: str) -> list:
         else:
             try:
                 tokens.append(int(t))
-            except Exception:
+            except ValueError:
                 # ignore malformed entries
                 pass
 
@@ -188,7 +188,7 @@ def _named_ranges_has_cycle(named_ranges: dict) -> bool:
     return False
 
 
-def _scenes_context():
+def _scenes_context() -> dict:
     """Return a context dict with the scenes list and active scenes."""
 
     scene_names = sorted(lights.settings["scenes"].keys())
@@ -210,17 +210,10 @@ def _scenes_context():
     }
 
 
-def _models_context():
+def _models_context() -> dict:
     """Return a context dict describing available models and the current model."""
 
-    try:
-        model_names = lights.get_model_names()
-        current = lights.current_model_name
-    except Exception:
-        model_names = []
-        current = None
-
-    return {"models": model_names, "current_model": current}
+    return {"models": lights.get_model_names(), "current_model": lights.current_model_name}
 
 
 class ModelsSummaryView(View):
@@ -253,13 +246,13 @@ class ModelsView(View):
                 lights.set_current_model(name)
                 # Instruct HTMX to reload the setup page so summaries update
                 return Response(status=200, reason="OK", body="", headers={"HX-Redirect": "/setup"})
-            except Exception:
-                pass
+            except Exception as e:
+                return str(e), 400
         elif action == "create" and name:
             try:
                 lights.create_model(name)
-            except Exception:
-                pass
+            except Exception as e:
+                return str(e), 400
         elif action == "delete" and name:
             try:
                 lights.delete_model(name)
@@ -281,8 +274,8 @@ class ModelsSetView(View):
         if name:
             try:
                 lights.set_current_model(name)
-            except Exception:
-                pass
+            except Exception as e:
+                return str(e), 400
 
         # Ask the client to reload the setup page so the UI reflects the new active model.
         return Response(status=200, reason="OK", body="", headers={"HX-Redirect": "/setup"})
@@ -301,7 +294,7 @@ class ModelsWrapView(View):
 
 class HomeView(View):
 
-    def get(self):
+    def get(self) -> str:
         """Handle GET requests for the home route."""
 
         context = {"message": "Lighting", "page_title": "Home"}
@@ -315,7 +308,7 @@ class HomeView(View):
 class SetSceneView(View):
     """Handle POST requests to set or modify the current lighting scene(s)."""
 
-    def post(self):
+    def post(self) -> str | tuple | None:
         """Set, add, or remove an active scene.
 
         action=set (default): replace all active scenes with the given scene.
@@ -345,7 +338,7 @@ class SetSceneView(View):
 class AnimationView(View):
     """Handle POST requests to start or stop the lighting animation."""
 
-    def post(self):
+    def post(self) -> str | tuple:
         """Start or stop the animation based on the POST data."""
         action = self.request.form_data.get("action")
         if action == "start":
@@ -379,7 +372,7 @@ def _redact_system_settings(storage_dict: dict) -> dict:
 class StorageView(View):
     """Display the persistent storage dictionary as pretty-printed JSON."""
 
-    def get(self):
+    def get(self) -> str | tuple:
         """Return the storage contents as JSON."""
 
         try:
@@ -1203,7 +1196,7 @@ class HostnameView(View):
 
         network.hostname(hostname)
 
-        def _restart_wifi():
+        def _restart_wifi() -> None:
             """Disconnect and reconnect WiFi so mDNS picks up the new name."""
 
             sleep(0.5)
@@ -1336,7 +1329,7 @@ class SystemSettingsView(View):
             error = "Hostname: only letters, numbers, hyphens; max 32 chars; no leading/trailing hyphens."
 
         # --- NeoPixel strips (multi-strip: parallel arrays from repeated fields) ---
-        def _as_list(val, default):
+        def _as_list(val, default) -> list:
             if val is None:
                 return [default]
             return val if isinstance(val, list) else [val]
@@ -1349,7 +1342,7 @@ class SystemSettingsView(View):
         # Pad shorter lists so all are the same length as strip_pins
         n_strips: int = max(1, len(strip_pins))
 
-        def _pad(lst, length, default):
+        def _pad(lst, length, default) -> list:
             return list(lst) + [default] * (length - len(lst))
 
         strip_nums = _pad(strip_nums, n_strips, "30")
@@ -2291,7 +2284,7 @@ class SoundsView(View):
 
         fd = self.request.form_data
 
-        def _as_list(val, default):
+        def _as_list(val, default) -> list:
             if val is None:
                 return [default]
             return val if isinstance(val, list) else [val]

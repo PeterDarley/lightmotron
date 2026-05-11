@@ -95,56 +95,83 @@
                     <div style="flex: 1; min-width: 120px;">
                         <input type="range" class="form-range w-100" id="duration_slider"
                                min="1" max="2400" step="1"
-                               oninput="durationSliderChanged(this.value)">
+                               oninput="tickSliderChanged('duration', this.value)">
                     </div>
                     <span class="small text-muted">1 min</span>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <input type="number" class="form-control form-control-sm" id="duration_min"
                            min="0" step="1" style="width: 75px;"
-                           oninput="durationPartsChanged()">
+                           oninput="tickPartsChanged('duration')">
                     <span class="small text-muted">min</span>
                     <input type="number" class="form-control form-control-sm" id="duration_sec"
                            min="0" max="59" step="1" style="width: 75px;"
-                           oninput="durationPartsChanged()">
+                           oninput="tickPartsChanged('duration')">
                     <span class="small text-muted">sec</span>
                     <input type="number" class="form-control form-control-sm" id="duration_ticks_part"
                            min="0" max="39" step="1" style="width: 75px;"
-                           oninput="durationPartsChanged()">
+                           oninput="tickPartsChanged('duration')">
                     <span class="small text-muted">ticks</span>
                     <input type="hidden" name="param_duration" id="param_duration" value="{{ param_val_duration }}">
                 </div>
                 <small class="text-muted">Cycle duration. 40 ticks = 1 second, 2400 ticks = 1 minute.</small>
+            </div>
+            {% endif %}
+            {% if param == "frequency" %}
+            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+                <label class="form-label mb-1">Frequency</label>
+
+                <div class="d-flex align-items-center gap-2 mb-2" style="max-width: 480px;">
+                    <span class="small text-muted" style="white-space:nowrap">0.1 Hz</span>
+                    <div style="flex: 1; min-width: 120px;">
+                        <input type="range" class="form-range w-100" id="frequency_slider"
+                               min="0.1" max="10" step="0.1"
+                               oninput="frequencySliderChanged(this.value)">
+                    </div>
+                    <span class="small text-muted">10 Hz</span>
+                </div>
+
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <input type="number" class="form-control form-control-sm" id="frequency_value"
+                           min="0.1" max="10" step="0.1" style="width: 120px;"
+                           onchange="frequencyInputChanged()">
+                    <div class="small text-muted">Hz</div>
+                    <input type="hidden" name="param_frequency" id="param_frequency" value="{{ param_val_frequency }}">
+                </div>
+
+                <small class="text-muted">Blinks per second. 1 Hz = one full blink cycle per second.</small>
+
                 <script>
                 (function() {
-                    function ticksToDisplay(t) {
-                        t = Math.max(1, parseInt(t) || 1);
-                        return { min: Math.floor(t / 2400), sec: Math.floor((t % 2400) / 40), ticks: t % 40 };
+                    function clamp(v, min, max) {
+                        var n = parseFloat(v);
+                        if (isNaN(n)) return min;
+                        if (n < min) return min;
+                        if (n > max) return max;
+                        return n;
                     }
-                    function displayToTicks(min, sec, ticks) {
-                        return Math.max(1, (parseInt(min) || 0) * 2400 + (parseInt(sec) || 0) * 40 + (parseInt(ticks) || 0));
-                    }
-                    function durationUpdateFromTicks(t) {
-                        var d = ticksToDisplay(t);
-                        document.getElementById('duration_min').value = d.min;
-                        document.getElementById('duration_sec').value = d.sec;
-                        document.getElementById('duration_ticks_part').value = d.ticks;
-                        document.getElementById('param_duration').value = t;
-                        document.getElementById('duration_slider').value = Math.min(2400, t);
-                    }
-                    window.durationSliderChanged = function(val) {
-                        durationUpdateFromTicks(parseInt(val));
+
+                    window.frequencySliderChanged = function(val) {
+                        var v = clamp(val, 0.1, 10);
+                        document.getElementById('frequency_value').value = v.toFixed(1);
+                        document.getElementById('param_frequency').value = v.toFixed(1);
                     };
-                    window.durationPartsChanged = function() {
-                        var t = displayToTicks(
-                            document.getElementById('duration_min').value,
-                            document.getElementById('duration_sec').value,
-                            document.getElementById('duration_ticks_part').value
-                        );
-                        document.getElementById('param_duration').value = t;
-                        document.getElementById('duration_slider').value = Math.min(2400, t);
+
+                    window.frequencyInputChanged = function() {
+                        var raw = document.getElementById('frequency_value').value;
+                        var v = clamp(raw, 0.1, 10);
+                        document.getElementById('frequency_value').value = v.toFixed(1);
+                        document.getElementById('frequency_slider').value = v;
+                        document.getElementById('param_frequency').value = v.toFixed(1);
                     };
-                    durationUpdateFromTicks(parseInt(document.getElementById('param_duration').value) || 40);
+
+                    // Initialize from hidden param value (or default 1.0)
+                    var rawInit = parseFloat(document.getElementById('param_frequency').value);
+                    var initVal = isNaN(rawInit) ? 1.0 : rawInit;
+                    initVal = clamp(initVal, 0.1, 10);
+                    document.getElementById('frequency_slider').value = initVal;
+                    document.getElementById('frequency_value').value = initVal.toFixed(1);
+                    document.getElementById('param_frequency').value = initVal.toFixed(1);
                 })();
                 </script>
             </div>
@@ -157,58 +184,26 @@
                     <div style="flex: 1; min-width: 120px;">
                         <input type="range" class="form-range w-100" id="period_slider"
                                min="1" max="2400" step="1"
-                               oninput="periodSliderChanged(this.value)">
+                               oninput="tickSliderChanged('period', this.value)">
                     </div>
                     <span class="small text-muted">1 min</span>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <input type="number" class="form-control form-control-sm" id="period_min"
                            min="0" step="1" style="width: 75px;"
-                           oninput="periodPartsChanged()">
+                           oninput="tickPartsChanged('period')">
                     <span class="small text-muted">min</span>
                     <input type="number" class="form-control form-control-sm" id="period_sec"
                            min="0" max="59" step="1" style="width: 75px;"
-                           oninput="periodPartsChanged()">
+                           oninput="tickPartsChanged('period')">
                     <span class="small text-muted">sec</span>
                     <input type="number" class="form-control form-control-sm" id="period_ticks_part"
                            min="0" max="39" step="1" style="width: 75px;"
-                           oninput="periodPartsChanged()">
+                           oninput="tickPartsChanged('period')">
                     <span class="small text-muted">ticks</span>
                     <input type="hidden" name="param_period" id="param_period" value="{{ param_val_period }}">
                 </div>
                 <small class="text-muted">Full cycle period (on-time + off-time). 40 ticks = 1 second.</small>
-                <script>
-                (function() {
-                    function ticksToDisplay(t) {
-                        t = Math.max(1, parseInt(t) || 1);
-                        return { min: Math.floor(t / 2400), sec: Math.floor((t % 2400) / 40), ticks: t % 40 };
-                    }
-                    function displayToTicks(min, sec, ticks) {
-                        return Math.max(1, (parseInt(min) || 0) * 2400 + (parseInt(sec) || 0) * 40 + (parseInt(ticks) || 0));
-                    }
-                    function periodUpdateFromTicks(t) {
-                        var d = ticksToDisplay(t);
-                        document.getElementById('period_min').value = d.min;
-                        document.getElementById('period_sec').value = d.sec;
-                        document.getElementById('period_ticks_part').value = d.ticks;
-                        document.getElementById('param_period').value = t;
-                        document.getElementById('period_slider').value = Math.min(2400, t);
-                    }
-                    window.periodSliderChanged = function(val) {
-                        periodUpdateFromTicks(parseInt(val));
-                    };
-                    window.periodPartsChanged = function() {
-                        var t = displayToTicks(
-                            document.getElementById('period_min').value,
-                            document.getElementById('period_sec').value,
-                            document.getElementById('period_ticks_part').value
-                        );
-                        document.getElementById('param_period').value = t;
-                        document.getElementById('period_slider').value = Math.min(2400, t);
-                    };
-                    periodUpdateFromTicks(parseInt(document.getElementById('param_period').value) || 40);
-                })();
-                </script>
             </div>
             {% endif %}
             {% if param == "width" %}
@@ -294,6 +289,89 @@
 <script>
 function setTarget(value) {
     document.getElementById('target').value = value;
+}
+
+function clampTickValue(value) {
+    return Math.max(1, parseInt(value) || 1);
+}
+
+function ticksToDisplay(value) {
+    var ticks = clampTickValue(value);
+    return {
+        min: Math.floor(ticks / 2400),
+        sec: Math.floor((ticks % 2400) / 40),
+        ticks: ticks % 40
+    };
+}
+
+function displayToTicks(min, sec, ticks) {
+    return Math.max(1, (parseInt(min) || 0) * 2400 + (parseInt(sec) || 0) * 40 + (parseInt(ticks) || 0));
+}
+
+function updateTickControl(prefix, value) {
+    var ticks = clampTickValue(value);
+    var display = ticksToDisplay(ticks);
+    document.getElementById(prefix + '_min').value = display.min;
+    document.getElementById(prefix + '_sec').value = display.sec;
+    document.getElementById(prefix + '_ticks_part').value = display.ticks;
+    document.getElementById('param_' + prefix).value = ticks;
+    document.getElementById(prefix + '_slider').value = Math.min(2400, ticks);
+}
+
+function tickSliderChanged(prefix, value) {
+    updateTickControl(prefix, value);
+}
+
+function tickPartsChanged(prefix) {
+    updateTickControl(
+        prefix,
+        displayToTicks(
+            document.getElementById(prefix + '_min').value,
+            document.getElementById(prefix + '_sec').value,
+            document.getElementById(prefix + '_ticks_part').value
+        )
+    );
+}
+
+function clampFrequencyValue(value) {
+    var frequency = parseFloat(value);
+    if (isNaN(frequency)) {
+        return 0.1;
+    }
+    if (frequency < 0.1) {
+        return 0.1;
+    }
+    if (frequency > 10) {
+        return 10;
+    }
+    return frequency;
+}
+
+function updateFrequencyControl(value) {
+    var frequency = clampFrequencyValue(value);
+    document.getElementById('frequency_value').value = frequency.toFixed(1);
+    document.getElementById('param_frequency').value = frequency.toFixed(1);
+    document.getElementById('frequency_slider').value = frequency;
+}
+
+function frequencySliderChanged(value) {
+    updateFrequencyControl(value);
+}
+
+function frequencyInputChanged() {
+    updateFrequencyControl(document.getElementById('frequency_value').value);
+}
+
+if (document.getElementById('param_duration')) {
+    updateTickControl('duration', parseInt(document.getElementById('param_duration').value) || 40);
+}
+
+if (document.getElementById('param_period')) {
+    updateTickControl('period', parseInt(document.getElementById('param_period').value) || 40);
+}
+
+if (document.getElementById('param_frequency')) {
+    updateFrequencyControl(parseFloat(document.getElementById('param_frequency').value) || 1.0);
 }
 </script>
 {% else %}
