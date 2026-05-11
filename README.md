@@ -170,13 +170,15 @@ Once configured, use the **Home** page to:
 | Effect | What It Does | Good For |
 |---|---|---|
 | **Solid** | Single color, no animation | Steady lights, engine glow |
-| **Blink** | On/off flashing | Warning lights, indicators |
-| **Pulse** | Asymmetric flashing (slow on, fast off) | Pulsing beacons |
+| **Blink** | Symmetric on/off flashing | Warning lights, indicators |
+| **Pulse** | Asymmetric flashing with separate on-time and period | Pulsing beacons |
 | **Fade In** | Smooth color transition | Startup sequences, transitions |
 | **Breathe** | Smooth up-and-down oscillation | Life-like breathing, organic feel |
 | **Wave** | Moving light across LEDs | Scanning beams, comet sweep |
 | **Cylon** | Wave that bounces back and forth | Iconic bouncing scan effect |
 | **Phaser Strip** | Two waves converge from opposite ends | Sci-fi phaser effects |
+
+Use `Blink` for equal on/off timing. Use `Pulse` when you need a short flash with a longer gap, such as one tick on every second.
 
 ### Filters Overview
 

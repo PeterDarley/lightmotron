@@ -102,23 +102,24 @@ Sets all target LEDs to a fixed color. No animation.
 ---
 
 ### `blink`
-Alternates between two colors at a given frequency.
+Alternates between two colors symmetrically. The on-time and off-time are the same.
 
 | Parameter | Description |
 |---|---|
-| `frequency` | Blinks per second (cycles at 40Hz tick rate) |
+| `duration` | Half-period in ticks. The effect shows `colors[0]` for this many ticks, then `colors[1]` for the same number of ticks. |
+| `frequency` | Optional override in blinks per second. If present, it takes precedence over `duration`. |
 | `colors[0]` | On color |
 | `colors[1]` | Off color |
 
 ---
 
 ### `pulse`
-Like `blink` but with a separate on-duration and off-interval, allowing asymmetric pulses.
+Like `blink` but with separate on-time and full-cycle timing, allowing asymmetric pulses.
 
 | Parameter | Description |
 |---|---|
-| `frequency` | Pulses per second |
 | `duration` | Number of ticks the on color is shown |
+| `period` | Full cycle length in ticks (`duration` + off-time) |
 | `colors[0]` | On color |
 | `colors[1]` | Off color |
 
@@ -140,7 +141,7 @@ Uses a sine wave to smoothly oscillate between two colors, creating a breathing 
 
 | Parameter | Description |
 |---|---|
-| `frequency` | Breath cycles per second |
+| `duration` | Full cycle length in ticks |
 | `colors[0]` | Dim/off color |
 | `colors[1]` | Bright/on color |
 
@@ -151,7 +152,7 @@ A comet or comets sweep across the LEDs. Each peak is set to `colors[1]` for one
 
 | Parameter | Default | Description |
 |---|---|---|
-| `frequency` | 1 | Sweeps per second |
+| `duration` | 40 | Full sweep length in ticks |
 | `width` | 5 | Fade trail length in LEDs |
 | `number` | 1 | Number of simultaneous peaks, evenly spaced |
 | `reverse` | `false` | If true, sweeps from last LED to first |
@@ -165,7 +166,7 @@ Like `wave` but the peak bounces back and forth (forward sweep then reverse swee
 
 | Parameter | Default | Description |
 |---|---|---|
-| `frequency` | 1 | One-way sweeps per second |
+| `duration` | 40 | One-way sweep length in ticks |
 | `width` | 5 | Fade trail length in LEDs |
 | `colors[0]` | — | Background/trail-end color |
 | `colors[1]` | — | Peak color |
