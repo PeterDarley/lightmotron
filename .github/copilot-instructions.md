@@ -95,6 +95,9 @@ The hardware includes:
 
 Mixing multiple YX5200 DAC_R outputs into the PAM8403 is done with a passive resistor network (one 1kΩ resistor per player). Each YX5200 UART RX line also requires a 1kΩ resistor from the ESP32-S3 TX pin. The ESP32-S3 has 3 hardware UARTs, sufficient for 3 simultaneous players.
 
+### Logic level converter
+Using a **Teyleten Robot 4 Channels Logic Level Converter** (3.3V ↔ 5V) for interfacing between ESP32-S3 GPIO (3.3V) and 5V components (MAX7219 SPI lines: CLK, DIN, CS).
+
 
 
 
