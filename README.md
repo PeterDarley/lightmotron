@@ -71,7 +71,7 @@ python tools\reset_device.py COM3
 
 ## Web Interface
 
-Once the device is running and connected to WiFi, open your browser and navigate to the device's IP address (e.g., `http://192.168.1.100/` or use the hostname `http://lightmotron.local/` if mDNS is available).
+Once the device is running and connected to WiFi, open your browser and navigate to the device's IP address (e.g., `http://192.168.1.100/` or use the hostname `http://lightmotron.local/` if mDNS is available). (These screen shots are messed up.  I'll fix them at some point.)
 
 ### Home Page
 Control animation playback and trigger scenes. Start/stop lighting animations, switch between configured scenes, and play sounds from the audio modules.
