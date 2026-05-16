@@ -39,6 +39,8 @@ At runtime the `Lighting` instance binds `self.settings` to the active model dic
 
 Code updates are managed from Setup -> Updates. The updater checks GitHub for changed files, lists additions/modifications/deletions, then applies updates only when explicitly confirmed.
 
+For hash comparison consistency on Windows checkouts, local text files are normalized from CRLF to LF before computing git-style blob SHAs. This includes common git dotfiles such as `.gitignore`.
+
 The repository source is configurable in persistent storage under:
 
 ```python
