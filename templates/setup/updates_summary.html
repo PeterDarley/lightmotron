@@ -1,0 +1,8 @@
+<ul class="list-unstyled small mb-0">
+    <li><span class="text-muted">Repository:</span> <strong>{{ repo_owner }}/{{ repo_name }}</strong></li>
+    {% if pending_update_count %}
+    <li><span class="text-muted">Pending:</span> <strong>{{ pending_update_count }}</strong> changed file(s)</li>
+    {% else %}
+    <li class="text-muted">No pending update check</li>
+    {% endif %}
+</ul>

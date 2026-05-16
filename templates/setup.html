@@ -237,6 +237,32 @@
                 </div>
             </div>
         </div>
+
+        <!-- Updates Card -->
+        <div class="col">
+            <div class="card setup-card h-100">
+                <div class="card-header">
+                    <h5 class="card-title">Updates</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <p class="card-text text-muted small">Check and apply OTA updates from a GitHub repository.</p>
+                    <div id="updates-summary" hx-get="/updates/summary" hx-swap="innerHTML">
+                        {% include 'setup/updates_summary.html' %}
+                    </div>
+                    <div class="mt-auto pt-3">
+                        <button class="btn btn-primary w-100"
+                                hx-get="/updates"
+                                hx-target="#modal-body"
+                                hx-swap="innerHTML"
+                                data-bs-toggle="modal"
+                                data-bs-target="#setup-modal"
+                                onclick="openSetupModal('Updates')">
+                            Manage Updates
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <a href="/" class="btn btn-secondary mt-4">Back to Home</a>
@@ -276,6 +302,7 @@ document.getElementById('setup-modal').addEventListener('hidden.bs.modal', funct
     htmx.ajax('GET', '/scenes/summary', {target: '#scenes-summary', swap: 'innerHTML'});
     htmx.ajax('GET', '/effects/summary', {target: '#effects-summary', swap: 'innerHTML'});
     htmx.ajax('GET', '/filters/summary', {target: '#filters-summary', swap: 'innerHTML'});
+    htmx.ajax('GET', '/updates/summary', {target: '#updates-summary', swap: 'innerHTML'});
 });
 </script>
 {% include 'base/base_foot.html' %}

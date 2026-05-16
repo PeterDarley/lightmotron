@@ -128,6 +128,17 @@ Choose a CSS theme to customise the look of the interface.
 
 ![Theme picker](docs/screenshots/setup-theme.png)
 
+#### Updates
+Use Setup -> Updates for OTA code updates directly from GitHub.
+
+Workflow:
+1. Choose the repository owner/name (defaults to `PeterDarley/lightmotron`) and save.
+2. Run **Check Now** to compare local files with the selected repository.
+3. Review the changed file list (added / modified / deleted).
+4. Run **Apply Updates** to pull and write changed files.
+
+You can optionally remove local files that were deleted upstream when applying updates.
+
 ### Status Page
 Monitor system health and performance. View memory usage, storage space, WiFi connection, and animation state. Download/restore all configuration as JSON.
 
@@ -188,6 +199,7 @@ Filters add visual flavor to effects after they render:
 |---|---|---|
 | **Scintillate** | Independent sparkling per LED | Twinkling stars, fireworks |
 | **Sizzle** | Synchronized group flicker | Electrical arcing, unified flicker |
+| **Brightness** | Multiplies each RGB channel by a constant, clamped to 0-255 | Global dimming/boost, quick intensity matching |
 
 ### Advanced: Direct Configuration
 

@@ -35,6 +35,21 @@ On first load the runtime will automatically migrate older single-model installa
 
 At runtime the `Lighting` instance binds `self.settings` to the active model dictionary and all UI and runtime operations (scene start/stop, named-range edits, effect updates, etc.) operate within that active model. When a model contains a `sounds` mapping it is preferred for playback; otherwise the top-level `sounds` mapping is used.
 
+## OTA Updates
+
+Code updates are managed from Setup -> Updates. The updater checks GitHub for changed files, lists additions/modifications/deletions, then applies updates only when explicitly confirmed.
+
+The repository source is configurable in persistent storage under:
+
+```python
+"system_settings": {
+    "ota": {
+        "repo_owner": "PeterDarley",
+        "repo_name": "lightmotron"
+    }
+}
+```
+
 
 ## Target Specification
 
@@ -221,3 +236,12 @@ Like `sizzle` but each LED is adjusted independently, creating a sparkling/twink
 | `frequency` | 40 | Updates per second |
 | `variation` | 50 | Bias strength toward target per LED |
 | `heat` | 10 | Maximum step size per channel per update |
+
+---
+
+### `brightness`
+Multiplies each target RGB channel by a constant factor. Each resulting channel value is clamped to the inclusive integer range `0..255`.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `brightness` | 1.0 | Constant multiplier per channel (`0.5` = half brightness, `2.0` = double brightness) |

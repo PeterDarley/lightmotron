@@ -40,7 +40,13 @@ if not _wifi_ssid or not _wifi_password:
     print("No WiFi credentials configured, starting captive portal...")
     from captive_portal import CaptivePortal  # type: ignore
 
-    CaptivePortal().start()  # blocks and resets device when done
+    CaptivePortal(
+        ap_ssid="lightmotron-setup",
+        ap_password="",
+        portal_title="Lightmotron Setup",
+        portal_heading="Lightmotron",
+        default_hostname="lightmotron",
+    ).start()  # blocks and resets device when done
 
 # Attempt to connect to WiFi
 WIFIManager(block=True, timeout=20)
@@ -50,7 +56,13 @@ if not WIFIManager().is_connected:
     print("WiFi connection failed, starting captive portal...")
     from captive_portal import CaptivePortal  # type: ignore
 
-    CaptivePortal().start()  # blocks and resets device when done
+    CaptivePortal(
+        ap_ssid="lightmotron-setup",
+        ap_password="",
+        portal_title="Lightmotron Setup",
+        portal_heading="Lightmotron",
+        default_hostname="lightmotron",
+    ).start()  # blocks and resets device when done
 
 _active_hostname = network.hostname()
 _active_ip = WIFIManager().ip

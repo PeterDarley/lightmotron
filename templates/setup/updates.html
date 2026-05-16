@@ -1,0 +1,99 @@
+<div id="updates-form">
+    {% if error %}
+    <div class="alert alert-danger small py-2">{{ error }}</div>
+    {% endif %}
+    {% if message %}
+    <div class="alert alert-success small py-2">{{ message }}</div>
+    {% endif %}
+
+    <h6 class="mt-0 mb-3">Repository</h6>
+    <form hx-post="/updates"
+          hx-target="#updates-form"
+          hx-swap="outerHTML"
+          class="mb-3">
+        <input type="hidden" name="action" value="save_repo">
+        <div class="row g-2 align-items-end">
+            <div class="col-sm-6">
+                <label class="form-label form-label-sm">Owner</label>
+                <input type="text" class="form-control form-control-sm" name="repo_owner" value="{{ repo_owner }}" maxlength="64" autocomplete="off">
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label form-label-sm">Repository</label>
+                <input type="text" class="form-control form-control-sm" name="repo_name" value="{{ repo_name }}" maxlength="64" autocomplete="off">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-outline-secondary btn-sm mt-2">Save Repository</button>
+    </form>
+
+    <h6 class="mb-2">Check for Updates</h6>
+    <form hx-post="/updates"
+          hx-target="#updates-form"
+          hx-swap="outerHTML"
+          class="mb-3">
+        <input type="hidden" name="action" value="check">
+        <button type="submit" class="btn btn-primary btn-sm">Check Now</button>
+    </form>
+
+    {% if has_checked %}
+    <div class="small text-muted mb-2">
+        Checked <strong>{{ checked_repository }}</strong>{% if checked_branch %} (branch: {{ checked_branch }}){% endif %}
+    </div>
+
+    {% if has_updates %}
+    <div class="table-responsive mb-3" style="max-height: 260px;">
+        <table class="table table-sm table-striped align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th style="width: 120px;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for update in updates %}
+                <tr>
+                    <td><code>{{ update.path }}</code></td>
+                    <td>
+                        {% if update.status == 'modified' %}
+                        <span class="badge text-bg-warning">modified</span>
+                        {% endif %}
+                        {% if update.status == 'added' %}
+                        <span class="badge text-bg-success">added</span>
+                        {% endif %}
+                        {% if update.status == 'deleted' %}
+                        <span class="badge text-bg-danger">deleted</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <form hx-post="/updates"
+          hx-target="#updates-form"
+          hx-swap="outerHTML">
+        <input type="hidden" name="action" value="apply">
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="remove_deleted" name="remove_deleted" value="1" {% if remove_deleted %}checked{% endif %}>
+            <label class="form-check-label small" for="remove_deleted">
+                Remove local files that were deleted upstream
+            </label>
+        </div>
+        <button type="submit" class="btn btn-danger btn-sm">Apply Updates</button>
+    </form>
+    {% else %}
+    <div class="alert alert-info small py-2 mb-0">No changed files found.</div>
+    {% endif %}
+    {% endif %}
+
+    {% if apply_result.failed_files %}
+    <div class="alert alert-warning small py-2 mt-3 mb-0">
+        <strong>Some files failed:</strong>
+        <ul class="mb-0 mt-1">
+            {% for failure in apply_result.failed_files %}
+            <li><code>{{ failure.path }}</code>: {{ failure.error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>

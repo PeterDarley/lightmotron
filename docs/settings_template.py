@@ -55,6 +55,13 @@ optional; hardcoded defaults in settings.py are used when a key is absent.
         # Empty string = default Bootstrap styling.
         "theme": "",
 
+        # OTA update source repository.
+        # Used by Setup -> Updates when checking/applying code updates.
+        "ota": {
+            "repo_owner": "PeterDarley",
+            "repo_name": "lightmotron"
+        },
+
         # ESP32 board configuration.
         "board": {
             "cpu_frequency": 240000000  # Hz: 80000000 | 160000000 | 240000000
@@ -134,6 +141,9 @@ Notes
   file structures.
 * When playing a sound with high_quality=true, the system will prefer to play
   it on a module marked as high_quality if one is available.
+* OTA updates can target a different GitHub repository by changing
+    ``system_settings.ota.repo_owner`` and ``system_settings.ota.repo_name``
+    from the Setup page Updates card.
 * Named ranges (``named_ranges``) may include references to other named ranges
     using the ``"named:OtherRange"`` syntax in addition to explicit LED indices
     or ranges. The web setup UI and runtime will expand these references when

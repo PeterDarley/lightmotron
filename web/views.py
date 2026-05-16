@@ -2,6 +2,7 @@ from webserver import View, render_template, Response
 from storage import PersistentDict
 from lighting import Lighting
 from comms import WIFIManager
+from ota_update import OTAUpdater
 import gc
 import io
 import json
@@ -53,6 +54,42 @@ except Exception:
     _wlan = None
 
 lights = Lighting()
+_OTA_REPO_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
+_ota_last_check: dict = {}
+_OTA_TRACKED_ROOT_PREFIXES: tuple = (
+    "lib/",
+    "web/",
+    "templates/",
+    "www/",
+    "docs/",
+)
+_OTA_TRACKED_ROOT_FILES: tuple = (
+    "boot.py",
+    "main.py",
+    "settings.py",
+    "README.md",
+    "index.html",
+    "requirements.txt",
+)
+_OTA_EXCLUDED_PATH_PREFIXES: tuple = (
+    ".git/",
+    ".github/",
+    "copilot_working/",
+    "deployment/",
+    "external_resources/",
+)
+_OTA_EXCLUDED_PATHS: tuple = (
+    "upload.ps1",
+    "repl.ps1",
+    "upload.sh",
+)
+_OTA_EXCLUDED_LOCAL_DIRS: tuple = (
+    ".github",
+    "copilot_working",
+    "deployment",
+    "external_resources",
+    "venv",
+)
 
 
 def _rename_named_range_refs(old_name: str, new_name: str) -> None:
@@ -397,6 +434,7 @@ class SetupView(View):
 
         context: dict = {"page_title": "Setup"}
         context.update(_system_settings_context())
+        context.update(_ota_summary_context())
 
         # Include all summary card data so the browser receives everything in one
         # request rather than firing 5+ lazy HTMX loads after page paint.
@@ -1277,6 +1315,225 @@ def _system_settings_context() -> dict:
         "ss_color_orders_json": json.dumps(_COLOR_ORDERS),
         "ss_audio_players": audio_players,
     }
+
+
+def _ota_repo_settings() -> dict:
+    """Return OTA repository settings from persistent storage."""
+
+    system_settings: dict = PersistentDict().get("system_settings", {})
+    ota_settings: dict = system_settings.get("ota", {})
+
+    repo_owner: str = ota_settings.get("repo_owner", "PeterDarley")
+    repo_name: str = ota_settings.get("repo_name", "lightmotron")
+
+    if not repo_owner:
+        repo_owner = "PeterDarley"
+    if not repo_name:
+        repo_name = "lightmotron"
+
+    return {"repo_owner": repo_owner, "repo_name": repo_name}
+
+
+def _ota_summary_context() -> dict:
+    """Return setup card summary context for OTA updates."""
+
+    repo_settings = _ota_repo_settings()
+    pending_count: int = 0
+    if _ota_last_check and _ota_last_check.get("has_updates"):
+        pending_count = len(_ota_last_check.get("updates", []))
+
+    return {
+        "repo_owner": repo_settings["repo_owner"],
+        "repo_name": repo_settings["repo_name"],
+        "pending_update_count": pending_count,
+    }
+
+
+def _validate_repo_part(value: str) -> bool:
+    """Validate owner/repository segment characters for GitHub slugs."""
+
+    if not value:
+        return False
+
+    if len(value) > 64:
+        return False
+
+    if value.startswith(".") or value.endswith("."):
+        return False
+
+    return all(character in _OTA_REPO_CHARS for character in value)
+
+
+def _updates_context(
+    message: str = "",
+    error: str = "",
+    check_result: dict = None,
+    apply_result: dict = None,
+    remove_deleted: bool = False,
+) -> dict:
+    """Build template context for the OTA updates modal."""
+
+    repo_settings = _ota_repo_settings()
+    result = check_result if check_result is not None else _ota_last_check
+
+    if result:
+        updates = result.get("updates", [])
+        has_updates = bool(result.get("has_updates"))
+        checked_repository = result.get("repository", repo_settings["repo_owner"] + "/" + repo_settings["repo_name"])
+        branch = result.get("branch", "")
+    else:
+        updates = []
+        has_updates = False
+        checked_repository = ""
+        branch = ""
+
+    return {
+        "repo_owner": repo_settings["repo_owner"],
+        "repo_name": repo_settings["repo_name"],
+        "checked_repository": checked_repository,
+        "checked_branch": branch,
+        "has_checked": bool(result),
+        "has_updates": has_updates,
+        "updates": updates,
+        "update_count": len(updates),
+        "message": message,
+        "error": error,
+        "apply_result": apply_result or {},
+        "remove_deleted": bool(remove_deleted),
+    }
+
+
+class UpdatesSummaryView(View):
+    """Return a summary snippet of OTA update settings for the setup card."""
+
+    def get(self) -> str:
+        """Return updates summary HTML fragment."""
+
+        return render_template("setup/updates_summary.html", _ota_summary_context())
+
+
+class UpdatesView(View):
+    """Display and execute OTA update checks and update application."""
+
+    def get(self) -> str:
+        """Return the updates management fragment."""
+
+        return render_template("setup/updates.html", _updates_context())
+
+    def post(self) -> str:
+        """Handle repository changes, update checks, and update application."""
+
+        global _ota_last_check
+
+        action: str = self.request.form_data.get("action", "check").strip()
+
+        if action == "save_repo":
+            repo_owner: str = self.request.form_data.get("repo_owner", "").strip()
+            repo_name: str = self.request.form_data.get("repo_name", "").strip()
+
+            if not _validate_repo_part(repo_owner) or not _validate_repo_part(repo_name):
+                return render_template(
+                    "setup/updates.html",
+                    _updates_context(error="Repository must use only letters, numbers, dash, underscore, or period."),
+                )
+
+            storage: PersistentDict = PersistentDict()
+            if "system_settings" not in storage:
+                storage["system_settings"] = {}
+
+            existing_settings: dict = dict(storage.get("system_settings", {}))
+            existing_ota: dict = dict(existing_settings.get("ota", {}))
+            existing_ota.update({"repo_owner": repo_owner, "repo_name": repo_name})
+            existing_settings["ota"] = existing_ota
+            storage["system_settings"] = existing_settings
+            storage.store()
+            _ota_last_check = {}
+
+            return render_template(
+                "setup/updates.html",
+                _updates_context(message="Repository updated to {}/{}".format(repo_owner, repo_name)),
+            )
+
+        repo_settings = _ota_repo_settings()
+        updater = OTAUpdater(
+            repo_owner=repo_settings["repo_owner"],
+            repo_name=repo_settings["repo_name"],
+            tracked_root_prefixes=_OTA_TRACKED_ROOT_PREFIXES,
+            tracked_root_files=_OTA_TRACKED_ROOT_FILES,
+            excluded_path_prefixes=_OTA_EXCLUDED_PATH_PREFIXES,
+            excluded_paths=_OTA_EXCLUDED_PATHS,
+            excluded_local_dirs=_OTA_EXCLUDED_LOCAL_DIRS,
+            user_agent="lightmotron-ota",
+        )
+
+        if action == "check":
+            try:
+                check_result = updater.check_for_updates()
+                _ota_last_check = check_result
+                if check_result.get("has_updates"):
+                    message = "Found {} changed file(s).".format(len(check_result.get("updates", [])))
+                else:
+                    message = "No updates available."
+
+                return render_template(
+                    "setup/updates.html", _updates_context(message=message, check_result=check_result)
+                )
+            except Exception as error:
+                return render_template(
+                    "setup/updates.html",
+                    _updates_context(error="Update check failed: {}".format(str(error))),
+                )
+
+        if action == "apply":
+            if not _ota_last_check:
+                return render_template(
+                    "setup/updates.html",
+                    _updates_context(error="Run a check first so changed files can be reviewed."),
+                )
+
+            remove_deleted: bool = self.request.form_data.get("remove_deleted", "") == "1"
+
+            try:
+                apply_result = updater.apply_updates(
+                    _ota_last_check.get("branch", "main"),
+                    _ota_last_check.get("updates", []),
+                    remove_deleted=remove_deleted,
+                )
+
+                check_result = dict(_ota_last_check)
+                check_result["updates"] = []
+                check_result["has_updates"] = False
+                _ota_last_check = check_result
+
+                success_count = len(apply_result.get("applied_files", []))
+                removed_count = len(apply_result.get("removed_files", []))
+                failed_count = len(apply_result.get("failed_files", []))
+
+                message_parts = ["Applied {} file(s).".format(success_count)]
+                if removed_count:
+                    message_parts.append("Removed {} file(s).".format(removed_count))
+                if failed_count:
+                    message_parts.append("{} file(s) failed.".format(failed_count))
+
+                return render_template(
+                    "setup/updates.html",
+                    _updates_context(
+                        message=" ".join(message_parts),
+                        check_result=check_result,
+                        apply_result=apply_result,
+                        remove_deleted=remove_deleted,
+                    ),
+                )
+            except Exception as error:
+                return render_template(
+                    "setup/updates.html",
+                    _updates_context(
+                        error="Update apply failed: {}".format(str(error)),
+                        remove_deleted=remove_deleted,
+                    ),
+                )
+
+        return render_template("setup/updates.html", _updates_context(error="Unknown action."))
 
 
 class SystemSettingsSummaryView(View):

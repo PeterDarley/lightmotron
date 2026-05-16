@@ -49,6 +49,8 @@ web_server.add_routes(
         "/system_settings/summary": views.SystemSettingsSummaryView,
         "/system_reboot": views.SystemRebootView,
         "/system_reboot/confirm": views.SystemRebootConfirmView,
+        "/updates": views.UpdatesView,
+        "/updates/summary": views.UpdatesSummaryView,
         "/sounds": views.SoundsView,
         "/sounds/summary": views.SoundsSummaryView,
         "/sounds/play": views.PlaySoundView,
