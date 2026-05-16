@@ -65,9 +65,6 @@ _OTA_TRACKED_ROOT_PREFIXES: tuple = (
 _OTA_TRACKED_ROOT_FILES: tuple = (
     "boot.py",
     "main.py",
-    "settings.py",
-    "index.html",
-    "requirements.txt",
 )
 _OTA_EXCLUDED_PATH_PREFIXES: tuple = (
     ".git/",
@@ -80,6 +77,9 @@ _OTA_EXCLUDED_PATHS: tuple = (
     "upload.ps1",
     "repl.ps1",
     "upload.sh",
+    "index.html",
+    "requirements.txt",
+    "lib/licence",
 )
 _OTA_EXCLUDED_LOCAL_DIRS: tuple = (
     ".github",

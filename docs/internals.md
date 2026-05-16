@@ -53,12 +53,13 @@ The repository source is configurable in persistent storage under:
 ### Tracked Files
 
 By default, the following paths are tracked for updates:
-- Directories: `lib/`, `web/`, `templates/`, `www/`, `docs/`
-- Root files: `boot.py`, `main.py`, `settings.py`, `README.md`, `index.html`, `requirements.txt`
+- Directories: `lib/`, `web/`, `templates/`, `www/`
+- Root files: `boot.py`, `main.py`
 
 The following paths are explicitly excluded:
 - `.git/`, `.github/`, `copilot_working/`, `deployment/`, `external_resources/`
 - Upload scripts: `upload.ps1`, `repl.ps1`, `upload.sh`
+- Non-device files: `index.html`, `requirements.txt`, `lib/licence`
 
 ### Submodule Support
 
