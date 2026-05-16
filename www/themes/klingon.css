@@ -194,6 +194,20 @@ body {
     }
 }
 
+.table {
+    color: var(--kli-text);
+    border-color: var(--kli-frame);
+
+    & thead,
+    & tbody,
+    & tfoot {
+        & th,
+        & td { border-color: var(--kli-frame); }
+    }
+
+    & tbody & tr:hover { background-color: var(--kli-panel-alt); }
+}
+
 /* ---- Home page panels ---- */
 .theme-animation-panel {
     background: linear-gradient(135deg, var(--kli-panel-alt) 0%, var(--kli-panel) 100%);

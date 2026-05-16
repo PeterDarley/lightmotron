@@ -152,6 +152,20 @@ body {
     }
 }
 
+.table {
+    color: var(--imp-text);
+    border-color: var(--imp-border);
+
+    & thead,
+    & tbody,
+    & tfoot {
+        & th,
+        & td { border-color: var(--imp-border); }
+    }
+
+    & tbody & tr:hover { background-color: var(--imp-panel-alt); }
+}
+
 /* ---- Home page ---- */
 .theme-animation-panel {
     background-color: var(--imp-panel);

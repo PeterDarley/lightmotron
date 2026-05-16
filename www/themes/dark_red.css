@@ -22,6 +22,21 @@ body {
     border-color: #6a0000;
 
     & .card-header { background-color: #2e0000; border-bottom-color: #6a0000; color: #f0c0c0; }
+    & .card-body { background-color: #1a0000; color: #f0c0c0; }
+}
+
+.table {
+    color: #f0c0c0;
+    border-color: #6a0000;
+
+    & thead,
+    & tbody,
+    & tfoot {
+        & th,
+        & td { border-color: #6a0000; }
+    }
+
+    & tbody & tr:hover { background-color: #2a0000; }
 }
 
 /* Home page */

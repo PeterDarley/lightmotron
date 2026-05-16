@@ -98,6 +98,11 @@ body {
         background-color: var(--sw-panel-alt);
         border-bottom: 1px solid var(--sw-border);
         color: var(--sw-accent);
+    }
+
+    & .card-body {
+        background-color: var(--sw-bg);
+        color: var(--sw-text);
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.1em;
@@ -158,6 +163,20 @@ body {
         background-color: var(--sw-panel-alt);
         border-top: 1px solid var(--sw-border);
     }
+}
+
+.table {
+    color: var(--sw-text);
+    border-color: var(--sw-border);
+
+    & thead,
+    & tbody,
+    & tfoot {
+        & th,
+        & td { border-color: var(--sw-border); }
+    }
+
+    & tbody & tr:hover { background-color: var(--sw-panel); }
 }
 
 /* ---- Home page ---- */
