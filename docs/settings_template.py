@@ -59,7 +59,9 @@ optional; hardcoded defaults in settings.py are used when a key is absent.
         # Used by Setup -> Updates when checking/applying code updates.
         "ota": {
             "repo_owner": "PeterDarley",
-            "repo_name": "lightmotron"
+            "repo_name": "lightmotron",
+            "track_submodules": True,
+            "debug_logging": False
         },
 
         # ESP32 board configuration.
@@ -144,6 +146,9 @@ Notes
 * OTA updates can target a different GitHub repository by changing
     ``system_settings.ota.repo_owner`` and ``system_settings.ota.repo_name``
     from the Setup page Updates card.
+* OTA update diagnostics can be enabled by setting
+    ``system_settings.ota.debug_logging`` to ``true``. Diagnostic entries are
+    written to ``.ota_debug.log`` during update checks.
 * Named ranges (``named_ranges``) may include references to other named ranges
     using the ``"named:OtherRange"`` syntax in addition to explicit LED indices
     or ranges. The web setup UI and runtime will expand these references when

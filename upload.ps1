@@ -113,6 +113,25 @@ foreach ($path in $changedFiles) {
 # Save updated manifest on success.
 $newManifest | ConvertTo-Json | Set-Content $manifestPath
 
+# Record the deployed commit SHA to .ota_deployed_commit.json for OTA tracking.
+try {
+    $commitSha = & git rev-parse HEAD 2>&1
+    if ($LASTEXITCODE -eq 0 -and $commitSha) {
+        $commitSha = $commitSha.Trim()
+        Write-Output "Recording deployed commit: $commitSha"
+        
+        # Execute Python on device to write the commit file (use double quotes for interpolation).
+        $pythonCode = "import json`nwith open('.ota_deployed_commit.json', 'w') as f:`n json.dump({'commit_sha': '$commitSha'}, f)"
+        & $mpremote connect $port exec $pythonCode
+    }
+    else {
+        Write-Warning "Could not get git commit SHA"
+    }
+}
+catch {
+    Write-Warning "Error recording deployed commit: $_"
+}
+
 # Soft reset device to reload boot.py/main.py with new files.
 # A fresh connect without --no-soft-reset will trigger soft reset on disconnect.
 Write-Output "Soft resetting device..."

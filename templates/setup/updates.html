@@ -6,6 +6,12 @@
     <div class="alert alert-success small py-2">{{ message }}</div>
     {% endif %}
 
+    {% if last_deploy_commit %}
+    <div class="small text-muted mb-3 pb-2 border-bottom">
+        Last deployed: <code>{{ last_deploy_commit }}</code>{% if last_deploy_branch %} on <strong>{{ last_deploy_branch }}</strong>{% endif %}
+    </div>
+    {% endif %}
+
     <h6 class="mt-0 mb-3">Repository</h6>
     <form hx-post="/updates"
           hx-target="#updates-form"
@@ -29,9 +35,16 @@
     <form hx-post="/updates"
           hx-target="#updates-form"
           hx-swap="outerHTML"
+          hx-indicator="#updates-spinner"
           class="mb-3">
         <input type="hidden" name="action" value="check">
-        <button type="submit" class="btn btn-primary btn-sm">Check Now</button>
+        <button type="submit" class="btn btn-primary btn-sm">
+            Check Now
+        </button>
+        <span id="updates-spinner" class="htmx-indicator ms-2">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span class="ms-1 small">Checking&hellip;</span>
+        </span>
     </form>
 
     {% if has_checked %}
@@ -40,6 +53,13 @@
     </div>
 
     {% if has_updates %}
+    <div class="small text-muted mb-2">
+        <strong>Status legend:</strong> 
+        <span class="badge text-bg-success">added</span> = new file in repo,
+        <span class="badge text-bg-warning">modified</span> = changed in repo since last update,
+        <span class="badge text-bg-info">locally modified</span> = you've modified locally (won't be overwritten),
+        <span class="badge text-bg-danger">deleted</span> = removed from repo
+    </div>
     <div class="table-responsive mb-3" style="max-height: 260px;">
         <table class="table table-sm table-striped align-middle mb-0">
             <thead>
@@ -58,6 +78,9 @@
                         {% endif %}
                         {% if update.status == 'added' %}
                         <span class="badge text-bg-success">added</span>
+                        {% endif %}
+                        {% if update.status == 'locally_modified' %}
+                        <span class="badge text-bg-info">locally modified</span>
                         {% endif %}
                         {% if update.status == 'deleted' %}
                         <span class="badge text-bg-danger">deleted</span>
@@ -79,7 +102,13 @@
                 Remove local files that were deleted upstream
             </label>
         </div>
-        <button type="submit" class="btn btn-danger btn-sm">Apply Updates</button>
+        <button type="submit" class="btn btn-danger btn-sm">
+            Apply Updates
+        </button>
+        <span class="htmx-indicator ms-2">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span class="ms-1 small">Applying&hellip;</span>
+        </span>
     </form>
     {% else %}
     <div class="alert alert-info small py-2 mb-0">No changed files found.</div>

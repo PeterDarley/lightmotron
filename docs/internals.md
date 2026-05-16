@@ -62,14 +62,40 @@ The following paths are explicitly excluded:
 
 ### Submodule Support
 
-If your project uses git submodules (like the shared `lib/` library), the updater automatically:
+Submodule file tracking is **enabled by default**. The OTA updater uses incremental chunked processing to safely handle large repository trees:
 
-1. Fetches `.gitmodules` to discover submodule repositories
-2. Recursively fetches the tree for each submodule at its pinned commit
-3. Detects changes to individual submodule files (not just the submodule pointer)
-4. Includes submodule file changes in the update plan
+**How it works:**
+- Remote tree and local files are saved to newline-delimited snapshot files
+- Snapshot files are processed incrementally line-by-line
+- Main repository trees are walked iteratively (non-recursive) one tree level at a time
+- Submodule trees are walked iteratively (non-recursive) by fetching one tree level at a time
+- Each file's SHA is compared individually, then discarded
+- Temporary files are cleaned up after processing completes
 
-This allows seamless updates to shared submodules alongside project-specific code.
+This approach is **stack-safer** on ESP32 because it avoids recursive operations in hot paths and maintains a smaller working set during processing.
+
+**To disable** submodule tracking (if you want to update submodules manually via git), add to persistent storage:
+```python
+"system_settings": {
+    "ota": {
+        "track_submodules": False
+    }
+}
+```
+
+### OTA Debug Logging
+
+To capture progress checkpoints during update checks, enable:
+
+```python
+"system_settings": {
+    "ota": {
+        "debug_logging": True
+    }
+}
+```
+
+When enabled, the OTA engine appends stage markers and `gc.mem_free()`/`gc.mem_alloc()` snapshots to `.ota_debug.log`. This helps identify the last successful phase before a crash or reboot.
 
 
 ## Target Specification

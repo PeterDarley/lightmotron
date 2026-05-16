@@ -61,13 +61,11 @@ _OTA_TRACKED_ROOT_PREFIXES: tuple = (
     "web/",
     "templates/",
     "www/",
-    "docs/",
 )
 _OTA_TRACKED_ROOT_FILES: tuple = (
     "boot.py",
     "main.py",
     "settings.py",
-    "README.md",
     "index.html",
     "requirements.txt",
 )
@@ -1349,6 +1347,25 @@ def _ota_summary_context() -> dict:
     }
 
 
+def _load_last_deploy_commit() -> dict:
+    """Load the last deployed commit SHA and branch from .ota_deployed_commit.json."""
+
+    try:
+        import json
+
+        with open(".ota_deployed_commit.json", "r") as file_handle:
+            data: dict = json.load(file_handle)
+            commit_sha: str = data.get("commit_sha", "")
+            # Shorten to 8 characters like git does
+            short_sha: str = commit_sha[:8] if commit_sha else ""
+            return {
+                "commit_sha": short_sha,
+                "branch": data.get("branch", ""),
+            }
+    except Exception:
+        return {"commit_sha": "", "branch": ""}
+
+
 def _validate_repo_part(value: str) -> bool:
     """Validate owner/repository segment characters for GitHub slugs."""
 
@@ -1387,6 +1404,9 @@ def _updates_context(
         checked_repository = ""
         branch = ""
 
+    # Load last deployed commit info
+    last_deploy_info = _load_last_deploy_commit()
+
     return {
         "repo_owner": repo_settings["repo_owner"],
         "repo_name": repo_settings["repo_name"],
@@ -1400,6 +1420,8 @@ def _updates_context(
         "error": error,
         "apply_result": apply_result or {},
         "remove_deleted": bool(remove_deleted),
+        "last_deploy_commit": last_deploy_info.get("commit_sha", ""),
+        "last_deploy_branch": last_deploy_info.get("branch", ""),
     }
 
 
@@ -1455,6 +1477,10 @@ class UpdatesView(View):
             )
 
         repo_settings = _ota_repo_settings()
+        ota_settings: dict = PersistentDict().get("system_settings", {}).get("ota", {})
+        track_submodules: bool = bool(ota_settings.get("track_submodules", True))
+        debug_logging: bool = bool(ota_settings.get("debug_logging", True))  # Enabled by default for troubleshooting
+
         updater = OTAUpdater(
             repo_owner=repo_settings["repo_owner"],
             repo_name=repo_settings["repo_name"],
@@ -1464,7 +1490,8 @@ class UpdatesView(View):
             excluded_paths=_OTA_EXCLUDED_PATHS,
             excluded_local_dirs=_OTA_EXCLUDED_LOCAL_DIRS,
             user_agent="lightmotron-ota",
-            track_submodules=True,
+            track_submodules=track_submodules,
+            debug_logging=debug_logging,
         )
 
         if action == "check":
@@ -1499,6 +1526,7 @@ class UpdatesView(View):
                     _ota_last_check.get("branch", "main"),
                     _ota_last_check.get("updates", []),
                     remove_deleted=remove_deleted,
+                    commit_sha=_ota_last_check.get("commit_sha", ""),
                 )
 
                 check_result = dict(_ota_last_check)
