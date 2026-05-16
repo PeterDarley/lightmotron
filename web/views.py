@@ -1464,6 +1464,7 @@ class UpdatesView(View):
             excluded_paths=_OTA_EXCLUDED_PATHS,
             excluded_local_dirs=_OTA_EXCLUDED_LOCAL_DIRS,
             user_agent="lightmotron-ota",
+            track_submodules=True,
         )
 
         if action == "check":

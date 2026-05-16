@@ -50,6 +50,27 @@ The repository source is configurable in persistent storage under:
 }
 ```
 
+### Tracked Files
+
+By default, the following paths are tracked for updates:
+- Directories: `lib/`, `web/`, `templates/`, `www/`, `docs/`
+- Root files: `boot.py`, `main.py`, `settings.py`, `README.md`, `index.html`, `requirements.txt`
+
+The following paths are explicitly excluded:
+- `.git/`, `.github/`, `copilot_working/`, `deployment/`, `external_resources/`
+- Upload scripts: `upload.ps1`, `repl.ps1`, `upload.sh`
+
+### Submodule Support
+
+If your project uses git submodules (like the shared `lib/` library), the updater automatically:
+
+1. Fetches `.gitmodules` to discover submodule repositories
+2. Recursively fetches the tree for each submodule at its pinned commit
+3. Detects changes to individual submodule files (not just the submodule pointer)
+4. Includes submodule file changes in the update plan
+
+This allows seamless updates to shared submodules alongside project-specific code.
+
 
 ## Target Specification
 
