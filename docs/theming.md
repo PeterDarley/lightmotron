@@ -150,3 +150,27 @@ body { background-color: #1a0000; color: #f0c0c0; }
 .theme-stop-btn.btn-outline-danger    { border-color: #8b0000; color: #c07070; }
 .theme-immediate-btn                  { border-color: #a06020; color: #c08030; }
 ```
+
+## Example: Event Horizon theme
+
+The built-in `event_horizon.css` is a dark sci-fi style with blue, green, and purple highlights:
+
+```css
+:root {
+    --eh-blue: #5aa2ff;
+    --eh-green: #2fd6a6;
+    --eh-purple: #a47aff;
+}
+
+body {
+    background-color: #050711;
+    color: #d6e3ff;
+}
+
+.theme-ongoing-section { border-left: 3px solid var(--eh-blue); }
+.theme-immediate-section { border-left: 3px solid var(--eh-purple); }
+.theme-sounds-section { border-left: 3px solid var(--eh-green); }
+
+.theme-start-btn.btn-success { background-color: #1a6a59; border-color: #23987f; }
+.theme-stop-btn.btn-danger { background-color: #573a86; border-color: #7e57be; }
+```
