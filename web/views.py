@@ -1544,6 +1544,19 @@ class UpdatesView(View):
                 if failed_count:
                     message_parts.append("{} file(s) failed.".format(failed_count))
 
+                if not failed_count:
+                    import _thread
+                    from time import sleep
+
+                    def _delayed_reset() -> None:
+                        """Wait briefly, then reboot the MCU to load updated files."""
+
+                        sleep(0.75)
+                        machine.reset()
+
+                    _thread.start_new_thread(_delayed_reset, ())
+                    message_parts.append("Rebooting now to apply changes.")
+
                 return render_template(
                     "setup/updates.html",
                     _updates_context(
