@@ -96,7 +96,7 @@ Define and name your own colors to reuse across effects and scenes.
 ![Edit a color](docs/screenshots/setup-colors-edit.png)
 
 #### Named Ranges
-Group LED indices and give them meaningful names (e.g. "Nacelle", "Hull"). Use the LED picker to visually select LEDs.
+Group LED indices and give them meaningful names (e.g. "Nacelle", "Hull"). Use the LED picker to visually select individual LEDs, or include another named range to build composite groups. Range buttons show the resolved LED summary, and included subranges are listed separately in the editor where they can be removed.
 
 ![Named Ranges](docs/screenshots/setup-ranges.png)
 ![Edit a range](docs/screenshots/setup-ranges-edit.png)

@@ -2,6 +2,10 @@
 
 This document provides detailed technical specifications for patterns and filters. For user-facing documentation, see the [README](../README.md).
 
+## Web UI View Modules
+
+Web request handlers are being split by logical feature area rather than by file length. For example, named-range handlers now live in `web/views_named_ranges.py`, while `web/views.py` remains the compatibility export module used by route registration.
+
 ## Configuration Format
 
 Lighting is defined by **scenes**, each containing one or more **jobs**. Each job assigns a **pattern** to a set of target LEDs, and optionally a list of **filters** that post-process the result.

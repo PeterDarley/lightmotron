@@ -1,7 +1,7 @@
-{% if named_range_names %}
+{% if named_ranges %}
 <div class="d-flex flex-wrap gap-1 mb-0">
-    {% for range_name in named_range_names %}
-    <span class="badge bg-secondary">{{ range_name }}</span>
+    {% for r in named_ranges %}
+    <span class="badge bg-secondary">{{ r.name }} <span class="text-muted fw-normal">{{ r.summary }}</span></span>
     {% endfor %}
 </div>
 {% else %}

@@ -1,5 +1,39 @@
 <div id="led-picker-container">
 <div id="led-picker">
+    {% if range_name %}
+        <form hx-post="/named_range" hx-target="#modal-body" hx-swap="innerHTML" id="range-form" class="mb-3">
+            <input type="hidden" name="old_name" value="{{ range_name }}">
+            <input type="hidden" id="selected-leds" name="selected_leds" value="{{ selected_tokens_str }}">
+            <div class="input-group mb-2" style="max-width: 400px;">
+                <input type="text" class="form-control" name="range_name" value="{{ range_name }}" required>
+                <button type="submit" name="action" value="save" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+
+        <form hx-post="/confirm" hx-target="#modal-body" hx-swap="innerHTML" class="mb-3">
+            <input type="hidden" name="object_type" value="Named Range">
+            <input type="hidden" name="object_name" value="{{ range_name }}">
+            <input type="hidden" name="action_path" value="/named_range">
+            <input type="hidden" name="old_name" value="{{ range_name }}">
+            <input type="hidden" name="selected_leds" value="{{ selected_tokens_str }}">
+            <button type="submit" class="btn btn-outline-danger me-2">Delete</button>
+        </form>
+
+        <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="back-btn"
+                hx-get="/named_range"
+                hx-target="#modal-body"
+                hx-swap="innerHTML">Back</button>
+    {% else %}
+        <form hx-post="/named_range" hx-target="#modal-body" hx-swap="innerHTML" id="range-form" class="mb-3">
+            <input type="hidden" id="selected-leds" name="selected_leds" value="{{ selected_tokens_str }}">
+            <div class="input-group mb-2" style="max-width: 400px;">
+                <input type="text" class="form-control" name="range_name" placeholder="Range name (e.g. cockpit)" required>
+                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-outline-danger" id="clear-btn">Clear</button>
+            </div>
+        </form>
+    {% endif %}
+
     <p class="text-muted small mb-1">Click an LED to toggle it. Hold <kbd>Shift</kbd> + click to select a range.</p>
 
     <div class="d-flex flex-wrap gap-1 mb-3" id="led-buttons">
@@ -13,51 +47,72 @@
         {% endfor %}
     </div>
 
-    {% if range_name %}
-        <form hx-post="/named_range" hx-target="#modal-body" hx-swap="innerHTML" id="range-form" class="d-inline-block">
-            <input type="hidden" name="old_name" value="{{ range_name }}">
-            <input type="hidden" id="selected-leds" name="selected_leds" value="{{ selected_tokens_str }}">
-            <div class="input-group mb-2" style="max-width: 400px;">
-                <input type="text" class="form-control" name="range_name" value="{{ range_name }}" required>
-                <button type="submit" name="action" value="save" class="btn btn-primary">Save</button>
-            </div>
-        </form>
+    {% if selected_subranges %}
+    <div class="mb-3" id="included-subranges-section">
+        <small class="text-muted">Included subranges:</small>
+        <div class="d-flex flex-wrap gap-1 mt-1" id="included-subranges-list">
+            {% for subrange_name in selected_subranges %}
+            <span class="badge bg-secondary" data-subrange-chip="named:{{ subrange_name }}">
+                {{ subrange_name }}
+                <button type="button"
+                        class="btn btn-outline-light btn-sm ms-2 py-0 px-1"
+                        data-subrange-token="named:{{ subrange_name }}"
+                        hx-post="/named_range/remove_subrange?token=named:{{ subrange_name }}&sort={{ sort_by }}"
+                        hx-target="#modal-body"
+                        hx-swap="innerHTML"
+                        aria-label="Remove {{ subrange_name }}">x</button>
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
-        <form hx-post="/confirm" hx-target="#modal-body" hx-swap="innerHTML" class="d-inline-block ms-2">
-            <input type="hidden" name="object_type" value="Named Range">
-            <input type="hidden" name="object_name" value="{{ range_name }}">
-            <input type="hidden" name="action_path" value="/named_range">
-            <input type="hidden" name="old_name" value="{{ range_name }}">
-            <input type="hidden" name="selected_leds" value="{{ selected_tokens_str }}">
-            <button type="submit" class="btn btn-outline-danger">Delete</button>
-        </form>
-
-        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="back-btn"
-                hx-get="/named_range"
-                hx-target="#modal-body"
-                hx-swap="innerHTML">Back</button>
-    {% else %}
-        <form hx-post="/named_range" hx-target="#modal-body" hx-swap="innerHTML" id="range-form">
-            <input type="hidden" id="selected-leds" name="selected_leds" value="{{ selected_tokens_str }}">
-            <div class="input-group mb-2" style="max-width: 400px;">
-                <input type="text" class="form-control" name="range_name" placeholder="Range name (e.g. cockpit)" required>
-                <button type="submit" class="btn btn-primary">Save</button>
-                <button type="button" class="btn btn-outline-danger" id="clear-btn">Clear</button>
-            </div>
-        </form>
+    {% if named_range_names %}
+    <div class="mb-3">
+        <small class="text-muted">Include another range:</small>
+        <div class="input-group mt-1" style="max-width: 360px;">
+            <select id="named-range-select" class="form-select form-select-sm">
+                <option value="">Choose range…</option>
+                {% for r in named_range_names %}
+                    {% if r.name != range_name %}
+                    <option value="named:{{ r.name }}">{{ r.name }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="add-range-btn">Add</button>
+        </div>
+    </div>
     {% endif %}
 
     {% if not range_name %}
-    <div class="mt-3">
+    <div class="mt-3 d-flex align-items-center gap-2 mb-1">
         <small class="text-muted">Saved ranges:</small>
-        <div>
-            {% for saved_range in named_range_names %}
+        <div class="btn-group btn-group-sm" role="group" aria-label="Range sort mode">
+            {% if sort_by == "name" %}
+            <button type="button" class="btn btn-secondary" disabled>Name</button>
+            <button type="button"
+                class="btn btn-outline-secondary"
+                hx-get="/named_range?sort=leds"
+                hx-target="#modal-body"
+                hx-swap="innerHTML">LEDs</button>
+            {% else %}
+            <button type="button"
+                class="btn btn-outline-secondary"
+                hx-get="/named_range?sort=name"
+                hx-target="#modal-body"
+                hx-swap="innerHTML">Name</button>
+            <button type="button" class="btn btn-secondary" disabled>LEDs</button>
+            {% endif %}
+        </div>
+    </div>
+    <div>
+            {% for r in named_range_names %}
             <button type="button"
                     class="btn btn-outline-secondary btn-sm me-1 mb-2"
-                    hx-get="/named_range?name={{ saved_range }}"
+                    hx-get="/named_range?name={{ r.name }}"
                     hx-target="#modal-body"
                     hx-swap="innerHTML">
-                {{ saved_range }}
+                {{ r.name }} <span class="text-muted fw-normal" style="font-size:0.75em">{{ r.summary }}</span>
             </button>
             {% endfor %}
         </div>
@@ -66,33 +121,21 @@
     <div class="mt-3">
         <small class="text-muted">Other ranges:</small>
         <div>
-            {% for other_name in named_range_names %}
-                {% if other_name != range_name %}
+            {% for r in named_range_names %}
+                {% if r.name != range_name %}
                 <button type="button"
                         class="btn btn-outline-secondary btn-sm me-1 mb-2"
-                        hx-get="/named_range?name={{ other_name }}"
+                        hx-get="/named_range?name={{ r.name }}"
                         hx-target="#modal-body"
                         hx-swap="innerHTML">
-                    {{ other_name }}
+                    {{ r.name }} <span class="text-muted fw-normal" style="font-size:0.75em">{{ r.summary }}</span>
                 </button>
                 {% endif %}
             {% endfor %}
         </div>
     </div>
-    <div class="mt-2">
-        <small class="text-muted">Include another range:</small>
-        <div class="input-group mt-1" style="max-width: 360px;">
-            <select id="named-range-select" class="form-select form-select-sm">
-                <option value="">Choose range…</option>
-                {% for other_name in named_range_names %}
-                    {% if other_name != range_name %}
-                    <option value="named:{{ other_name }}">{{ other_name }}</option>
-                    {% endif %}
-                {% endfor %}
-            </select>
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="add-range-btn">Add</button>
-        </div>
-    </div>
+    {% endif %}
+
     {% endif %}
 
     <script src="/scripts/led_picker.js"></script>

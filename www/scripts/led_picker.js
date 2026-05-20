@@ -32,8 +32,9 @@
         });
     }
 
-    async function syncWithServer() {
+    async function syncWithServer(reason) {
         updateSelectedLedsInput();
+
         try {
             const resp = await fetch('/named_range/set', {
                 method: 'POST',
@@ -41,10 +42,20 @@
                 body: new URLSearchParams({ selected_leds: selectedLedsInput.value })
             });
             if (resp.ok) {
-                const arr = await resp.json();
-                if (Array.isArray(arr)) {
-                    highlightIndices(arr);
+                const data = await resp.json();
+                let directSelected = [];
+                let resolvedSelected = [];
+
+                if (Array.isArray(data)) {
+                    // Backward compatibility with older endpoint response format.
+                    directSelected = data;
+                    resolvedSelected = data;
+                } else if (data && typeof data === 'object') {
+                    directSelected = Array.isArray(data.direct_selected_leds) ? data.direct_selected_leds : [];
+                    resolvedSelected = Array.isArray(data.resolved_leds) ? data.resolved_leds : [];
                 }
+
+                highlightIndices(directSelected);
             } else {
                 // on error, just clear highlights
                 highlightIndices([]);
@@ -83,20 +94,24 @@
             lastClickedIndex = ledIndex;
         }
 
-        syncWithServer();
+        syncWithServer('led-button-click');
     });
 
     // Delegated handlers for clear and back buttons and add-range button
     persistentContainer.addEventListener('click', (e) => {
+        // Subrange removal is handled by HTMX buttons in the template.
+
         if (e.target.closest('#clear-btn')) {
             e.preventDefault();
             selectedItems.clear();
-            syncWithServer();
+            syncWithServer('clear');
+            return;
         }
 
         if (e.target.closest('#back-btn')) {
             e.preventDefault();
             document.getElementById('modal-body').innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+            return;
         }
 
         if (e.target.closest('#add-range-btn')) {
@@ -104,8 +119,9 @@
             const sel = document.getElementById('named-range-select');
             if (sel && sel.value) {
                 selectedItems.add(sel.value);
-                syncWithServer();
+                syncWithServer('subrange-add');
             }
+            return;
         }
     });
 
@@ -125,5 +141,5 @@
     }
 
     // Kick off initial sync so server-side resolution is applied
-    syncWithServer();
+    syncWithServer('initial-load');
 })();

@@ -10,6 +10,7 @@ import os
 import sys
 import machine
 import settings
+from web import views_named_ranges
 
 
 def _fmt_bytes(num_bytes: int) -> str:
@@ -21,6 +22,49 @@ def _fmt_bytes(num_bytes: int) -> str:
         return "{:.1f} KB".format(num_bytes / 1024)
     else:
         return "{} B".format(num_bytes)
+
+
+def summarize_led_list(led_indices: list) -> str:
+    """Return a compact human-readable summary of a list of LED indices.
+
+    A single contiguous run returns "x-y" (or "x" for a single LED).
+    Two contiguous runs return "a-b, x-y".
+    Three or more runs (or an otherwise complex set) return "x to y".
+    An empty list returns "none".
+    """
+
+    if not led_indices:
+        return "none"
+
+    sorted_indices = sorted(set(led_indices))
+
+    segments = []
+    start = sorted_indices[0]
+    end = sorted_indices[0]
+
+    for idx in sorted_indices[1:]:
+        if idx == end + 1:
+            end = idx
+        else:
+            segments.append((start, end))
+            start = idx
+            end = idx
+
+    segments.append((start, end))
+
+    def _fmt_seg(s: int, e: int) -> str:
+        """Format a single contiguous segment as 'x' or 'x-y'."""
+
+        if s == e:
+            return str(s)
+        return "{}-{}".format(s, e)
+
+    if len(segments) == 1:
+        return _fmt_seg(segments[0][0], segments[0][1])
+    elif len(segments) == 2:
+        return "{}, {}".format(_fmt_seg(*segments[0]), _fmt_seg(*segments[1]))
+    else:
+        return "{} to {}".format(sorted_indices[0], sorted_indices[-1])
 
 
 def _pretty_json(obj: dict, indent: int = 0) -> str:
@@ -156,71 +200,23 @@ def _rename_color_refs(old_name: str, new_name: str) -> None:
                     colors_list[i] = new_ref
 
 
+# Named range views are grouped into a dedicated module by feature area.
+views_named_ranges.initialize_named_range_views(
+    lights_instance=lights,
+    rename_named_range_refs_func=_rename_named_range_refs,
+    summarize_led_list_func=summarize_led_list,
+)
+NamedRangeSummaryView = views_named_ranges.NamedRangeSummaryView
+NamedRangeView = views_named_ranges.NamedRangeView
+NamedRangeSetView = views_named_ranges.NamedRangeSetView
+NamedRangeRemoveSubrangeView = views_named_ranges.NamedRangeRemoveSubrangeView
+
+
 def _animation_context() -> dict:
     """Return a context dict with the current animation running state."""
 
     running = lights.animation.running
     return {"animation_running": running, "animation_stopped": not running}
-
-
-def _parse_selected_tokens(selected_leds_str: str) -> list:
-    """Parse a comma-separated selected_leds string into a list of ints and named refs.
-
-    Accepts tokens like "10", "3" or "named:engine". Invalid tokens are ignored.
-    """
-    if not selected_leds_str:
-        return []
-
-    tokens = []
-    for t in (x.strip() for x in selected_leds_str.split(",")):
-        if not t:
-            continue
-        if t.startswith("named:"):
-            name = t[6:]
-            if name:
-                tokens.append("named:" + name)
-        else:
-            try:
-                tokens.append(int(t))
-            except ValueError:
-                # ignore malformed entries
-                pass
-
-    return tokens
-
-
-def _named_ranges_has_cycle(named_ranges: dict) -> bool:
-    """Detect cycles in the named_ranges graph. Returns True if a cycle exists."""
-
-    # Build adjacency map where edges point from a range to any named ranges it references
-    adj = {name: [] for name in named_ranges.keys()}
-    for name, members in named_ranges.items():
-        if isinstance(members, list):
-            for item in members:
-                if isinstance(item, str) and item.startswith("named:"):
-                    adj.setdefault(name, []).append(item[6:])
-
-    visited = set()
-    recstack = set()
-
-    def _dfs(node: str) -> bool:
-        if node in recstack:
-            return True
-        if node in visited:
-            return False
-        visited.add(node)
-        recstack.add(node)
-        for child in adj.get(node, []):
-            if _dfs(child):
-                return True
-        recstack.remove(node)
-        return False
-
-    for n in adj.keys():
-        if _dfs(n):
-            return True
-
-    return False
 
 
 def _scenes_context() -> dict:
@@ -437,6 +433,10 @@ class SetupView(View):
         # Include all summary card data so the browser receives everything in one
         # request rather than firing 5+ lazy HTMX loads after page paint.
         named_ranges: dict = lights.settings.get("named_ranges", {})
+        context["named_ranges"] = [
+            {"name": name, "summary": views_named_ranges.summarize_named_range_members(named_ranges[name])}
+            for name in sorted(named_ranges.keys())
+        ]
         context["named_range_names"] = sorted(named_ranges.keys())
 
         custom_colors_dict: dict = lights.settings.get("custom_colors", {})
@@ -453,19 +453,6 @@ class SetupView(View):
         context["filter_names"] = sorted(lights.settings.get("filters", {}).keys())
 
         return render_template("setup.html", context)
-
-
-class NamedRangeSummaryView(View):
-    """Return a summary snippet of named ranges for the setup card."""
-
-    def get(self) -> str:
-        """Return named ranges summary HTML fragment."""
-
-        named_ranges = lights.settings.get("named_ranges", {})
-        return render_template(
-            "setup/named_ranges_summary.html",
-            {"named_range_names": sorted(named_ranges.keys())},
-        )
 
 
 class CustomColorsSummaryView(View):
@@ -523,160 +510,6 @@ class FiltersSummaryView(View):
             "setup/filters_summary.html",
             {"filter_names": filter_names},
         )
-
-
-# Server-side selection state for the LED naming tool
-_selected_leds = []
-_editing_range_name = None
-
-
-def _named_range_context() -> dict:
-    """Build template context for the LED picker from current server-side selection state."""
-    # Resolve any named: references in the server-side selection into a set
-    resolved = []
-    for item in _selected_leds:
-        try:
-            targets = lights.get_targets(item)
-        except Exception:
-            targets = []
-        for t in targets:
-            if t not in resolved:
-                resolved.append(t)
-
-    selected_set = set(resolved)
-    led_list = [
-        {
-            "index": i,
-            "css_class": "btn-warning" if i in selected_set else "btn-outline-secondary",
-        }
-        for i in range(lights.leds.count)
-    ]
-    named_range_names = sorted(lights.settings.get("named_ranges", {}).keys())
-
-    # Prepare a comma-separated representation of the raw selected tokens
-    try:
-        selected_tokens_str = ",".join([str(x) for x in _selected_leds])
-    except Exception:
-        selected_tokens_str = ""
-
-    return {
-        "led_list": led_list,
-        "named_range_names": named_range_names,
-        "range_name": _editing_range_name,
-        "selected_tokens": list(_selected_leds),
-        "selected_tokens_str": selected_tokens_str,
-    }
-
-
-class NamedRangeView(View):
-    """Manage LED naming - create new or edit existing ranges."""
-
-    def get(self) -> str:
-        """Show LED picker for creating or editing a range."""
-
-        global _selected_leds, _editing_range_name
-        range_name = self.request.query_params.get("name")
-
-        # Load existing range if editing, otherwise start fresh
-        if range_name and range_name in lights.settings.get("named_ranges", {}):
-            _editing_range_name = range_name
-            _selected_leds = list(lights.settings["named_ranges"][range_name])
-        else:
-            _selected_leds = []
-            _editing_range_name = None
-
-        if lights.animation.running:
-            lights.animation.pause()
-
-        lights.leds.clear()
-        if _selected_leds:
-            # Expand named: refs for hardware identification
-            resolved = []
-            for item in _selected_leds:
-                try:
-                    targets = lights.get_targets(item)
-                except Exception:
-                    targets = []
-                for t in targets:
-                    if t not in resolved:
-                        resolved.append(t)
-            lights.leds.identify(resolved)
-        lights.leds.show()
-
-        context = _named_range_context()
-        context["page_title"] = "Named Ranges"
-        return render_template("setup/led_picker.html", context)
-
-    def post(self) -> str:
-        """Save or delete a named range."""
-
-        global _selected_leds, _editing_range_name
-        action = self.request.form_data.get("action", "save").strip()
-        old_name = self.request.form_data.get("old_name", "").strip()
-        range_name = self.request.form_data.get("range_name", "").strip()
-        selected_leds_str = self.request.form_data.get("selected_leds", "").strip()
-
-        # Parse tokens which may include ints and named:refs
-        selected_tokens = _parse_selected_tokens(selected_leds_str)
-
-        # Determine if saving new or editing existing
-        if action == "delete" and old_name and old_name in lights.settings.get("named_ranges", {}):
-            del lights.settings["named_ranges"][old_name]
-        elif range_name:
-            # Prepare a candidate mapping and validate for circular refs
-            candidate = dict(lights.settings.get("named_ranges", {}))
-            candidate[range_name] = selected_tokens
-            if _named_ranges_has_cycle(candidate):
-                return Response(status=400, reason="Bad Request", body="Circular named-range reference detected")
-
-            lights.settings["named_ranges"][range_name] = selected_tokens
-            if old_name != range_name and old_name in lights.settings.get("named_ranges", {}):
-                del lights.settings["named_ranges"][old_name]
-                _rename_named_range_refs(old_name, range_name)
-
-        lights.settings_object.store()
-
-        _selected_leds = []
-        _editing_range_name = None
-        lights.animation.resume()
-        lights.leds.clear()
-        lights.leds.show()
-
-        context = _named_range_context()
-        context["page_title"] = "Named Ranges"
-        return render_template("setup/led_picker.html", context)
-
-
-class NamedRangeSetView(View):
-    """Set the current LED selection without returning HTML."""
-
-    def post(self) -> None:
-        """Update _selected_leds from form data and light up hardware. Returns 204 (no content)."""
-
-        global _selected_leds
-        selected_leds_str = self.request.form_data.get("selected_leds", "").strip()
-        # Accept ints and named:refs; keep token list server-side and return
-        # the resolved integer LED indices so the client can update highlights.
-        tokens = _parse_selected_tokens(selected_leds_str)
-        _selected_leds = tokens
-
-        resolved = []
-        for item in tokens:
-            try:
-                targets = lights.get_targets(item)
-            except Exception:
-                targets = []
-            for t in targets:
-                if t not in resolved:
-                    resolved.append(t)
-
-        if resolved:
-            lights.leds.identify(resolved)
-        else:
-            lights.leds.clear()
-            lights.leds.show()
-
-        return Response(body=json.dumps(resolved), content_type="application/json")
 
 
 class StatusView(View):
