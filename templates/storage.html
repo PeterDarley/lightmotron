@@ -5,7 +5,7 @@
         <div class="card-header d-flex align-items-center justify-content-between">
             <span>Raw Storage</span>
             <button class="btn btn-outline-secondary btn-sm"
-                    onclick="navigator.clipboard.writeText(document.getElementById('storage-content').textContent).then(function(){this.textContent='Copied!';var btn=this;setTimeout(function(){btn.textContent='Copy';},2000);}.bind(this))">
+                    onclick="return copyStorageContent(this)">
                 Copy
             </button>
         </div>
@@ -15,4 +15,5 @@
     </div>
     <a href="/" class="btn btn-secondary mt-3">Back to Home</a>
 </div>
+<script src="/scripts/storage.js"></script>
 {% include 'base/base_foot.html' %}
