@@ -9,6 +9,17 @@ Web request handlers are being split by logical feature area rather than by file
 Static assets served by the built-in web server use content-type-based cache policy. JavaScript and CSS responses are sent with `Cache-Control: no-cache, max-age=0, must-revalidate` so browser UI updates are picked up immediately after deployment, while non-code assets keep a longer cache lifetime.
 Static response writes use a send-all loop so larger CSS/JS payloads are not truncated by partial socket writes.
 The named-range LED picker template also appends a version query parameter to `led_picker.js` based on file mtime, ensuring the script URL changes when that file changes.
+
+## Lighting Module Layout
+
+The lighting runtime is split into focused modules under `lib/lighting/` to
+reduce update payloads and improve maintainability:
+
+- `lighting.py`: model/settings orchestration, scene lifecycle, target/color helpers
+- `patterns.py`: pattern implementations (`pattern_*`)
+- `effects.py`: effect resolution and per-tick execution pipeline
+- `filters.py`: filter implementations (`filter_*`) and filter grouping helpers
+- `metadata.py`: `PATTERN_METADATA` and `FILTER_METADATA`
 The storage page copy button uses the Clipboard API when available and falls back to `document.execCommand('copy')` for non-secure/device-browser contexts.
 
 ## Configuration Format
