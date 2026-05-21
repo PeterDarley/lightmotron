@@ -1,47 +1,49 @@
 /* =========================================================
    Event Horizon theme for Lightmotron
-   Dark space palette with blue, green, and purple highlights
+   Ominous deep-space palette with crimson and toxic accents
    ========================================================= */
 
 :root {
-    --eh-bg: #050711;
-    --eh-bg-alt: #0a1020;
-    --eh-panel: #0d1628;
-    --eh-panel-hi: #13213a;
-    --eh-border: #1e3357;
-    --eh-grid: rgba(65, 108, 180, 0.12);
+    --eh-bg: #040306;
+    --eh-bg-alt: #0d0912;
+    --eh-panel: #130d14;
+    --eh-panel-hi: #1d1320;
+    --eh-border: #5a2231;
+    --eh-grid: rgba(120, 36, 54, 0.14);
 
-    --eh-text: #d6e3ff;
-    --eh-muted: #7f98c7;
+    --eh-text: #f0dbe1;
+    --eh-muted: #b58a96;
 
-    --eh-blue: #5aa2ff;
-    --eh-blue-hi: #87beff;
-    --eh-green: #2fd6a6;
-    --eh-green-hi: #79f4cf;
-    --eh-purple: #a47aff;
-    --eh-purple-hi: #c6abff;
+    --eh-blue: #cc4d65;
+    --eh-blue-hi: #ff9fb0;
+    --eh-green: #8abf36;
+    --eh-green-hi: #cdf27d;
+    --eh-purple: #8a3f5f;
+    --eh-purple-hi: #cf82a2;
 
-    --eh-shadow-blue: rgba(90, 162, 255, 0.35);
-    --eh-shadow-green: rgba(47, 214, 166, 0.28);
-    --eh-shadow-purple: rgba(164, 122, 255, 0.3);
+    --eh-shadow-blue: rgba(204, 77, 101, 0.36);
+    --eh-shadow-green: rgba(138, 191, 54, 0.3);
+    --eh-shadow-purple: rgba(138, 63, 95, 0.35);
 }
 
 body {
+    min-height: 100vh;
     background-color: var(--eh-bg);
     color: var(--eh-text);
     background-image:
-        radial-gradient(circle at 10% 15%, rgba(164, 122, 255, 0.12), transparent 28%),
-        radial-gradient(circle at 90% 10%, rgba(47, 214, 166, 0.1), transparent 26%),
-        radial-gradient(circle at 50% 85%, rgba(90, 162, 255, 0.12), transparent 34%),
+        radial-gradient(circle at 12% 14%, rgba(204, 77, 101, 0.18), transparent 28%),
+        radial-gradient(circle at 86% 12%, rgba(138, 191, 54, 0.11), transparent 24%),
+        radial-gradient(circle at 50% 85%, rgba(138, 63, 95, 0.15), transparent 34%),
         linear-gradient(90deg, var(--eh-grid) 1px, transparent 1px),
         linear-gradient(0deg, var(--eh-grid) 1px, transparent 1px);
-    background-size: auto, auto, auto, 36px 36px, 36px 36px;
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat;
+    background-size: 120% 120%, 120% 120%, 120% 120%, 36px 36px, 36px 36px;
 }
 
 .navbar {
-    background: linear-gradient(180deg, #111c31 0%, #0a1222 100%) !important;
+    background: linear-gradient(180deg, #220f1a 0%, #120911 100%) !important;
     border-bottom: 1px solid var(--eh-border);
-    box-shadow: 0 0 18px rgba(0, 0, 0, 0.45), inset 0 -1px 0 rgba(90, 162, 255, 0.2);
+    box-shadow: 0 0 18px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(204, 77, 101, 0.3);
 
     & .navbar-brand {
         color: var(--eh-blue-hi) !important;
@@ -63,10 +65,10 @@ body {
 .card {
     background-color: var(--eh-panel);
     border-color: var(--eh-border);
-    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
 
     & .card-header {
-        background: linear-gradient(180deg, #172742 0%, #111d33 100%);
+        background: linear-gradient(180deg, #2a1620 0%, #1d1219 100%);
         border-bottom-color: var(--eh-border);
         color: var(--eh-blue-hi);
         font-weight: 600;
@@ -101,20 +103,20 @@ body {
         & td { border-color: var(--eh-border); }
     }
 
-    & tbody tr:hover { background-color: rgba(90, 162, 255, 0.08); }
+    & tbody tr:hover { background-color: rgba(204, 77, 101, 0.12); }
 }
 
 .table-striped > tbody > tr:nth-of-type(odd) > * {
-    background-color: rgba(16, 28, 48, 0.8);
+    background-color: rgba(46, 24, 33, 0.72);
     color: var(--eh-text);
 }
 
 .theme-animation-panel {
-    background: linear-gradient(140deg, #142542 0%, #101d34 55%, #0e172a 100%);
-    border-color: #294675;
+    background: linear-gradient(140deg, #2a161f 0%, #20121b 55%, #170d15 100%);
+    border-color: #7f374b;
     box-shadow:
-        inset 0 0 0 1px rgba(90, 162, 255, 0.26),
-        0 0 22px rgba(90, 162, 255, 0.18);
+        inset 0 0 0 1px rgba(204, 77, 101, 0.3),
+        0 0 22px rgba(204, 77, 101, 0.2);
 }
 
 .theme-animation-label,
@@ -137,41 +139,41 @@ body {
 .theme-sounds-section {
     border-left: 3px solid var(--eh-blue);
     padding-left: 0.75rem;
-    background: linear-gradient(90deg, rgba(90, 162, 255, 0.08) 0%, transparent 45%);
+    background: linear-gradient(90deg, rgba(204, 77, 101, 0.14) 0%, transparent 45%);
 }
 
 .theme-immediate-section {
     border-left-color: var(--eh-purple);
-    background: linear-gradient(90deg, rgba(164, 122, 255, 0.1) 0%, transparent 45%);
+    background: linear-gradient(90deg, rgba(138, 63, 95, 0.16) 0%, transparent 45%);
 }
 
 .theme-sounds-section {
     border-left-color: var(--eh-green);
-    background: linear-gradient(90deg, rgba(47, 214, 166, 0.1) 0%, transparent 45%);
+    background: linear-gradient(90deg, rgba(138, 191, 54, 0.12) 0%, transparent 45%);
 }
 
 .theme-ongoing-btn,
 .theme-sound-btn {
     &.btn-primary {
-        background-color: #214a82;
-        border-color: #2f68b8;
-        color: #e6f0ff;
-        box-shadow: 0 0 10px rgba(90, 162, 255, 0.18);
+        background-color: #7a2f42;
+        border-color: #b04a62;
+        color: #ffe8ee;
+        box-shadow: 0 0 10px rgba(204, 77, 101, 0.26);
     }
 
     &.btn-primary:hover {
-        background-color: #2a5b9e;
-        border-color: #3d78c7;
+        background-color: #92384f;
+        border-color: #c75a74;
     }
 
     &.btn-outline-primary {
-        border-color: #3f79c7;
-        color: #90beff;
+        border-color: #b04a62;
+        color: #ff9fb0;
     }
 
     &.btn-outline-primary:hover {
-        background-color: rgba(90, 162, 255, 0.12);
-        color: #d6e8ff;
+        background-color: rgba(204, 77, 101, 0.14);
+        color: #ffd7df;
     }
 }
 
@@ -187,56 +189,56 @@ body {
 
 .theme-start-btn {
     &.btn-success {
-        background-color: #1a6a59;
-        border-color: #23987f;
+        background-color: #4e6c21;
+        border-color: #7fa83a;
         color: var(--eh-green-hi);
-        box-shadow: 0 0 10px rgba(47, 214, 166, 0.22);
+        box-shadow: 0 0 10px rgba(138, 191, 54, 0.28);
     }
 
     &.btn-outline-success {
-        border-color: #2db393;
+        border-color: #7fa83a;
         color: var(--eh-green);
     }
 
     &.btn-outline-success:hover {
-        background-color: rgba(47, 214, 166, 0.14);
+        background-color: rgba(138, 191, 54, 0.14);
         color: var(--eh-green-hi);
     }
 }
 
 .theme-stop-btn {
     &.btn-danger {
-        background-color: #573a86;
-        border-color: #7e57be;
-        color: #efe7ff;
-        box-shadow: 0 0 10px rgba(164, 122, 255, 0.22);
+        background-color: #681e2f;
+        border-color: #9b3049;
+        color: #ffe8ee;
+        box-shadow: 0 0 10px rgba(204, 77, 101, 0.26);
     }
 
     &.btn-outline-danger {
-        border-color: #9369db;
-        color: var(--eh-purple-hi);
+        border-color: #b04a62;
+        color: var(--eh-blue-hi);
     }
 
     &.btn-outline-danger:hover {
-        background-color: rgba(164, 122, 255, 0.14);
-        color: #f2eaff;
+        background-color: rgba(204, 77, 101, 0.14);
+        color: #fff0f4;
     }
 }
 
 .form-control,
 .form-select {
-    background-color: #0c1527;
-    border-color: #26446f;
+    background-color: #170f18;
+    border-color: #6f3142;
     color: var(--eh-text);
 
     &:focus {
-        background-color: #12203a;
+        background-color: #1f131d;
         border-color: var(--eh-blue);
-        color: #f2f7ff;
-        box-shadow: 0 0 0 0.2rem rgba(90, 162, 255, 0.22);
+        color: #fff2f5;
+        box-shadow: 0 0 0 0.2rem rgba(204, 77, 101, 0.24);
     }
 
-    &::placeholder { color: #6d86b6; }
+    &::placeholder { color: #b38591; }
 }
 
 .form-check-input {
@@ -250,69 +252,69 @@ body {
 }
 
 .btn-secondary {
-    background-color: #1b2c4c;
-    border-color: #305484;
-    color: #d9e6ff;
+    background-color: #2a1620;
+    border-color: #6f3142;
+    color: #f2dce2;
 
     &:hover {
-        background-color: #233a62;
-        border-color: #3a6296;
+        background-color: #3a1d2a;
+        border-color: #8a3f57;
     }
 }
 
 .btn-primary {
-    background-color: #2d5ea5;
-    border-color: #3f79c7;
+    background-color: #7a2f42;
+    border-color: #b04a62;
 
     &:hover {
-        background-color: #3870bf;
-        border-color: #4e89d6;
+        background-color: #91384f;
+        border-color: #c75a74;
     }
 }
 
 .alert {
     &.alert-success {
-        background-color: rgba(47, 214, 166, 0.14);
-        border-color: rgba(47, 214, 166, 0.45);
-        color: #bff6e6;
+        background-color: rgba(138, 191, 54, 0.16);
+        border-color: rgba(138, 191, 54, 0.42);
+        color: #ddf8ad;
     }
 
     &.alert-warning {
-        background-color: rgba(164, 122, 255, 0.14);
-        border-color: rgba(164, 122, 255, 0.4);
-        color: #e7d9ff;
+        background-color: rgba(138, 63, 95, 0.18);
+        border-color: rgba(138, 63, 95, 0.45);
+        color: #f0c7dd;
     }
 
     &.alert-danger {
-        background-color: rgba(90, 162, 255, 0.14);
-        border-color: rgba(90, 162, 255, 0.38);
-        color: #d7ebff;
+        background-color: rgba(204, 77, 101, 0.16);
+        border-color: rgba(204, 77, 101, 0.42);
+        color: #ffdce4;
     }
 }
 
 .modal-content {
-    background-color: #0f1a2d;
-    border-color: #2b4873;
+    background-color: #180f19;
+    border-color: #6f3142;
     color: var(--eh-text);
 
-    & .modal-header { border-bottom-color: #2b4873; }
-    & .modal-footer { border-top-color: #2b4873; }
+    & .modal-header { border-bottom-color: #6f3142; }
+    & .modal-footer { border-top-color: #6f3142; }
 }
 
 .list-group-item {
-    background-color: #0f1a2d;
-    border-color: #26446f;
+    background-color: #180f19;
+    border-color: #6f3142;
     color: var(--eh-text);
 
     &:hover {
-        background-color: #15233d;
-        color: #f1f7ff;
+        background-color: #221421;
+        color: #fff1f4;
     }
 
     &.active {
-        background-color: #315f9e;
-        border-color: #3f79c7;
-        color: #f4f8ff;
+        background-color: #8a3f5f;
+        border-color: #b04a62;
+        color: #fff0f4;
     }
 }
 

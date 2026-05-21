@@ -1,5 +1,6 @@
 from webserver import View, render_template, Response
 import json
+import os
 
 _lights = None
 _rename_named_range_refs_func = None
@@ -137,6 +138,17 @@ def _build_named_range_entries(sort_by: str) -> list:
     return range_entries
 
 
+def get_named_range_summary_entries(sort_by: str = "name") -> list:
+    """Return named range summary entries without internal sort metadata."""
+
+    range_entries = _build_named_range_entries(sort_by)
+    for range_entry in range_entries:
+        if "min_led" in range_entry:
+            del range_entry["min_led"]
+
+    return range_entries
+
+
 def _named_range_context(sort_by: str = "name") -> dict:
     """Build template context for the LED picker from current server-side selection state."""
 
@@ -194,7 +206,32 @@ def _named_range_context(sort_by: str = "name") -> dict:
         "selected_subranges": selected_subranges,
         "led_summary": _summarize_led_list_func(resolved),
         "sort_by": sort_by,
+        "led_picker_script_version": _get_led_picker_script_version(),
     }
+
+
+def _get_led_picker_script_version() -> str:
+    """Return a stable cache-busting version for the LED picker script.
+
+    Uses file mtime so the URL query string changes only when the script file
+    actually changes.
+    """
+
+    candidate_paths = (
+        "/www/scripts/led_picker.js",
+        "www/scripts/led_picker.js",
+    )
+
+    for candidate_path in candidate_paths:
+        try:
+            stat = os.stat(candidate_path)
+            if len(stat) > 8:
+                return str(stat[8])
+            return str(stat[6])
+        except OSError:
+            pass
+
+    return "0"
 
 
 class NamedRangeSummaryView(View):
@@ -203,10 +240,7 @@ class NamedRangeSummaryView(View):
     def get(self) -> str:
         """Return named ranges summary HTML fragment."""
 
-        ranges_info = _build_named_range_entries("name")
-        for range_entry in ranges_info:
-            if "min_led" in range_entry:
-                del range_entry["min_led"]
+        ranges_info = get_named_range_summary_entries("name")
 
         return render_template(
             "setup/named_ranges_summary.html",

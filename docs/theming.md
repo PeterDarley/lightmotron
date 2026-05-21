@@ -97,6 +97,7 @@ Themes can also restyle any Bootstrap component globally. Commonly overridden:
 | `.list-group-item` | List items |
 | `.text-muted` | Muted helper text |
 | `.alert-success`, `.alert-danger`, `.alert-warning` | Alert banners |
+| `.status-card`, `.status-table` | Status-page card and table presentation |
 
 > **Note:** Prefer overriding `theme-*` classes rather than Bootstrap classes directly where `theme-*` equivalents exist (e.g. use `.theme-check` instead of `.form-check-input`).
 
@@ -153,13 +154,15 @@ body { background-color: #1a0000; color: #f0c0c0; }
 
 ## Example: Event Horizon theme
 
-The built-in `event_horizon.css` is a dark sci-fi style with blue, green, and purple highlights:
+The built-in `event_horizon.css` is an ominous sci-fi style with deep black-maroon surfaces, crimson highlights, and toxic green accents:
+
+It uses non-repeating atmospheric glow layers over a repeating grid texture, with a minimum page height of one viewport (`min-height: 100vh`).
 
 ```css
 :root {
-    --eh-blue: #5aa2ff;
-    --eh-green: #2fd6a6;
-    --eh-purple: #a47aff;
+    --eh-blue: #cc4d65;
+    --eh-green: #8abf36;
+    --eh-purple: #8a3f5f;
 }
 
 body {
@@ -171,6 +174,6 @@ body {
 .theme-immediate-section { border-left: 3px solid var(--eh-purple); }
 .theme-sounds-section { border-left: 3px solid var(--eh-green); }
 
-.theme-start-btn.btn-success { background-color: #1a6a59; border-color: #23987f; }
-.theme-stop-btn.btn-danger { background-color: #573a86; border-color: #7e57be; }
+.theme-start-btn.btn-success { background-color: #4e6c21; border-color: #7fa83a; }
+.theme-stop-btn.btn-danger { background-color: #681e2f; border-color: #9b3049; }
 ```

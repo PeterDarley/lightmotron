@@ -6,6 +6,9 @@ This document provides detailed technical specifications for patterns and filter
 
 Web request handlers are being split by logical feature area rather than by file length. For example, named-range handlers now live in `web/views_named_ranges.py`, while `web/views.py` remains the compatibility export module used by route registration.
 
+Static assets served by the built-in web server use content-type-based cache policy. JavaScript and CSS responses are sent with `Cache-Control: no-cache, max-age=0, must-revalidate` so browser UI updates are picked up immediately after deployment, while non-code assets keep a longer cache lifetime.
+The named-range LED picker template also appends a version query parameter to `led_picker.js` based on file mtime, ensuring the script URL changes when that file changes.
+
 ## Configuration Format
 
 Lighting is defined by **scenes**, each containing one or more **jobs**. Each job assigns a **pattern** to a set of target LEDs, and optionally a list of **filters** that post-process the result.

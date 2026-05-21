@@ -16,18 +16,21 @@
         selectedLedsInput.value = Array.from(selectedItems).join(',');
     }
 
-    function highlightIndices(resolved) {
-        // Clear all
-        document.querySelectorAll('.led-btn').forEach(btn => {
+    function highlightFromLocalState() {
+        // Derive direct LED indices from selectedItems and highlight immediately.
+        const allBtns = document.querySelectorAll('.led-btn');
+        allBtns.forEach(btn => {
             btn.classList.remove('btn-warning');
             btn.classList.add('btn-outline-secondary');
         });
-        // Mark resolved
-        resolved.forEach(idx => {
-            const btn = document.querySelector('.led-btn[data-led-index="' + idx + '"]');
-            if (btn) {
-                btn.classList.remove('btn-outline-secondary');
-                btn.classList.add('btn-warning');
+        selectedItems.forEach(token => {
+            const idx = parseInt(token);
+            if (!isNaN(idx)) {
+                const btn = document.querySelector('.led-btn[data-led-index="' + idx + '"]');
+                if (btn) {
+                    btn.classList.remove('btn-outline-secondary');
+                    btn.classList.add('btn-warning');
+                }
             }
         });
     }
@@ -36,30 +39,11 @@
         updateSelectedLedsInput();
 
         try {
-            const resp = await fetch('/named_range/set', {
+            await fetch('/named_range/set', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({ selected_leds: selectedLedsInput.value })
             });
-            if (resp.ok) {
-                const data = await resp.json();
-                let directSelected = [];
-                let resolvedSelected = [];
-
-                if (Array.isArray(data)) {
-                    // Backward compatibility with older endpoint response format.
-                    directSelected = data;
-                    resolvedSelected = data;
-                } else if (data && typeof data === 'object') {
-                    directSelected = Array.isArray(data.direct_selected_leds) ? data.direct_selected_leds : [];
-                    resolvedSelected = Array.isArray(data.resolved_leds) ? data.resolved_leds : [];
-                }
-
-                highlightIndices(directSelected);
-            } else {
-                // on error, just clear highlights
-                highlightIndices([]);
-            }
         } catch (e) {
             console.error('named_range sync failed', e);
         }
@@ -71,6 +55,91 @@
             selectedItems.delete(token);
         } else {
             selectedItems.add(token);
+        }
+    }
+
+    function getSortBy() {
+        const ledPicker = document.getElementById('led-picker');
+        if (!ledPicker || !ledPicker.dataset || !ledPicker.dataset.sortBy) {
+            return 'name';
+        }
+
+        return ledPicker.dataset.sortBy;
+    }
+
+    function ensureIncludedSubrangesList() {
+        let list = document.getElementById('included-subranges-list');
+        if (list) {
+            return list;
+        }
+
+        const includeRangeSelect = document.getElementById('named-range-select');
+        if (!includeRangeSelect) {
+            return null;
+        }
+
+        const includeRangeBlock = includeRangeSelect.closest('.mb-3');
+        if (!includeRangeBlock || !includeRangeBlock.parentNode) {
+            return null;
+        }
+
+        const section = document.createElement('div');
+        section.className = 'mb-3';
+        section.id = 'included-subranges-section';
+
+        const label = document.createElement('small');
+        label.className = 'text-muted';
+        label.textContent = 'Included subranges:';
+        section.appendChild(label);
+
+        list = document.createElement('div');
+        list.className = 'd-flex flex-wrap gap-1 mt-1';
+        list.id = 'included-subranges-list';
+        section.appendChild(list);
+
+        includeRangeBlock.parentNode.insertBefore(section, includeRangeBlock);
+        return list;
+    }
+
+    function addSubrangeChip(token) {
+        if (!token || !token.startsWith('named:')) {
+            return;
+        }
+
+        const existingChip = document.querySelector('[data-subrange-chip="' + token + '"]');
+        if (existingChip) {
+            return;
+        }
+
+        const list = ensureIncludedSubrangesList();
+        if (!list) {
+            return;
+        }
+
+        const subrangeName = token.slice(6);
+        if (!subrangeName) {
+            return;
+        }
+
+        const chip = document.createElement('span');
+        chip.className = 'badge bg-secondary';
+        chip.setAttribute('data-subrange-chip', token);
+        chip.appendChild(document.createTextNode(subrangeName + ' '));
+
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'btn btn-outline-light btn-sm ms-2 py-0 px-1';
+        removeButton.setAttribute('data-subrange-token', token);
+        removeButton.setAttribute('hx-post', '/named_range/remove_subrange?token=' + token + '&sort=' + getSortBy());
+        removeButton.setAttribute('hx-target', '#modal-body');
+        removeButton.setAttribute('hx-swap', 'innerHTML');
+        removeButton.setAttribute('aria-label', 'Remove ' + subrangeName);
+        removeButton.textContent = 'x';
+        chip.appendChild(removeButton);
+
+        list.appendChild(chip);
+        if (window.htmx && typeof window.htmx.process === 'function') {
+            window.htmx.process(chip);
         }
     }
 
@@ -94,6 +163,7 @@
             lastClickedIndex = ledIndex;
         }
 
+        highlightFromLocalState();
         syncWithServer('led-button-click');
     });
 
@@ -104,6 +174,7 @@
         if (e.target.closest('#clear-btn')) {
             e.preventDefault();
             selectedItems.clear();
+            highlightFromLocalState();
             syncWithServer('clear');
             return;
         }
@@ -118,7 +189,11 @@
             e.preventDefault();
             const sel = document.getElementById('named-range-select');
             if (sel && sel.value) {
-                selectedItems.add(sel.value);
+                const selectedToken = sel.value;
+                selectedItems.add(selectedToken);
+                addSubrangeChip(selectedToken);
+                sel.value = '';
+                highlightFromLocalState();
                 syncWithServer('subrange-add');
             }
             return;
@@ -140,6 +215,7 @@
         // ignore
     }
 
-    // Kick off initial sync so server-side resolution is applied
+    // Highlight from local state on load, then sync with server for hardware
+    highlightFromLocalState();
     syncWithServer('initial-load');
 })();

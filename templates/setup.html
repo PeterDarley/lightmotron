@@ -2,9 +2,9 @@
 <div class="container mt-4">
     <h1 class="mb-4">Setup</h1>
 
-    <div class="row g-4">
+    <div class="row g-4 dashboard-card-grid">
         <!-- System Settings Card -->
-        <div class="col">
+        <div class="col dashboard-card-col">
             <div class="card setup-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">System Settings</h5>
@@ -37,7 +37,7 @@
         </div>
 
         <!-- Models Card -->
-        <div class="col">
+        <div class="col dashboard-card-col">
             <div class="card setup-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">Models</h5>
@@ -62,7 +62,7 @@
         </div>
 
         <!-- Custom Colors Card -->
-        <div class="col">
+        <div class="col dashboard-card-col">
             <div class="card setup-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">Custom Colors</h5>
@@ -88,14 +88,14 @@
         </div>
 
         <!-- Named Ranges Card -->
-        <div class="col">
+        <div class="col dashboard-card-col">
             <div class="card setup-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">Named Ranges</h5>
                 </div>
                 <div class="card-body d-flex flex-column">
                     <p class="card-text text-muted small">Group LEDs into named ranges for use in animations and scenes.</p>
-                    <div id="named-ranges-summary" hx-get="/named_range/summary" hx-swap="innerHTML">
+                    <div id="named-ranges-summary" class="setup-summary-scroll setup-summary-scroll-ranges" hx-get="/named_range/summary" hx-swap="innerHTML">
                         {% include 'setup/named_ranges_summary.html' %}
                     </div>
                     <div class="mt-auto pt-3">
@@ -114,7 +114,7 @@
         </div>
 
         <!-- Filters Card -->
-        <div class="col">
+        <div class="col dashboard-card-col">
             <div class="card setup-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">Filters</h5>
@@ -140,7 +140,7 @@
         </div>
 
         <!-- Effects Card -->
-        <div class="col">
+        <div class="col dashboard-card-col">
             <div class="card setup-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">Effects</h5>
@@ -166,7 +166,7 @@
         </div>
 
         <!-- Scenes Card -->
-        <div class="col">
+        <div class="col dashboard-card-col">
             <div class="card setup-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">Scenes</h5>
@@ -192,7 +192,7 @@
         </div>
 
         <!-- Sounds Card -->
-        <div class="col">
+        <div class="col dashboard-card-col">
             <div class="card setup-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">Sounds</h5>
@@ -218,7 +218,7 @@
         </div>
 
         <!-- Theme Card -->
-        <div class="col">
+        <div class="col dashboard-card-col">
             <div class="card setup-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">Theme</h5>
@@ -239,7 +239,7 @@
         </div>
 
         <!-- Updates Card -->
-        <div class="col">
+        <div class="col dashboard-card-col">
             <div class="card setup-card h-100">
                 <div class="card-header">
                     <h5 class="card-title">Updates</h5>

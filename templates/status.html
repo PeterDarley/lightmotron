@@ -9,12 +9,12 @@
     </div>
     {% endif %}
 
-    <div class="row g-4">
-        <div class="col">
-            <div class="card h-100">
+    <div class="row g-4 dashboard-card-grid">
+        <div class="col dashboard-card-col">
+            <div class="card setup-card status-card h-100">
                 <div class="card-header">Memory</div>
                 <div class="card-body">
-                    <table class="table table-sm mb-0">
+                    <table class="table table-sm status-table mb-0">
                         <tr><th>Free</th><td>{{ mem_free }}</td></tr>
                         <tr><th>Allocated</th><td>{{ mem_alloc }}</td></tr>
                         <tr><th>Total</th><td>{{ mem_total }}</td></tr>
@@ -24,11 +24,11 @@
             </div>
         </div>
 
-        <div class="col">
-            <div class="card h-100">
+        <div class="col dashboard-card-col">
+            <div class="card setup-card status-card h-100">
                 <div class="card-header">Storage</div>
                 <div class="card-body">
-                    <table class="table table-sm mb-0">
+                    <table class="table table-sm status-table mb-0">
                         <tr><th>Total</th><td>{{ storage_total }}</td></tr>
                         <tr><th>Used</th><td>{{ storage_used }}</td></tr>
                         <tr><th>Free</th><td>{{ storage_free }}</td></tr>
@@ -38,11 +38,11 @@
             </div>
         </div>
 
-        <div class="col">
-            <div class="card h-100">
+        <div class="col dashboard-card-col">
+            <div class="card setup-card status-card h-100">
                 <div class="card-header">System</div>
                 <div class="card-body">
-                    <table class="table table-sm mb-0">
+                    <table class="table table-sm status-table mb-0">
                         <tr><th>CPU Frequency</th><td>{{ cpu_freq_mhz }} MHz</td></tr>
                         <tr><th>MicroPython</th><td>{{ upy_version }}</td></tr>
                         <tr><th>Platform</th><td>{{ platform }}</td></tr>
@@ -51,11 +51,11 @@
             </div>
         </div>
 
-        <div class="col">
-            <div class="card h-100">
+        <div class="col dashboard-card-col">
+            <div class="card setup-card status-card h-100">
                 <div class="card-header">WiFi</div>
                 <div class="card-body">
-                    <table class="table table-sm mb-0">
+                    <table class="table table-sm status-table mb-0">
                         <tr><th>IP Address</th><td>{{ ip_address }}</td></tr>
                         <tr><th>Connected</th><td>{{ wifi_connected }}</td></tr>
                         <tr><th>SSID</th><td>{{ wifi_ssid }}</td></tr>
@@ -64,11 +64,11 @@
             </div>
         </div>
 
-        <div class="col">
-            <div class="card h-100">
+        <div class="col dashboard-card-col">
+            <div class="card setup-card status-card h-100">
                 <div class="card-header">Animation</div>
                 <div class="card-body">
-                    <table class="table table-sm mb-0">
+                    <table class="table table-sm status-table mb-0">
                         <tr><th>Running</th><td>{{ animation_running }}</td></tr>
                         <tr><th>Scene</th><td>{{ current_scene }}</td></tr>
                             <tr><th>Model</th><td>{{ active_model }}</td></tr>
@@ -78,13 +78,13 @@
             </div>
         </div>
 
-        <div class="col">
-            <div class="card h-100">
+        <div class="col dashboard-card-col">
+            <div class="card setup-card status-card h-100">
                 <div class="card-header">Audio Modules</div>
                 <div class="card-body">
                     <p class="small text-muted mb-2">{{ audio_health_summary }}</p>
                     {% if audio_health %}
-                    <table class="table table-sm mb-0">
+                    <table class="table table-sm status-table mb-0">
                         <thead>
                             <tr><th>Module</th><th>UART</th><th>Responsive</th><th>State</th></tr>
                         </thead>
@@ -112,17 +112,16 @@
             </div>
         </div>
 
-        <div class="col">
-            <div class="card h-100">
+        <div class="col dashboard-card-col">
+            <div class="card setup-card status-card h-100">
                 <div class="card-header">Backup &amp; Restore</div>
                 <div class="card-body">
                     <p class="small text-muted mb-2">Download or restore all settings (scenes, effects, filters, colors, ranges).</p>
                     <a href="/backup" class="btn btn-outline-primary btn-sm mb-3">Download Backup</a>
-                    <form hx-post="/restore/confirm" hx-target="#restore-confirm-area" hx-swap="innerHTML" class="mb-2">
+                    <form hx-post="/restore/confirm" hx-target="#restore-confirm-area" hx-swap="innerHTML" class="mb-2" enctype="multipart/form-data">
                         <div class="mb-2">
-                            <label for="backup-json" class="form-label small">Paste backup JSON to restore:</label>
-                            <textarea class="form-control form-control-sm" id="backup-json" name="backup_json"
-                                      rows="3" placeholder='{"lighting_settings": {...}}'></textarea>
+                            <label for="backup-file" class="form-label small">Select backup JSON file to restore:</label>
+                            <input class="form-control form-control-sm" type="file" id="backup-file" name="backup_file" accept=".json,application/json" required>
                         </div>
                         <button type="submit" class="btn btn-outline-danger btn-sm">Review Restore</button>
                     </form>

@@ -75,11 +75,13 @@ Once the device is running and connected to WiFi, open your browser and navigate
 
 ### Home Page
 Control animation playback and trigger scenes. Start/stop lighting animations, switch between configured scenes, and play sounds from the audio modules.
+The Immediate scenes section is only shown when at least one scene is configured as immediate.
 
 ![Home page](docs/screenshots/home.png)
 
 ### Setup Page
 Configure all lighting settings and system configuration in one place. Each section opens a dialog to manage that category.
+Cards use a consistent responsive grid layout (up to four cards per row on wide screens), and the Named Ranges summary area scrolls to prevent that card from growing excessively tall.
 
 ![Setup page](docs/screenshots/setup.png)
 
@@ -97,6 +99,9 @@ Define and name your own colors to reuse across effects and scenes.
 
 #### Named Ranges
 Group LED indices and give them meaningful names (e.g. "Nacelle", "Hull"). Use the LED picker to visually select individual LEDs, or include another named range to build composite groups. Range buttons show the resolved LED summary, and included subranges are listed separately in the editor where they can be removed.
+In the LED picker, button highlights show only LEDs directly selected in the current range; LEDs inherited through included subranges are not highlighted as direct selections.
+When you add an included subrange from the dropdown, the editor updates immediately by clearing the selector and adding the subrange chip without waiting for a full modal refresh.
+The Setup page Named Ranges summary uses the same compact format on initial load and after modal-driven refreshes.
 
 ![Named Ranges](docs/screenshots/setup-ranges.png)
 ![Edit a range](docs/screenshots/setup-ranges-edit.png)
@@ -141,6 +146,8 @@ You can optionally remove local files that were deleted upstream when applying u
 
 ### Status Page
 Monitor system health and performance. View memory usage, storage space, WiFi connection, and animation state. Download/restore all configuration as JSON.
+Status cards use the same responsive card grid as Setup (up to four cards per row on wide screens), and status tables are rendered with theme-friendly styling so they blend with the active CSS theme.
+Restore now uses a `.json` file upload flow (select file -> review -> confirm) instead of pasting raw JSON into a textarea.
 
 ![Status page](docs/screenshots/status.png)
 

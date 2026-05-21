@@ -1,5 +1,5 @@
 <div id="led-picker-container">
-<div id="led-picker">
+<div id="led-picker" data-sort-by="{{ sort_by }}">
     {% if range_name %}
         <form hx-post="/named_range" hx-target="#modal-body" hx-swap="innerHTML" id="range-form" class="mb-3">
             <input type="hidden" name="old_name" value="{{ range_name }}">
@@ -138,6 +138,6 @@
 
     {% endif %}
 
-    <script src="/scripts/led_picker.js"></script>
+    <script src="/scripts/led_picker.js?v={{ led_picker_script_version }}"></script>
 </div>
 </div>

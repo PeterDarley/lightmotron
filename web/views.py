@@ -432,12 +432,8 @@ class SetupView(View):
 
         # Include all summary card data so the browser receives everything in one
         # request rather than firing 5+ lazy HTMX loads after page paint.
-        named_ranges: dict = lights.settings.get("named_ranges", {})
-        context["named_ranges"] = [
-            {"name": name, "summary": views_named_ranges.summarize_named_range_members(named_ranges[name])}
-            for name in sorted(named_ranges.keys())
-        ]
-        context["named_range_names"] = sorted(named_ranges.keys())
+        context["named_ranges"] = views_named_ranges.get_named_range_summary_entries("name")
+        context["named_range_names"] = [range_entry["name"] for range_entry in context["named_ranges"]]
 
         custom_colors_dict: dict = lights.settings.get("custom_colors", {})
         context["custom_colors"] = sorted(
@@ -699,9 +695,28 @@ class RestoreConfirmView(View):
     """Return a small confirmation fragment for restoring settings."""
 
     def post(self) -> str:
-        backup_json = self.request.form_data.get("backup_json", "")
+        backup_json = ""
+
+        backup_file = self.request.files.get("backup_file", {})
+        if backup_file and isinstance(backup_file, dict):
+            try:
+                backup_json = backup_file.get("data", b"").decode("utf-8").strip()
+            except Exception:
+                backup_json = ""
+
         if not backup_json:
-            return '<div class="alert alert-warning small py-2 mb-2">No backup JSON provided.</div>'
+            backup_json = self.request.form_data.get("backup_json", "").strip()
+
+        if not backup_json:
+            return '<div class="alert alert-warning small py-2 mb-2">No backup JSON file selected.</div>'
+
+        try:
+            parsed_json = json.loads(backup_json)
+        except (ValueError, TypeError):
+            return '<div class="alert alert-danger small py-2 mb-2">Selected file does not contain valid JSON.</div>'
+
+        if not isinstance(parsed_json, dict):
+            return '<div class="alert alert-danger small py-2 mb-2">Backup JSON must contain a top-level object.</div>'
 
         return render_template("setup/restore_confirm.html", {"backup_json": backup_json})
 
