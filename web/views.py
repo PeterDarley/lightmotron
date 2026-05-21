@@ -1644,11 +1644,32 @@ def _effects_list(effects_dict: dict) -> list:
     return result
 
 
-def _filters_list(filters_dict: dict) -> list:
-    """Build a list of filter summary dicts for template rendering, sorted alphabetically."""
+def _filters_list(filters_dict: dict, filter_order: list = None) -> list:
+    """Build filter summary dicts for template rendering.
+
+    If ``filter_order`` is provided, listed names are emitted first (in that
+    order) followed by any remaining filters sorted alphabetically.
+    """
 
     result: list = []
+    seen: set = set()
+
+    if filter_order:
+        for filter_name in filter_order:
+            if filter_name in filters_dict and filter_name not in seen:
+                filter_def = filters_dict[filter_name]
+                result.append(
+                    {
+                        "name": filter_name,
+                        "filter_type": filter_def.get("filter", ""),
+                    }
+                )
+                seen.add(filter_name)
+
     for filter_name in sorted(filters_dict.keys()):
+        if filter_name in seen:
+            continue
+
         filter_def = filters_dict[filter_name]
         result.append(
             {
@@ -1753,23 +1774,26 @@ def _pattern_params_context(pattern: str, existing_effect: dict = None, show_tar
         "color_select_url": "/scenes/color_select" if show_target else "/effects/color_select",
     }
 
-    # Build available named filters list with selection state
-    stored_filters: dict = lights.settings.get("filters", {})
-    selected_filters: list = existing_effect.get("filters", []) if existing_effect else []
-    available_filters: list = []
-    for filter_name in sorted(stored_filters.keys()):
-        filter_data: dict = stored_filters[filter_name]
-        available_filters.append(
-            {
-                "name": filter_name,
-                "filter_type": filter_data.get("filter", "?"),
-                "selected": filter_name in selected_filters,
-            }
-        )
+    # Build available named filters list with selection state.
+    # These checkbox controls are used in scene editing only. Effect editing
+    # has a dedicated ordered filter manager and should not emit checkbox fields.
+    if show_target:
+        stored_filters: dict = lights.settings.get("filters", {})
+        selected_filters: list = existing_effect.get("filters", []) if existing_effect else []
+        available_filters: list = []
+        for filter_name in sorted(stored_filters.keys()):
+            filter_data: dict = stored_filters[filter_name]
+            available_filters.append(
+                {
+                    "name": filter_name,
+                    "filter_type": filter_data.get("filter", "?"),
+                    "selected": filter_name in selected_filters,
+                }
+            )
 
-    if available_filters:
-        context["available_filters"] = available_filters
-        context["has_available_filters"] = True
+        if available_filters:
+            context["available_filters"] = available_filters
+            context["has_available_filters"] = True
 
     # Add pre-fill values for optional numeric/boolean params as param_val_<name>
     if existing_effect:
@@ -1923,9 +1947,11 @@ def _effect_edit_context(effect_name: str = None) -> dict:
     """
 
     effects_dict: dict = lights.settings.get("effects", {})
+    filters_dict: dict = lights.settings.get("filters", {})
     context: dict = {
         "effects": _effects_list(effects_dict),
         "pattern_metadata": lights.get_pattern_metadata(),
+        "all_filters": _filters_list(filters_dict),
         "page_title": "Effects",
     }
 
@@ -1936,6 +1962,21 @@ def _effect_edit_context(effect_name: str = None) -> dict:
         context["edit_effect_pattern"] = pattern
         context["edit_effect_cycles"] = str(effect_dict["cycles"]) if "cycles" in effect_dict else ""
         context["old_effect_name"] = effect_name
+
+        # Keep storage/execution order in effect_filter_names and expose a
+        # reversed list for UI display so the top-most filter executes last.
+        effect_filters: list = effect_dict.get("filters", [])
+        effect_filters_display: list = list(reversed(effect_filters))
+        context["effect_filters"] = [
+            {
+                "name": fname,
+                "filter_type": filters_dict.get(fname, {}).get("filter", ""),
+            }
+            for fname in effect_filters_display
+            if fname in filters_dict
+        ]
+        context["effect_filter_names"] = effect_filters
+
         if pattern and pattern in lights.get_pattern_metadata():
             context.update(_pattern_params_context(pattern, effect_dict, show_target=False))
 
@@ -2014,12 +2055,63 @@ class EffectEditView(View):
         if "effects" not in lights.settings:
             lights.settings["effects"] = {}
 
+        # Handle effect filter manager actions.
+        if action in ["add_effect_filter", "remove_effect_filter", "move_effect_filter_up", "move_effect_filter_down"]:
+            if not effect_name or effect_name not in lights.settings.get("effects", {}):
+                return '<p class="text-danger small">Effect not found.</p>'
+
+            effect_dict: dict = lights.settings["effects"][effect_name]
+            if "filters" not in effect_dict:
+                effect_dict["filters"] = []
+
+            filter_name: str = self.request.form_data.get("filter_name", "").strip()
+
+            if action == "add_effect_filter" and filter_name:
+                if filter_name not in effect_dict["filters"]:
+                    effect_dict["filters"].append(filter_name)
+                    lights.settings_object.store()
+
+            elif action == "remove_effect_filter" and filter_name:
+                if filter_name in effect_dict["filters"]:
+                    effect_dict["filters"].remove(filter_name)
+                    lights.settings_object.store()
+
+            elif action == "move_effect_filter_up" and filter_name:
+                if filter_name in effect_dict["filters"]:
+                    idx = effect_dict["filters"].index(filter_name)
+                    if idx > 0:
+                        effect_dict["filters"][idx - 1], effect_dict["filters"][idx] = (
+                            effect_dict["filters"][idx],
+                            effect_dict["filters"][idx - 1],
+                        )
+                        lights.settings_object.store()
+
+            elif action == "move_effect_filter_down" and filter_name:
+                if filter_name in effect_dict["filters"]:
+                    idx = effect_dict["filters"].index(filter_name)
+                    if idx < len(effect_dict["filters"]) - 1:
+                        effect_dict["filters"][idx], effect_dict["filters"][idx + 1] = (
+                            effect_dict["filters"][idx + 1],
+                            effect_dict["filters"][idx],
+                        )
+                        lights.settings_object.store()
+
+            # Return just the manager fragment for htmx replacement.
+            return render_template("setup/effect_filters_manager.html", _effect_edit_context(effect_name))
+
         if action == "update_effect" and effect_name and pattern:
             old_effect_name: str = self.request.form_data.get("old_effect_name", "").strip()
 
             # Build effect dict without target (target lives in scenes)
             effect_dict: dict = _parse_effect_from_form(self.request.form_data, pattern)
             effect_dict.pop("target", None)
+
+            # Preserve ordered managed filters from the existing effect. Filter
+            # order is edited via the dedicated manager, not the pattern params form.
+            source_name: str = old_effect_name or effect_name
+            existing_effect: dict = lights.settings.get("effects", {}).get(source_name, {})
+            if "filters" in existing_effect:
+                effect_dict["filters"] = list(existing_effect.get("filters", []))
 
             # If renaming, delete the old entry first
             if old_effect_name and old_effect_name != effect_name and old_effect_name in lights.settings["effects"]:
@@ -2055,9 +2147,10 @@ def _filter_edit_context(filter_name: str = None) -> dict:
     """Build template context for the filter editor."""
 
     filters_dict: dict = lights.settings.get("filters", {})
+    filter_order: list = lights.settings.get("filter_order", [])
     filter_metadata: dict = lights.get_filter_metadata()
     context: dict = {
-        "filters": _filters_list(filters_dict),
+        "filters": _filters_list(filters_dict, filter_order),
         "filter_metadata": filter_metadata,
         "page_title": "Filters",
     }
@@ -2090,7 +2183,7 @@ class FiltersView(View):
         return render_template("setup/filters.html", context)
 
     def post(self) -> str:
-        """Create or delete a filter."""
+        """Create or delete filters."""
 
         action: str = self.request.form_data.get("action", "").strip()
         filter_name: str = self.request.form_data.get("filter_name", "").strip()
@@ -2106,6 +2199,8 @@ class FiltersView(View):
 
         elif action == "delete_filter" and filter_name and filter_name in lights.settings["filters"]:
             del lights.settings["filters"][filter_name]
+            # Remove from any effects that reference this filter
+            _rename_filter_refs(filter_name, None)
             lights.settings_object.store()
 
         context: dict = {

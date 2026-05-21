@@ -1,0 +1,71 @@
+{% if effect_filters %}
+<table class="table table-sm table-hover align-middle mb-2">
+    <thead>
+        <tr>
+            <th style="width: 60%;">Filter</th>
+            <th style="width: 40%;"></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for filter in effect_filters %}
+        <tr>
+            <td>
+                <strong>{{ filter.name }}</strong>
+                <span class="text-muted small">({{ filter.filter_type }})</span>
+            </td>
+            <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-secondary me-1"
+                        hx-post="/effects/edit"
+                        hx-target="#effect-filters-manager"
+                        hx-swap="innerHTML"
+                        hx-vals='{"effect_name": "{{ edit_effect_name }}", "action": "move_effect_filter_down", "filter_name": "{{ filter.name }}"}'
+                        title="Move up"
+                        {% if loop.first %}disabled{% endif %}>
+                    ↑
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary me-1"
+                        hx-post="/effects/edit"
+                        hx-target="#effect-filters-manager"
+                        hx-swap="innerHTML"
+                        hx-vals='{"effect_name": "{{ edit_effect_name }}", "action": "move_effect_filter_up", "filter_name": "{{ filter.name }}"}'
+                        title="Move down"
+                        {% if loop.last %}disabled{% endif %}>
+                    ↓
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        hx-post="/effects/edit"
+                        hx-target="#effect-filters-manager"
+                        hx-swap="innerHTML"
+                        hx-vals='{"effect_name": "{{ edit_effect_name }}", "action": "remove_effect_filter", "filter_name": "{{ filter.name }}"}'
+                        title="Remove">
+                    ×
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="text-muted small">No filters applied.</p>
+{% endif %}
+
+<small class="text-muted d-block mb-2">Top-to-bottom display is reverse execution order (top runs last).</small>
+
+{% if all_filters %}
+<form hx-post="/effects/edit"
+      hx-target="#effect-filters-manager"
+      hx-swap="innerHTML"
+      class="d-flex gap-2">
+    <input type="hidden" name="action" value="add_effect_filter">
+    <input type="hidden" name="effect_name" value="{{ edit_effect_name }}">
+    <select class="form-select form-select-sm" name="filter_name" style="max-width: 250px;" required>
+        <option value="">Add filter...</option>
+        {% for filter in all_filters %}
+            {% if filter.name not in effect_filter_names %}
+            <option value="{{ filter.name }}">{{ filter.name }} ({{ filter.filter_type }})</option>
+            {% endif %}
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-sm btn-outline-primary">Add</button>
+</form>
+{% endif %}

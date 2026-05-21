@@ -1,9 +1,39 @@
 {% if named_ranges %}
 <div class="d-flex flex-wrap gap-1 mb-0">
     {% for r in named_ranges %}
-    <span class="badge bg-secondary">{{ r.name }} <span class="text-muted fw-normal">{{ r.summary }}</span></span>
+    <span class="badge contrast-text-range" data-name="{{ r.name }}">{{ r.name }} <span class="text-muted fw-normal">{{ r.summary }}</span></span>
     {% endfor %}
 </div>
+<script>
+    // Generate deterministic colors and set text contrast for each range
+    function hashCode(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            hash = hash & hash;
+        }
+        return Math.abs(hash);
+    }
+
+    document.querySelectorAll('.contrast-text-range').forEach(element => {
+        const name = element.dataset.name;
+        const hash = hashCode(name);
+        
+        // Generate RGB from hash
+        const r = (hash & 0xFF0000) >> 16;
+        const g = (hash & 0x00FF00) >> 8;
+        const b = (hash & 0x0000FF);
+        
+        // Set background color
+        element.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+        
+        // Calculate relative luminance using WCAG formula
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        
+        // Use white text for dark backgrounds, black for light backgrounds
+        element.style.color = luminance > 0.5 ? '#000' : '#fff';
+    });
+</script>
 {% else %}
 <small class="text-muted">No ranges defined yet.</small>
 {% endif %}

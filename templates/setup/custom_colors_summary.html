@@ -1,9 +1,23 @@
 {% if custom_colors %}
 <div class="d-flex flex-wrap gap-1 mb-0">
     {% for color_name, color_value in custom_colors %}
-    <span class="badge rounded-pill" style="background-color: rgb({{ color_value.0 }}, {{ color_value.1 }}, {{ color_value.2 }}); color: white;">{{ color_name }}</span>
+    <span class="badge rounded-pill contrast-text" data-r="{{ color_value.0 }}" data-g="{{ color_value.1 }}" data-b="{{ color_value.2 }}" style="background-color: rgb({{ color_value.0 }}, {{ color_value.1 }}, {{ color_value.2 }});">{{ color_name }}</span>
     {% endfor %}
 </div>
+<script>
+    // Set text color based on background luminance
+    document.querySelectorAll('.contrast-text').forEach(element => {
+        const r = parseInt(element.dataset.r);
+        const g = parseInt(element.dataset.g);
+        const b = parseInt(element.dataset.b);
+        
+        // Calculate relative luminance using WCAG formula
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        
+        // Use white text for dark backgrounds, black for light backgrounds
+        element.style.color = luminance > 0.5 ? '#000' : '#fff';
+    });
+</script>
 {% else %}
 <small class="text-muted">No custom colors yet.</small>
 {% endif %}

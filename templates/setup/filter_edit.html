@@ -61,8 +61,8 @@
                             <input type="number" class="form-control" name="filter_param_heat"
                                    id="filter_param_heat"
                                    value="{{ filter_val_heat }}"
-                                   placeholder="10" min="1" max="50" step="1" style="width: 100px;">
-                            <small class="text-muted">Step size per tick (1&ndash;50).</small>
+                                   placeholder="10" min="0" step="1" style="width: 100px;">
+                            <small class="text-muted" id="filter_param_heat_hint">Step size per tick (sizzle/scintillate) or &plusmn; random ticks added to spike duration.</small>
                         </div>
                         <div class="col-auto filter-param" data-param="brightness">
                             <label class="form-label" for="filter_param_brightness">Brightness</label>
@@ -71,6 +71,79 @@
                                    value="{{ filter_val_brightness }}"
                                    placeholder="1.0" min="0" max="8" step="0.01" style="width: 100px;">
                             <small class="text-muted">Multiplier (for example, 0.50 = half, 2.00 = double).</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="color">
+                            <label class="form-label" for="filter_param_color">Color</label>
+                            <input type="text" class="form-control" name="filter_param_color"
+                                   id="filter_param_color"
+                                   value="{{ filter_val_color }}"
+                                   placeholder="white" style="width: 150px;">
+                            <small class="text-muted">Spike color name or custom:name.</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="duration">
+                            <label class="form-label mb-1">Duration</label>
+                            <div class="d-flex align-items-center gap-2 mb-2" style="max-width: 360px;">
+                                <span class="small text-muted" style="white-space: nowrap;">1 tick</span>
+                                <div style="flex: 1; min-width: 120px;">
+                                 <input type="range" class="form-range w-100" id="filter_duration_slider"
+                                     min="1" max="2400" step="1"
+                                     oninput="filterTickSliderChanged('duration', this.value)">
+                                </div>
+                                <span class="small text-muted">1 min</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="number" class="form-control form-control-sm" id="filter_duration_min"
+                                    min="0" step="1" style="width: 75px;"
+                                    oninput="filterTickPartsChanged('duration')">
+                                <span class="small text-muted">min</span>
+                                <input type="number" class="form-control form-control-sm" id="filter_duration_sec"
+                                    min="0" max="59" step="1" style="width: 75px;"
+                                    oninput="filterTickPartsChanged('duration')">
+                                <span class="small text-muted">sec</span>
+                                <input type="number" class="form-control form-control-sm" id="filter_duration_ticks_part"
+                                    min="0" max="39" step="1" style="width: 75px;"
+                                    oninput="filterTickPartsChanged('duration')">
+                                <span class="small text-muted">ticks</span>
+                                <input type="hidden" name="filter_param_duration" id="filter_param_duration" value="{{ filter_val_duration }}">
+                            </div>
+                            <small class="text-muted">Spike length. 40 ticks = 1 second.</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="period">
+                            <label class="form-label mb-1">Period</label>
+                            <div class="d-flex align-items-center gap-2 mb-2" style="max-width: 360px;">
+                                <span class="small text-muted" style="white-space: nowrap;">1 tick</span>
+                                <div style="flex: 1; min-width: 120px;">
+                                 <input type="range" class="form-range w-100" id="filter_period_slider"
+                                     min="1" max="2400" step="1"
+                                     oninput="filterTickSliderChanged('period', this.value)">
+                                </div>
+                                <span class="small text-muted">1 min</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="number" class="form-control form-control-sm" id="filter_period_min"
+                                    min="0" step="1" style="width: 75px;"
+                                    oninput="filterTickPartsChanged('period')">
+                                <span class="small text-muted">min</span>
+                                <input type="number" class="form-control form-control-sm" id="filter_period_sec"
+                                    min="0" max="59" step="1" style="width: 75px;"
+                                    oninput="filterTickPartsChanged('period')">
+                                <span class="small text-muted">sec</span>
+                                <input type="number" class="form-control form-control-sm" id="filter_period_ticks_part"
+                                    min="0" max="39" step="1" style="width: 75px;"
+                                    oninput="filterTickPartsChanged('period')">
+                                <span class="small text-muted">ticks</span>
+                                <input type="hidden" name="filter_param_period" id="filter_param_period" value="{{ filter_val_period }}">
+                            </div>
+                            <small class="text-muted">Ticks between spikes. 40 ticks = 1 second.</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="scope">
+                            <label class="form-label" for="filter_param_scope">Scope</label>
+                            <select class="form-select" name="filter_param_scope" id="filter_param_scope" style="width: 150px;">
+                                <option value="all"{% if filter_val_scope == 'all' or not filter_val_scope %} selected{% endif %}>All (as one)</option>
+                                <option value="subranges"{% if filter_val_scope == 'subranges' %} selected{% endif %}>Subranges</option>
+                                <option value="leds"{% if filter_val_scope == 'leds' %} selected{% endif %}>Each LED</option>
+                            </select>
+                            <small class="text-muted">What fires independently.</small>
                         </div>
                     </div>
                 </div>
@@ -110,7 +183,9 @@ function toggleFilterEditParams() {
     var optionalParamsByType = {
         sizzle: ['frequency', 'variation', 'heat'],
         scintillate: ['frequency', 'variation', 'heat'],
-        brightness: ['brightness']
+        brightness: ['brightness'],
+        spike: ['color', 'duration', 'period', 'variation', 'heat', 'scope'],
+        dropout: ['duration', 'period', 'variation', 'heat', 'scope']
     };
 
     if (select.value && select.value !== 'null') {
@@ -130,5 +205,69 @@ function toggleFilterEditParams() {
     }
 }
 
+function filterClampTickValue(value) {
+    var parsed = parseInt(value, 10);
+    if (isNaN(parsed) || parsed < 1) {
+        return 1;
+    }
+
+    return parsed;
+}
+
+function filterTicksToDisplay(value) {
+    var ticks = filterClampTickValue(value);
+    return {
+        min: Math.floor(ticks / 2400),
+        sec: Math.floor((ticks % 2400) / 40),
+        ticks: ticks % 40
+    };
+}
+
+function filterDisplayToTicks(min, sec, ticks) {
+    var minVal = parseInt(min, 10) || 0;
+    var secVal = parseInt(sec, 10) || 0;
+    var tickVal = parseInt(ticks, 10) || 0;
+    return Math.max(1, (minVal * 2400) + (secVal * 40) + tickVal);
+}
+
+function filterUpdateTickControl(prefix, value) {
+    var ticks = filterClampTickValue(value);
+    var display = filterTicksToDisplay(ticks);
+
+    document.getElementById('filter_' + prefix + '_min').value = display.min;
+    document.getElementById('filter_' + prefix + '_sec').value = display.sec;
+    document.getElementById('filter_' + prefix + '_ticks_part').value = display.ticks;
+    document.getElementById('filter_param_' + prefix).value = ticks;
+    document.getElementById('filter_' + prefix + '_slider').value = Math.min(2400, ticks);
+}
+
+function filterTickSliderChanged(prefix, value) {
+    filterUpdateTickControl(prefix, value);
+}
+
+function filterTickPartsChanged(prefix) {
+    var ticks = filterDisplayToTicks(
+        document.getElementById('filter_' + prefix + '_min').value,
+        document.getElementById('filter_' + prefix + '_sec').value,
+        document.getElementById('filter_' + prefix + '_ticks_part').value
+    );
+    filterUpdateTickControl(prefix, ticks);
+}
+
+function initializeFilterTickControls() {
+    var durationHidden = document.getElementById('filter_param_duration');
+    if (durationHidden) {
+        var durationValue = durationHidden.value || '5';
+        filterUpdateTickControl('duration', durationValue);
+    }
+
+    var periodHidden = document.getElementById('filter_param_period');
+    if (periodHidden) {
+        var periodValue = periodHidden.value || '40';
+        filterUpdateTickControl('period', periodValue);
+    }
+}
+
 toggleFilterEditParams();
+initializeFilterTickControls();
 </script>

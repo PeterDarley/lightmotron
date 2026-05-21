@@ -261,6 +261,8 @@ Two waves start at opposite ends of the target range and converge on a randomly 
 
 Filters are applied after the pattern has computed its LED list for the tick. Multiple filters can be chained in the `filters` list.
 
+In the effect editor UI, the displayed filter list is intentionally reversed relative to execution order: the top filter runs last.
+
 ```python
 "filters": [
     {"filter": "scintillate", "frequency": 20, "heat": 5}
@@ -302,3 +304,41 @@ Multiplies each target RGB channel by a constant factor. Each resulting channel 
 | Parameter | Default | Description |
 |---|---|---|
 | `brightness` | 1.0 | Constant multiplier per channel (`0.5` = half brightness, `2.0` = double brightness) |
+
+---
+
+### `spike`
+Periodically overrides LEDs with a spike color.
+
+Each spike lasts `duration` ± `heat` ticks. After a spike ends, the next spike
+is scheduled `period` ± `variation` ticks later. This keeps spikes separated by
+the configured period window instead of clustering when spikes are long.
+
+In the Setup UI filter editor, `duration` and `period` are entered with
+minutes/seconds/ticks controls and stored as total ticks.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `color` | `white` | Spike color (name or RGB tuple) |
+| `duration` | 5 | Spike length in ticks |
+| `period` | 40 | Delay before next spike (after previous spike ends) |
+| `variation` | 0 | Random ± tick offset applied to each period |
+| `heat` | 0 | Random ± tick offset applied to each spike duration |
+| `scope` | `all` | Grouping mode: `all`, `subranges`, or `leds` |
+
+---
+
+### `dropout`
+Identical to `spike` but the override color is always black `(0, 0, 0)`.
+
+For `scope='subranges'`, if the target is an aggregate named range (a named
+range whose value is a list of component targets), each component is treated as
+its own group. This avoids accidental merging of adjacent component LEDs.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `duration` | 5 | Dropout length in ticks |
+| `period` | 40 | Delay before next dropout (after previous dropout ends) |
+| `variation` | 0 | Random ± tick offset applied to each period |
+| `heat` | 0 | Random ± tick offset applied to each dropout duration |
+| `scope` | `all` | Grouping mode: `all`, `subranges`, or `leds` |
