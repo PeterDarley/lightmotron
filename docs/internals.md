@@ -9,6 +9,8 @@ Web request handlers are being split by logical feature area rather than by file
 Static assets served by the built-in web server use content-type-based cache policy. JavaScript and CSS responses are sent with `Cache-Control: no-cache, max-age=0, must-revalidate` so browser UI updates are picked up immediately after deployment, while non-code assets keep a longer cache lifetime.
 Static response writes use a send-all loop so larger CSS/JS payloads are not truncated by partial socket writes.
 The named-range LED picker template also appends a version query parameter to `led_picker.js` based on file mtime, ensuring the script URL changes when that file changes.
+Home scene actions (`/set_scene`) return a server-rendered `scenes/scene_panel.html` fragment and swap `#scene_panel` so active-scene labels and ongoing/immediate button states always reflect server truth, including scene kills triggered by `scene_settings.kills`.
+The Home "Active Scenes" label/list intentionally shows only ongoing scenes; immediate scenes are trigger actions and are not displayed there.
 
 ## Lighting Module Layout
 
@@ -36,6 +38,8 @@ Filters are applied sequentially: each filter receives the output of the
 previous filter. On scene restart (`set_scene`), transient filter runtime
 state is cleared so timing-based filters (for example `dropout`/`spike`)
 start from a clean phase.
+Timing-based filters are evaluated using effect-local ticks (relative to each
+effect's own start tick), not the global animation tick.
 
 Scene auto-completion only applies when every effect in the scene has an
 explicit `cycles` limit and all such effects have finished. If a scene
@@ -313,8 +317,8 @@ Computes a single random deviation from the first LED's current position toward 
 | Parameter | Default | Description |
 |---|---|---|
 | `frequency` | 40 | Updates per second |
-| `variation` | 50 | Bias strength toward target (lower = stronger pull) |
-| `heat` | 10 | Maximum step size per channel per update |
+| `variation_percent` | 20 | Maximum random channel deviation as a percentage of each channel's current target value |
+| `heat` | 10 | Reserved for compatibility (not currently used by sizzle/scintillate math) |
 
 ---
 
@@ -324,8 +328,12 @@ Like `sizzle` but each LED is adjusted independently, creating a sparkling/twink
 | Parameter | Default | Description |
 |---|---|---|
 | `frequency` | 40 | Updates per second |
-| `variation` | 50 | Bias strength toward target per LED |
-| `heat` | 10 | Maximum step size per channel per update |
+| `variation_percent` | 20 | Maximum random channel deviation as a percentage of each channel's current target value |
+| `heat` | 10 | Reserved for compatibility (not currently used by sizzle/scintillate math) |
+
+When editing legacy `sizzle` or `scintillate` filters that still store
+`variation` as 0..255 levels, the UI converts it to percentage using
+`variation / 255 * 100`. Saving stores only `variation_percent`.
 
 ---
 
@@ -344,6 +352,8 @@ Periodically overrides LEDs with a spike color.
 Each spike lasts `duration` ± `heat` ticks. After a spike ends, the next spike
 is scheduled `period` ± `variation` ticks later. This keeps spikes separated by
 the configured period window instead of clustering when spikes are long.
+The first spike after an effect starts is scheduled from effect start using
+`period` (plus any subrange phase offset), without initial `variation` jitter.
 
 In the Setup UI filter editor, `duration` and `period` are entered with
 minutes/seconds/ticks controls and stored as total ticks.
@@ -365,6 +375,11 @@ Identical to `spike` but the override color is always black `(0, 0, 0)`.
 For `scope='subranges'`, if the target is an aggregate named range (a named
 range whose value is a list of component targets), each component is treated as
 its own group. This avoids accidental merging of adjacent component LEDs.
+Like `spike`, the first dropout after effect start uses `period` from the
+effect start time and does not apply initial `variation` jitter.
+Runtime scheduling state for `spike`/`dropout` is scoped per effect instance,
+so reusing the same named filter in different effects does not carry timing
+state across those effect boundaries.
 
 | Parameter | Default | Description |
 |---|---|---|

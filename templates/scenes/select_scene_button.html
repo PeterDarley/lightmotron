@@ -2,7 +2,7 @@
         data-scene="{{ scene }}"
         hx-post="/set_scene"
         hx-vals='{% if scene in active_scenes %}{"scene": "{{ scene }}", "action": "remove"}{% else %}{"scene": "{{ scene }}", "action": "add"}{% endif %}'
-        hx-swap="none"
-        hx-on:htmx:after-request="toggleActiveScene('{{ scene }}', this)">
+    hx-target="#scene_panel"
+    hx-swap="outerHTML">
     {{ scene }}
 </button>

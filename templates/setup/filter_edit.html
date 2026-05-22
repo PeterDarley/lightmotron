@@ -48,13 +48,21 @@
                                    placeholder="40" min="1" max="40" step="1" style="width: 100px;">
                             <small class="text-muted">Updates per second (1&ndash;40).</small>
                         </div>
+                        <div class="col-auto filter-param" data-param="variation_percent">
+                            <label class="form-label" for="filter_param_variation_percent">Variation (%)</label>
+                            <input type="number" class="form-control" name="filter_param_variation_percent"
+                                   id="filter_param_variation_percent"
+                                   value="{{ filter_val_variation_percent }}"
+                                   placeholder="20" min="0" max="100" step="0.1" style="width: 120px;">
+                            <small class="text-muted">Maximum RGB channel deviation as a percentage of 255.</small>
+                        </div>
                         <div class="col-auto filter-param" data-param="variation">
                             <label class="form-label" for="filter_param_variation">Variation</label>
                             <input type="number" class="form-control" name="filter_param_variation"
                                    id="filter_param_variation"
                                    value="{{ filter_val_variation }}"
-                                   placeholder="50" min="0" max="255" step="1" style="width: 100px;">
-                            <small class="text-muted">Color variation range (0&ndash;255).</small>
+                                   placeholder="0" min="0" step="1" style="width: 100px;">
+                            <small class="text-muted">Random &plusmn; tick offset applied to each period.</small>
                         </div>
                         <div class="col-auto filter-param" data-param="heat">
                             <label class="form-label" for="filter_param_heat">Heat</label>
@@ -181,8 +189,8 @@ function toggleFilterEditParams() {
     var paramsDiv = document.getElementById('filter-edit-params');
     var paramElements = document.querySelectorAll('.filter-param');
     var optionalParamsByType = {
-        sizzle: ['frequency', 'variation', 'heat'],
-        scintillate: ['frequency', 'variation', 'heat'],
+        sizzle: ['frequency', 'variation_percent', 'heat'],
+        scintillate: ['frequency', 'variation_percent', 'heat'],
         brightness: ['brightness'],
         spike: ['color', 'duration', 'period', 'variation', 'heat', 'scope'],
         dropout: ['duration', 'period', 'variation', 'heat', 'scope']

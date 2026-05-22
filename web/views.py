@@ -247,7 +247,9 @@ def _scenes_context() -> dict:
     scene_names = sorted(lights.settings["scenes"].keys())
     ongoing_scenes = [name for name in scene_names if lights.is_scene_ongoing(name)]
     immediate_scenes = [name for name in scene_names if not lights.is_scene_ongoing(name)]
-    active_scenes = list(lights._active_scenes)
+    # Home panel only treats ongoing scenes as "active". Immediate scenes are
+    # one-shot triggers and are not shown in the active-scenes label/list.
+    active_scenes = [name for name in lights._active_scenes if name in ongoing_scenes]
 
     # Ensure label construction is robust: convert non-string entries to
     # strings so join() does not raise if a malformed value appears.
@@ -385,7 +387,7 @@ class SetSceneView(View):
             }
             lights.set_scene(scene_name, **extra_kwargs)
 
-        return None
+        return render_template("scenes/scene_panel.html", _scenes_context())
 
 
 class AnimationView(View):
@@ -2183,6 +2185,28 @@ def _filter_edit_context(filter_name: str = None) -> dict:
         context["edit_filter_name"] = filter_name
         context["edit_filter_type"] = filter_type
         context["old_filter_name"] = filter_name
+
+        if filter_type in ("sizzle", "scintillate"):
+            variation_percent: float | None = None
+
+            if "variation_percent" in filter_def:
+                try:
+                    variation_percent = float(filter_def.get("variation_percent", 20.0))
+                except (TypeError, ValueError):
+                    variation_percent = 20.0
+            elif "variation" in filter_def:
+                try:
+                    legacy_variation = float(filter_def.get("variation", 0))
+                except (TypeError, ValueError):
+                    legacy_variation = 0.0
+                variation_percent = (legacy_variation / 255.0) * 100.0
+
+            if variation_percent is None:
+                variation_percent = 20.0
+
+            variation_percent = max(0.0, min(100.0, variation_percent))
+            context["filter_val_variation_percent"] = str(round(variation_percent, 2))
+
         # Pre-fill optional params
         if filter_type in filter_metadata:
             for param_name in filter_metadata[filter_type].get("optional", []):
@@ -2267,6 +2291,20 @@ class FilterEditView(View):
                         filter_def[param_name] = float(param_value) if "." in param_value else int(param_value)
                     except ValueError:
                         filter_def[param_name] = param_value
+
+            if filter_type in ("sizzle", "scintillate"):
+                variation_percent_value: str = self.request.form_data.get("filter_param_variation_percent", "").strip()
+                if variation_percent_value:
+                    try:
+                        variation_percent = float(variation_percent_value)
+                    except ValueError:
+                        variation_percent = 20.0
+                else:
+                    variation_percent = 20.0
+
+                variation_percent = max(0.0, min(100.0, variation_percent))
+                filter_def["variation_percent"] = round(variation_percent, 2)
+                filter_def.pop("variation", None)
 
             if old_filter_name and old_filter_name != filter_name and old_filter_name in lights.settings["filters"]:
                 del lights.settings["filters"][old_filter_name]

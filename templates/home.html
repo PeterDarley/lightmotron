@@ -9,13 +9,7 @@
             </div>
             </div>
         </section>
-        <section class="theme-home-section theme-active-scene-panel">
-            <div class="theme-active-scene-label text-muted small mb-1">Active Scenes</div>
-            <div class="theme-scene-name" id="active-scene-name">{{ active_scenes_label }}</div>
-        </section>
-        <section class="theme-home-section theme-scenes-panel">
-            {% include 'scenes/buttons.html' %}
-        </section>
+        {% include 'scenes/scene_panel.html' %}
         <section class="theme-home-section theme-sounds-panel">
             {% include 'sounds/buttons.html' %}
         </section>
