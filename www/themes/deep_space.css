@@ -2,6 +2,16 @@
    Deep Space theme for Lightmotron
    ========================================================= */
 
+:root {
+    --effect-optional-bg: #10183d;
+    --effect-optional-border: #33488a;
+    --effect-slider-track: #4f6fbc;
+    --effect-slider-track-focus: #7ca3ff;
+    --effect-slider-thumb: #8ab7ff;
+    --effect-slider-thumb-border: #2f4b8a;
+    --effect-slider-thumb-ring: rgba(138, 183, 255, 0.32);
+}
+
 body {
     background-color: #050510;
     color: #c8d8f8;

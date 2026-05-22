@@ -20,6 +20,14 @@
     --sw-green:       #00cc88;
     --sw-red:         #cc2244;
     --sw-yellow:      #ccaa00;
+
+    --effect-optional-bg: #0f2230;
+    --effect-optional-border: #008aaa;
+    --effect-slider-track: #3c8da4;
+    --effect-slider-track-focus: #68cce8;
+    --effect-slider-thumb: #00ccee;
+    --effect-slider-thumb-border: #006688;
+    --effect-slider-thumb-ring: rgba(0, 204, 238, 0.34);
 }
 
 /* ---- Base ---- */

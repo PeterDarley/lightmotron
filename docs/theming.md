@@ -59,6 +59,15 @@ appearance; your theme only needs to override what it changes.
 | `theme-check` | Checkbox `<input>` | Bootstrap `form-check-input` also applied |
 | `theme-check-label` | Checkbox `<label>` | Bootstrap `form-check-label` also applied |
 
+### Effect editor controls
+
+| Class | Element | Notes |
+|---|---|---|
+| `effect-optional-card` | Optional setting panel inside effect editor | Applied to each parameter block in `pattern_params.html` |
+| `effect-param-slider` | Range input inside effect editor optional cards | Used by duration/frequency/period sliders |
+
+Themes can override `--effect-slider-track`, `--effect-slider-track-focus`, and `--effect-slider-thumb` on `.effect-param-slider` to fine-tune slider contrast.
+
 ### Button state notes
 
 Bootstrap state classes are added/removed dynamically by HTMX and `home.js`:

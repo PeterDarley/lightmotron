@@ -49,6 +49,14 @@
     --lcars-c18: #FF9966;  /* peach */
     --lcars-c19: #CC99CC;  /* mauve-pink */
     --lcars-c20: #CC88AA;  /* dusty pink */
+
+    --effect-optional-bg: #1b1b1b;
+    --effect-optional-border: #ff9966;
+    --effect-slider-track: #cc99ff;
+    --effect-slider-track-focus: #ffcc99;
+    --effect-slider-thumb: #ff7700;
+    --effect-slider-thumb-border: #7a3a00;
+    --effect-slider-thumb-ring: rgba(255, 119, 0, 0.36);
 }
 
 /* ---- Base ---- */

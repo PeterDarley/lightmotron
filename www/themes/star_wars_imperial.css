@@ -25,6 +25,14 @@
     --imp-readout:     #e8e8e8;
     --imp-green:       #229944;
     --imp-yellow:      #aa8800;
+
+    --effect-optional-bg: #191313;
+    --effect-optional-border: #6a1818;
+    --effect-slider-track: #7f3a3a;
+    --effect-slider-track-focus: #c25a5a;
+    --effect-slider-thumb: #ee2233;
+    --effect-slider-thumb-border: #5a1212;
+    --effect-slider-thumb-ring: rgba(238, 34, 51, 0.34);
 }
 
 /* ---- Base ---- */

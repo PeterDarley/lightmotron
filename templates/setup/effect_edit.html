@@ -28,6 +28,7 @@
                     hx-post="/effects/edit"
                     hx-target="#pattern-params-area"
                     hx-swap="innerHTML"
+                    hx-vals='{"action": ""}'
                     required style="max-width: 300px;">
                 <option value="">Select a pattern...</option>
                 {% for pattern_name, metadata in pattern_metadata.items() %}

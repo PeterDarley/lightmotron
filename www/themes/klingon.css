@@ -19,6 +19,14 @@
     --kli-muted:       #8b6938;
     --kli-green:       #4a9030;
     --kli-gold:        #c8a030;
+
+    --effect-optional-bg: #22140b;
+    --effect-optional-border: #8a4c1a;
+    --effect-slider-track: #9f6933;
+    --effect-slider-track-focus: #c88f4f;
+    --effect-slider-thumb: #d48828;
+    --effect-slider-thumb-border: #6b3410;
+    --effect-slider-thumb-ring: rgba(212, 136, 40, 0.34);
 }
 
 /* ---- Base ---- */

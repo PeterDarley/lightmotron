@@ -63,7 +63,7 @@
                     </select>
 
                     <!-- Color display: shows pill or picker (no form inputs) -->
-                    <div id="color-display-{{ i }}" class="d-flex align-items-center">
+                      <div id="color-display-{{ i }}" class="d-flex align-items-center">
                         {% if color_is_named.i %}
                         <span class="badge rounded-pill"
                               style="background-color: {{ color_hex.i }}; min-width: 60px; height: 30px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">{{ color_display_names.i }}</span>
@@ -88,12 +88,12 @@
             <label class="form-label fw-semibold">Additional Settings</label>
             {% for param in pattern_info.optional %}
             {% if param == "duration" %}
-            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+            <div class="rounded border p-3 mb-2 effect-optional-card">
                 <label class="form-label mb-1">Duration</label>
                 <div class="d-flex align-items-center gap-2 mb-2" style="max-width: 480px;">
                     <span class="small text-muted" style="white-space:nowrap">1 tick</span>
                     <div style="flex: 1; min-width: 120px;">
-                        <input type="range" class="form-range w-100" id="duration_slider"
+                           <input type="range" class="form-range w-100 effect-param-slider" id="duration_slider"
                                min="1" max="2400" step="1"
                                oninput="tickSliderChanged('duration', this.value)">
                     </div>
@@ -118,13 +118,13 @@
             </div>
             {% endif %}
             {% if param == "frequency" %}
-            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+            <div class="rounded border p-3 mb-2 effect-optional-card">
                 <label class="form-label mb-1">Frequency</label>
 
                 <div class="d-flex align-items-center gap-2 mb-2" style="max-width: 480px;">
                     <span class="small text-muted" style="white-space:nowrap">0.1 Hz</span>
                     <div style="flex: 1; min-width: 120px;">
-                        <input type="range" class="form-range w-100" id="frequency_slider"
+                           <input type="range" class="form-range w-100 effect-param-slider" id="frequency_slider"
                                min="0.1" max="10" step="0.1"
                                oninput="frequencySliderChanged(this.value)">
                     </div>
@@ -177,12 +177,12 @@
             </div>
             {% endif %}
             {% if param == "period" %}
-            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+            <div class="rounded border p-3 mb-2 effect-optional-card">
                 <label class="form-label mb-1">Period</label>
                 <div class="d-flex align-items-center gap-2 mb-2" style="max-width: 480px;">
                     <span class="small text-muted" style="white-space:nowrap">1 tick</span>
                     <div style="flex: 1; min-width: 120px;">
-                        <input type="range" class="form-range w-100" id="period_slider"
+                           <input type="range" class="form-range w-100 effect-param-slider" id="period_slider"
                                min="1" max="2400" step="1"
                                oninput="tickSliderChanged('period', this.value)">
                     </div>
@@ -207,7 +207,7 @@
             </div>
             {% endif %}
             {% if param == "width" %}
-            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+            <div class="rounded border p-3 mb-2 effect-optional-card">
                 <label class="form-label mb-1" for="param_width">Wave Width</label>
                 <input type="number" class="form-control" name="param_width" id="param_width"
                        value="{{ param_val_width }}"
@@ -216,7 +216,7 @@
             </div>
             {% endif %}
             {% if param == "number" %}
-            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+            <div class="rounded border p-3 mb-2 effect-optional-card">
                 <label class="form-label mb-1" for="param_number">Number of Waves</label>
                 <input type="number" class="form-control" name="param_number" id="param_number"
                        value="{{ param_val_number }}"
@@ -225,7 +225,7 @@
             </div>
             {% endif %}
             {% if param == "variation" %}
-            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+            <div class="rounded border p-3 mb-2 effect-optional-card">
                 <label class="form-label mb-1" for="param_variation">Variation</label>
                 <input type="number" class="form-control" name="param_variation" id="param_variation"
                        value="{{ param_val_variation }}"
@@ -234,7 +234,7 @@
             </div>
             {% endif %}
             {% if param == "heat" %}
-            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+            <div class="rounded border p-3 mb-2 effect-optional-card">
                 <label class="form-label mb-1" for="param_heat">Heat</label>
                 <input type="number" class="form-control" name="param_heat" id="param_heat"
                        value="{{ param_val_heat }}"
@@ -243,7 +243,7 @@
             </div>
             {% endif %}
             {% if param == "reverse" %}
-            <div class="rounded border p-3 mb-2" style="background-color: #f8f9fa;">
+            <div class="rounded border p-3 mb-2 effect-optional-card">
                 <div class="form-check">
                     <input type="checkbox" class="form-check-input theme-check" name="param_reverse"
                            id="param_reverse" value="true"

@@ -100,6 +100,58 @@
     &::-moz-range-track { background: #dee2e6; border-radius: 4px; height: 6px; }
 }
 
+/* Effect editor optional settings blocks and sliders */
+:root {
+    --effect-optional-bg: rgba(255, 255, 255, 0.05);
+    --effect-optional-border: rgba(255, 255, 255, 0.18);
+    --effect-slider-track: rgba(255, 255, 255, 0.38);
+    --effect-slider-track-focus: rgba(255, 255, 255, 0.55);
+    --effect-slider-thumb: var(--bs-primary);
+    --effect-slider-thumb-border: rgba(0, 0, 0, 0.35);
+    --effect-slider-thumb-ring: rgba(255, 255, 255, 0.2);
+}
+
+.effect-optional-card {
+    background: var(--effect-optional-bg);
+    border-color: var(--effect-optional-border);
+}
+
+.effect-param-slider {
+    accent-color: var(--effect-slider-thumb);
+
+    height: 1.1rem;
+
+    &::-webkit-slider-runnable-track {
+        background: var(--effect-slider-track);
+        border-radius: 999px;
+        height: 0.42rem;
+    }
+
+    &::-moz-range-track {
+        background: var(--effect-slider-track);
+        border-radius: 999px;
+        height: 0.42rem;
+    }
+
+    &::-webkit-slider-thumb {
+        background: var(--effect-slider-thumb);
+        border: 2px solid var(--effect-slider-thumb-border);
+        border-radius: 999px;
+        box-shadow: 0 0 0 2px var(--effect-slider-thumb-ring);
+        margin-top: -0.31rem;
+    }
+
+    &::-moz-range-thumb {
+        background: var(--effect-slider-thumb);
+        border: 2px solid var(--effect-slider-thumb-border);
+        border-radius: 999px;
+        box-shadow: 0 0 0 2px var(--effect-slider-thumb-ring);
+    }
+
+    &:focus::-webkit-slider-runnable-track { background: var(--effect-slider-track-focus); }
+    &:focus::-moz-range-track { background: var(--effect-slider-track-focus); }
+}
+
 /* Home page */
 .theme-page {}
 .theme-home-stack {

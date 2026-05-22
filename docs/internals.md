@@ -26,10 +26,23 @@ The storage page copy button uses the Clipboard API when available and falls bac
 
 Lighting is defined by **scenes**, each containing one or more **jobs**. Each job assigns a **pattern** to a set of target LEDs, and optionally a list of **filters** that post-process the result.
 
+When a scene entry is renamed in the Setup UI, other entries in the same
+scene that reference it via `after` are automatically updated to the new
+entry name.
+When a scene entry is deleted in the Setup UI, any same-scene `after`
+references pointing to that entry are automatically cleared.
+
 Filters are applied sequentially: each filter receives the output of the
 previous filter. On scene restart (`set_scene`), transient filter runtime
 state is cleared so timing-based filters (for example `dropout`/`spike`)
 start from a clean phase.
+
+Scene auto-completion only applies when every effect in the scene has an
+explicit `cycles` limit and all such effects have finished. If a scene
+contains any effect without `cycles` (infinite repeat), that scene is treated
+as ongoing and is not auto-removed.
+The home page scene grouping uses this same rule: scenes with at least one
+infinite effect are shown as ongoing.
 
 ```python
 "scenes": {

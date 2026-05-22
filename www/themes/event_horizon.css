@@ -24,6 +24,14 @@
     --eh-shadow-blue: rgba(204, 77, 101, 0.36);
     --eh-shadow-green: rgba(138, 191, 54, 0.3);
     --eh-shadow-purple: rgba(138, 63, 95, 0.35);
+
+    --effect-optional-bg: #1a1220;
+    --effect-optional-border: #6e3447;
+    --effect-slider-track: #865468;
+    --effect-slider-track-focus: #c57f98;
+    --effect-slider-thumb: #ff9fb0;
+    --effect-slider-thumb-border: #6e3447;
+    --effect-slider-thumb-ring: rgba(255, 159, 176, 0.36);
 }
 
 body {

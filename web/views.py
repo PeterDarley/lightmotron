@@ -187,6 +187,28 @@ def _rename_scene_refs(old_name: str, new_name: str) -> None:
                     kills[i] = new_name
 
 
+def _rename_scene_entry_after_refs(scene_dict: dict, old_entry_name: str, new_entry_name: str) -> None:
+    """Update ``after`` fields within a scene when an entry is renamed."""
+
+    for entry in scene_dict.values():
+        if not isinstance(entry, dict):
+            continue
+
+        if entry.get("after") == old_entry_name:
+            entry["after"] = new_entry_name
+
+
+def _clear_scene_entry_after_refs(scene_dict: dict, removed_entry_name: str) -> None:
+    """Remove dangling ``after`` references to a deleted scene entry."""
+
+    for entry in scene_dict.values():
+        if not isinstance(entry, dict):
+            continue
+
+        if entry.get("after") == removed_entry_name:
+            del entry["after"]
+
+
 def _rename_color_refs(old_name: str, new_name: str) -> None:
     """Update all effect color lists that reference a custom color by its old name."""
 
@@ -2371,6 +2393,11 @@ class SceneEditView(View):
                     and old_entry_name != entry_name
                     and old_entry_name in lights.settings["scenes"][scene_name]
                 ):
+                    _rename_scene_entry_after_refs(
+                        lights.settings["scenes"][scene_name],
+                        old_entry_name,
+                        entry_name,
+                    )
                     del lights.settings["scenes"][scene_name][old_entry_name]
 
                 entry_dict: dict = {
@@ -2398,6 +2425,7 @@ class SceneEditView(View):
 
             elif action == "delete_entry" and entry_name:
                 if entry_name in lights.settings["scenes"][scene_name]:
+                    _clear_scene_entry_after_refs(lights.settings["scenes"][scene_name], entry_name)
                     del lights.settings["scenes"][scene_name][entry_name]
                     lights.settings_object.store()
 

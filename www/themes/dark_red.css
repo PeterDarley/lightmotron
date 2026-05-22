@@ -2,6 +2,16 @@
    Dark Red theme for Lightmotron
    ========================================================= */
 
+:root {
+    --effect-optional-bg: #2a0e10;
+    --effect-optional-border: #7a2c33;
+    --effect-slider-track: #83454d;
+    --effect-slider-track-focus: #b86470;
+    --effect-slider-thumb: #ff6f7c;
+    --effect-slider-thumb-border: #6a1f2a;
+    --effect-slider-thumb-ring: rgba(255, 111, 124, 0.34);
+}
+
 body {
     background-color: #1a0000;
     color: #f0c0c0;
