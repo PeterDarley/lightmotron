@@ -9,7 +9,11 @@ Web request handlers are being split by logical feature area rather than by file
 Static assets served by the built-in web server use content-type-based cache policy. JavaScript and CSS responses are sent with `Cache-Control: no-cache, max-age=0, must-revalidate` so browser UI updates are picked up immediately after deployment, while non-code assets keep a longer cache lifetime.
 Static response writes use a send-all loop so larger CSS/JS payloads are not truncated by partial socket writes.
 The named-range LED picker template also appends a version query parameter to `led_picker.js` based on file mtime, ensuring the script URL changes when that file changes.
+Web server startup now handles transient socket creation `OSError 23` (ENFILE) by retrying briefly and then exiting cleanly (without uncaught thread traceback) if descriptors are still exhausted after retries.
+Audio startup can send a UART soft-reset command (DFPlayer/YX5200 command `0x0C`) to each configured module during boot to recover players that occasionally fail after ESP32 reset. This is controlled by `system_settings.audio_reset_on_boot` (default true).
 Home scene actions (`/set_scene`) return a server-rendered `scenes/scene_panel.html` fragment and swap `#scene_panel` so active-scene labels and ongoing/immediate button states always reflect server truth, including scene kills triggered by `scene_settings.kills`.
+Scene trigger sound playback (`scene_settings.sound`) is handled by the lighting runtime (`Lighting.set_scene` / `Lighting.add_scene`), not by web views, so sounds also play for non-UI scene activations.
+Home sound controls only include sounds where `show_on_home` is true and use HTMX polling (`every 5s`) against `/sounds/status` to keep each button in sync with hardware playback state (Play vs Stop) when tracks finish naturally.
 The Home "Active Scenes" label/list intentionally shows only ongoing scenes; immediate scenes are trigger actions and are not displayed there.
 
 ## Lighting Module Layout

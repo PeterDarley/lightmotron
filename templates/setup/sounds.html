@@ -19,6 +19,7 @@
                         <th class="form-label-sm">File #</th>
                         <th class="form-label-sm">Duration (min:sec.ticks)</th>
                         <th class="form-label-sm">HQ</th>
+                        <th class="form-label-sm">Home</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -52,6 +53,10 @@
                             <input class="form-check-input" type="checkbox" name="sound_high_quality"
                                    value="1" {% if sound.high_quality %}checked{% endif %}>
                         </td>
+                        <td class="text-center align-middle">
+                            <input class="form-check-input" type="checkbox" name="sound_show_on_home"
+                                   value="1" {% if sound.show_on_home %}checked{% endif %}>
+                        </td>
                         <td>
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                     onclick="this.closest('tr').remove()">✕</button>
@@ -61,7 +66,7 @@
                 </tbody>
             </table>
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addSoundRow()">+ Add Sound</button>
-            <div class="form-text">Enter title, file number (0001-9999 on SD card), duration, and mark as high quality if applicable.</div>
+            <div class="form-text">Enter title, file number (0001-9999 on SD card), duration, and choose whether each sound should appear on the home page.</div>
         </div>
 
         <button type="submit" class="btn btn-primary btn-sm">Save Sounds</button>
@@ -89,6 +94,9 @@ function addSoundRow() {
         '</td>' +
         '<td class="text-center align-middle">' +
         '<input class="form-check-input" type="checkbox" name="sound_high_quality" value="1">' +
+        '</td>' +
+        '<td class="text-center align-middle">' +
+        '<input class="form-check-input" type="checkbox" name="sound_show_on_home" value="1" checked>' +
         '</td>' +
         '<td>' +
         '<button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()">✕</button>' +

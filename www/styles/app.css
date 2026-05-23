@@ -16,6 +16,29 @@
     & .card-body { padding: 1.25rem; }
 }
 
+/* Setup page responsive card grid (Bootstrap-independent fallback) */
+.setup-card-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+    .setup-card-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1200px) {
+    .setup-card-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+.setup-card-grid > .dashboard-card-col {
+    min-width: 0;
+}
+
 /* Setup/Status dashboard card layout */
 .dashboard-card-grid {
     display: grid;
@@ -79,6 +102,22 @@
 
     & td {
         word-break: break-word;
+    }
+}
+
+/* Setup sounds modal table integration */
+#sounds-form {
+    & #sounds-table {
+        --bs-table-bg: transparent;
+        --bs-table-striped-bg: transparent;
+        --bs-table-active-bg: transparent;
+        --bs-table-hover-bg: transparent;
+        color: inherit;
+
+        & > :not(caption) > * > * {
+            background-color: transparent;
+            color: inherit;
+        }
     }
 }
 

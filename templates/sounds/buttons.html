@@ -1,10 +1,35 @@
-<div id="sound_buttons" class="theme-scene-buttons theme-sound-buttons">
+<div id="sound_buttons"
+    class="theme-scene-buttons theme-sound-buttons"
+    hx-get="/sounds/status"
+    hx-trigger="every 5s"
+    hx-swap="outerHTML">
     {% if sounds %}
     <section class="theme-home-subsection theme-sounds-section">
-        <h6 class="theme-section-heading theme-home-subsection-heading">Sounds</h6>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <h6 class="theme-section-heading theme-home-subsection-heading mb-0">Sounds</h6>
+            <form hx-post="/sounds/stop-all"
+                  hx-target="#sound_buttons"
+                  hx-swap="outerHTML">
+                <button type="submit" class="btn btn-sm btn-outline-danger theme-stop-all-btn">
+                    &#9632; Stop All
+                </button>
+            </form>
+        </div>
         <div class="theme-section-actions d-flex flex-wrap gap-2">
             {% for sound in sounds %}
             <div id="sound-{{ sound.file }}-result">
+                {% if sound.is_playing %}
+                <form hx-post="/sounds/stop"
+                      hx-target="#sound-{{ sound.file }}-result"
+                      hx-swap="innerHTML">
+                    <input type="hidden" name="module_idx" value="{{ sound.module_idx }}">
+                    <input type="hidden" name="title" value="{{ sound.title }}">
+                    <input type="hidden" name="file" value="{{ sound.file }}">
+                    <button type="submit" class="btn btn-sm btn-danger theme-sound-stop-btn">
+                        &#9632; {{ sound.title }}
+                    </button>
+                </form>
+                {% else %}
                 <form hx-post="/sounds/play"
                       hx-target="#sound-{{ sound.file }}-result"
                       hx-swap="innerHTML">
@@ -13,6 +38,7 @@
                         {{ sound.title }}
                     </button>
                 </form>
+                {% endif %}
             </div>
             {% endfor %}
         </div>

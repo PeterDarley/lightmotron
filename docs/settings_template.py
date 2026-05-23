@@ -109,7 +109,11 @@ optional; hardcoded defaults in settings.py are used when a key is absent.
                 "high_quality": false       # whether to prefer this module for HQ sounds
             }
             # ... up to 3 total entries
-        ]
+        ],
+
+        # If true, send DFPlayer/YX5200 soft-reset over UART at boot.
+        # Helps recover modules that occasionally fail to initialise after ESP32 reboot.
+        "audio_reset_on_boot": true
     },
 
     # Sounds configuration.
@@ -118,12 +122,14 @@ optional; hardcoded defaults in settings.py are used when a key is absent.
         "alert": {
             "file":          1,      # file number (0001.mp3, 0002.mp3, etc)
             "duration_ms":  5400,    # duration in milliseconds
-            "high_quality": false    # whether to play on high-quality modules if available
+            "high_quality": false,   # whether to play on high-quality modules if available
+            "show_on_home": true     # whether to show this sound button on the Home page
         },
         "fanfare": {
             "file":          2,
             "duration_ms":  12000,
-            "high_quality": true
+            "high_quality": true,
+            "show_on_home": true
         }
         # ... more sounds
     }

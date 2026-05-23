@@ -355,7 +355,7 @@ class HomeView(View):
         context = {"message": "Lighting", "page_title": "Home"}
         context.update(_scenes_context())
         context.update(_animation_context())
-        context.update(_sounds_context())
+        context.update(_sounds_context(include_playing=True, home_only=True))
 
         # Get current master volume from persistent storage
         storage: PersistentDict = PersistentDict()
@@ -431,32 +431,6 @@ class SetSceneView(View):
                 key: value for key, value in self.request.form_data.items() if key not in ("scene", "action")
             }
             lights.set_scene(scene_name, **extra_kwargs)
-
-            # Play associated sound if configured
-            try:
-                scene_meta: dict = lights.settings.get("scene_settings", {}).get(scene_name, {})
-                sound_name: str = scene_meta.get("sound", "").strip()
-                if sound_name:
-                    # Get sounds from persistent storage
-                    storage: PersistentDict = PersistentDict()
-                    lighting_root = storage.get("lighting_settings", {})
-                    sounds: dict = {}
-                    if isinstance(lighting_root, dict) and "models" in lighting_root:
-                        current = lighting_root.get("current_model")
-                        models = lighting_root.get("models", {})
-                        if current and current in models and isinstance(models[current], dict):
-                            sounds = models[current].get("sounds", {})
-                    if not sounds:
-                        sounds = storage.get("sounds", {})
-
-                    if sound_name in sounds:
-                        sound_config = sounds[sound_name]
-                        from audio import AudioPlayer
-
-                        player = AudioPlayer()
-                        player.play_file(sound_config.get("file", 0), sound_config.get("high_quality", False))
-            except Exception as e:
-                print(f"SetSceneView: failed to play scene sound: {e}")
 
         return render_template("scenes/scene_panel.html", _scenes_context())
 
@@ -2614,25 +2588,48 @@ class ColorSelectView(View):
         return render_template("setup/color_select.html", context)
 
 
-def _sounds_list(sounds_dict: dict) -> list:
+def _sounds_list(sounds_dict: dict, playing_by_title: dict | None = None) -> list:
     """Build a list of sound summary dicts for template rendering, sorted alphabetically."""
 
     result: list = []
+    active_by_title: dict = playing_by_title or {}
     for sound_title in sorted(sounds_dict.keys()):
         sound = sounds_dict[sound_title]
+        module_idx = active_by_title.get(sound_title)
         result.append(
             {
                 "title": sound_title,
                 "file": sound.get("file", 0),
                 "duration_ms": sound.get("duration_ms", 0),
                 "high_quality": bool(sound.get("high_quality", False)),
+                "show_on_home": bool(sound.get("show_on_home", True)),
+                "is_playing": module_idx is not None,
+                "module_idx": module_idx if module_idx is not None else -1,
             }
         )
 
     return result
 
 
-def _sounds_context() -> dict:
+def _playing_sounds_by_title() -> dict:
+    """Return a mapping of currently playing sound title to module index."""
+
+    result: dict = {}
+    try:
+        from sounds import SoundManager
+
+        manager: SoundManager = SoundManager()
+        playing_state: dict = manager.get_playing_sounds()
+        for module_idx, title in playing_state.items():
+            if title:
+                result[str(title)] = int(module_idx)
+    except Exception:
+        return {}
+
+    return result
+
+
+def _sounds_context(include_playing: bool = False, home_only: bool = False) -> dict:
     """Build template context from sounds in persistent storage."""
     storage: PersistentDict = PersistentDict()
     # Prefer per-model sounds when available
@@ -2646,9 +2643,16 @@ def _sounds_context() -> dict:
     if not sounds:
         sounds = storage.get("sounds", {})
 
-    return {
-        "sounds": _sounds_list(sounds),
+    if home_only:
+        sounds = {title: sound for title, sound in sounds.items() if bool(sound.get("show_on_home", True))}
+
+    playing_by_title: dict = _playing_sounds_by_title() if include_playing else {}
+
+    context: dict = {
+        "sounds": _sounds_list(sounds, playing_by_title=playing_by_title),
     }
+
+    return context
 
 
 class SoundsSummaryView(View):
@@ -2672,7 +2676,8 @@ class SoundsView(View):
         """Validate and save all sound definitions.
 
         Accepts arrays of sound_title[], sound_file[], sound_duration_minutes[],
-        sound_duration_seconds[], sound_duration_ticks[], and sound_high_quality[].
+        sound_duration_seconds[], sound_duration_ticks[], sound_high_quality[],
+        and sound_show_on_home[].
         """
 
         fd = self.request.form_data
@@ -2688,12 +2693,21 @@ class SoundsView(View):
         durations_sec = _as_list(fd.get("sound_duration_seconds"), "0")
         durations_ticks = _as_list(fd.get("sound_duration_ticks"), "0")
         hq_flags = _as_list(fd.get("sound_high_quality"), "")
+        show_on_home_flags = _as_list(fd.get("sound_show_on_home"), "")
 
         sounds: dict = {}
         error: str = ""
 
         for i in range(
-            max(len(titles), len(files), len(durations_min), len(durations_sec), len(durations_ticks), len(hq_flags))
+            max(
+                len(titles),
+                len(files),
+                len(durations_min),
+                len(durations_sec),
+                len(durations_ticks),
+                len(hq_flags),
+                len(show_on_home_flags),
+            )
         ):
             title = (titles[i] if i < len(titles) else "").strip()
             if not title:
@@ -2715,11 +2729,13 @@ class SoundsView(View):
                 duration_ms = 0
 
             hq: bool = (hq_flags[i] if i < len(hq_flags) else "") == "1"
+            show_on_home: bool = (show_on_home_flags[i] if i < len(show_on_home_flags) else "") == "1"
 
             sounds[title] = {
                 "file": file_num,
                 "duration_ms": duration_ms,
                 "high_quality": hq,
+                "show_on_home": show_on_home,
             }
 
         if error:
@@ -2757,7 +2773,7 @@ class PlaySoundView(View):
     """Handle requests to play a sound by title."""
 
     def post(self) -> str:
-        """Play a sound and return status.
+        """Play a sound and return a stop button on success.
 
         Form data:
             title: Sound title to play
@@ -2772,23 +2788,25 @@ class PlaySoundView(View):
             from sounds import SoundManager
 
             manager: SoundManager = SoundManager()
-            print(f"PlaySoundView: play request received: '{title}'")
+            sound_info: dict | None = None
             try:
                 sound_info = manager.get_sound_by_title(title)
-                print("PlaySoundView: sound_info:", sound_info)
-            except Exception:
-                print("PlaySoundView: could not read sound_info")
-
-            try:
-                print("PlaySoundView: audio player state:", manager.audio_player.get_playing_state())
             except Exception:
                 pass
 
             module_idx: int = manager.play_sound(title)
+            file_number: int = sound_info.get("file", 0) if isinstance(sound_info, dict) else 0
             return (
-                '<div class="alert alert-success small py-2 mb-0">'
-                f"Playing '{title}' on module {module_idx}"
-                "</div>"
+                f'<form hx-post="/sounds/stop"'
+                f' hx-target="#sound-{file_number}-result"'
+                f' hx-swap="innerHTML">'
+                f'<input type="hidden" name="module_idx" value="{module_idx}">'
+                f'<input type="hidden" name="title" value="{title}">'
+                f'<input type="hidden" name="file" value="{file_number}">'
+                f'<button type="submit" class="btn btn-sm btn-danger theme-sound-stop-btn">'
+                f"&#9632; {title}"
+                f"</button>"
+                f"</form>"
             )
         except ImportError:
             return '<div class="alert alert-warning small py-2 mb-0">Audio system not available</div>'
@@ -2801,3 +2819,72 @@ class PlaySoundView(View):
                 return '<div class="alert alert-danger small py-2 mb-0">' "All audio modules are busy" "</div>"
             else:
                 return '<div class="alert alert-danger small py-2 mb-0">' f"Error: {str(err)}" "</div>"
+
+
+class StopSoundView(View):
+    """Handle requests to stop a specific audio module."""
+
+    def post(self) -> str:
+        """Stop the given module and restore the play button.
+
+        Form data:
+            module_idx: Index of the audio module to stop
+            title: Sound title (to restore the play button label)
+            file: File number (used to restore the correct hx-target)
+        """
+
+        module_idx_str: str = self.request.form_data.get("module_idx", "")
+        title: str = self.request.form_data.get("title", "").strip()
+        file_str: str = self.request.form_data.get("file", "0")
+
+        try:
+            from audio import AudioPlayer
+
+            audio_player: AudioPlayer = AudioPlayer()
+            module_idx: int = int(module_idx_str)
+            if 0 <= module_idx < len(audio_player.players):
+                audio_player.players[module_idx].stop()
+        except Exception as err:
+            print(f"StopSoundView: error stopping module: {err}")
+
+        try:
+            file_number: int = int(file_str)
+        except (ValueError, TypeError):
+            file_number = 0
+
+        return (
+            f'<form hx-post="/sounds/play"'
+            f' hx-target="#sound-{file_number}-result"'
+            f' hx-swap="innerHTML">'
+            f'<input type="hidden" name="title" value="{title}">'
+            f'<button type="submit" class="btn btn-sm btn-outline-primary theme-sound-btn">'
+            f"{title}"
+            f"</button>"
+            f"</form>"
+        )
+
+
+class StopAllSoundsView(View):
+    """Handle requests to stop all audio modules."""
+
+    def post(self) -> str:
+        """Stop all audio modules and return the re-rendered sounds buttons section."""
+
+        try:
+            from audio import AudioPlayer
+
+            audio_player: AudioPlayer = AudioPlayer()
+            audio_player.stop_all()
+        except Exception as err:
+            print(f"StopAllSoundsView: error stopping all: {err}")
+
+        return render_template("sounds/buttons.html", _sounds_context(include_playing=True, home_only=True))
+
+
+class SoundsStatusView(View):
+    """Return the home sounds controls fragment with current playback state."""
+
+    def get(self) -> str:
+        """Render sound buttons using current playing/not-playing state."""
+
+        return render_template("sounds/buttons.html", _sounds_context(include_playing=True, home_only=True))

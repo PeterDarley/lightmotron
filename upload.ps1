@@ -17,6 +17,40 @@ foreach ($a in $args) {
 }
 if (-not $port) { $port = 'COM4' }
 
+function Invoke-MpremoteWithRetry {
+    param(
+        [string[]]$MpArgs,
+        [string]$Description,
+        [int]$MaxAttempts = 3
+    )
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $output = & $mpremote @MpArgs 2>&1
+        $exitCode = $LASTEXITCODE
+
+        if ($output) {
+            $output | ForEach-Object { Write-Output $_ }
+        }
+
+        if ($exitCode -eq 0) {
+            return $true
+        }
+
+        $joined = ($output | Out-String)
+        $isTransportError = ($joined -match 'Error with transport') -or ($joined -match 'could not enter raw repl')
+        if ($isTransportError -and $attempt -lt $MaxAttempts) {
+            Write-Warning "$Description failed due to transport/raw REPL sync (attempt $attempt/$MaxAttempts). Retrying..."
+            [System.Threading.Thread]::Sleep(350)
+            continue
+        }
+
+        Write-Warning "$Description failed on attempt $attempt/$MaxAttempts"
+        return $false
+    }
+
+    return $false
+}
+
 # NOTE: This script does NOT reboot the device after upload.
 # The device must already be at a quiet REPL before running this script.
 # To stop the webserver from the REPL: WebServer().stop()
@@ -73,6 +107,18 @@ if ($changedFiles.Count -eq 0) {
 
 Write-Output "Uploading $($changedFiles.Count) changed file(s) to ${port}..."
 
+# Try to quiet the runtime before file copy to reduce serial output during raw REPL operations.
+$quietCode = @"
+import gc
+try:
+    from webserver import WebServer
+    WebServer().stop()
+except Exception:
+    pass
+gc.collect()
+"@
+[void](Invoke-MpremoteWithRetry -MpArgs @('connect', $port, 'exec', $quietCode) -Description 'pre-upload quiet step' -MaxAttempts 2)
+
 # Collect unique remote directories that need to exist.
 $remoteDirs = [System.Collections.Generic.HashSet[string]]::new()
 foreach ($path in $changedFiles) {
@@ -108,7 +154,9 @@ foreach ($path in $changedFiles) {
     $cpArgs.AddRange([string[]]@('fs', 'cp', $localPath, ":$path"))
 }
 
-& $mpremote @cpArgs
+if (-not (Invoke-MpremoteWithRetry -MpArgs $cpArgs -Description 'file upload' -MaxAttempts 3)) {
+    throw "Upload failed: mpremote could not complete file copy."
+}
 
 # Save updated manifest on success.
 $newManifest | ConvertTo-Json | Set-Content $manifestPath
@@ -122,7 +170,9 @@ try {
         
         # Execute Python on device to write the commit file (use double quotes for interpolation).
         $pythonCode = "import json`nwith open('.ota_deployed_commit.json', 'w') as f:`n json.dump({'commit_sha': '$commitSha'}, f)"
-        & $mpremote connect $port exec $pythonCode
+        if (-not (Invoke-MpremoteWithRetry -MpArgs @('connect', $port, 'exec', $pythonCode) -Description 'commit marker write' -MaxAttempts 2)) {
+            Write-Warning "Could not write deployed commit marker to device"
+        }
     }
     else {
         Write-Warning "Could not get git commit SHA"

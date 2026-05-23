@@ -63,6 +63,9 @@ Credentials are stored persistently, so this only needs to be done once. To chan
 .\upload.ps1
 ```
 
+`upload.ps1` now attempts to quiet the runtime (stops the web server when possible)
+before transfer and retries transient mpremote transport/raw-REPL failures automatically.
+
 To hard reset the device after uploading:
 
 ```powershell

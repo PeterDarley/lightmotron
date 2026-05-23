@@ -54,7 +54,10 @@ web_server.add_routes(
         "/updates/summary": views.UpdatesSummaryView,
         "/sounds": views.SoundsView,
         "/sounds/summary": views.SoundsSummaryView,
+        "/sounds/status": views.SoundsStatusView,
         "/sounds/play": views.PlaySoundView,
+        "/sounds/stop": views.StopSoundView,
+        "/sounds/stop-all": views.StopAllSoundsView,
         "/audio/volume": views.AudioVolumeView,
     }
 )
