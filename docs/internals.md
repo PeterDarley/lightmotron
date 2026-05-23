@@ -48,6 +48,16 @@ as ongoing and is not auto-removed.
 The home page scene grouping uses this same rule: scenes with at least one
 infinite effect are shown as ongoing.
 
+## Audio Debug Logging
+
+Audio module logs include the configured UART and pin mapping so wiring can be
+verified directly from boot/runtime output.
+
+- `AudioPlayer: configured modules:` entries include `uart`, `tx_pin`, and `rx_pin`.
+- Health checks include `uart`, `tx`, and `rx` in each module line.
+- YX5200 command logs include `UART N (tx=X, rx=Y)` on send, response, no-response,
+  and write/read error messages.
+
 ```python
 "scenes": {
     "My Scene": {

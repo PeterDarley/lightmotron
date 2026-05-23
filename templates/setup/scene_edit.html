@@ -193,6 +193,26 @@
         </form>
         {% endif %}
 
+        <form hx-post="/scenes/edit"
+              hx-target="#modal-body"
+              hx-swap="innerHTML"
+              class="mb-3">
+            <input type="hidden" name="action" value="update_scene_settings">
+            <input type="hidden" name="scene_name" value="{{ scene_name }}">
+            <label for="scene-sound-{{ scene_name_id }}" class="form-label small fw-semibold">Play Sound on Trigger</label>
+            <div class="d-flex gap-2 align-items-end">
+                <select class="form-select form-select-sm" id="scene-sound-{{ scene_name_id }}" 
+                        name="scene_sound" style="max-width: 250px;">
+                    <option value="">None</option>
+                    {% for sound in sounds %}
+                    <option value="{{ sound.title }}"{% if scene_sound == sound.title %} selected{% endif %}>{{ sound.title }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Set</button>
+            </div>
+            <small class="text-muted ms-2">Select a sound to play automatically when this scene is activated.</small>
+        </form>
+
         <div class="d-flex flex-wrap gap-3 align-items-end">
 
             <form hx-post="/scenes"

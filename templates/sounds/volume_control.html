@@ -1,0 +1,43 @@
+<section class="theme-home-section theme-audio-control-panel card">
+    <div class="card-body theme-home-section-body">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <label for="master-volume" class="form-label theme-audio-label text-muted small mb-0">Volume</label>
+            <div class="d-flex align-items-center gap-2">
+                <input type="range" id="master-volume" name="master-volume" class="form-range theme-volume-slider" 
+                       min="0" max="30" value="{{ current_volume }}"
+                       hx-post="/audio/volume"
+                       hx-trigger="change"
+                       hx-target="#volume-feedback"
+                       hx-swap="innerHTML"
+                       onchange="this.value">
+                <span class="small text-muted theme-volume-value" id="volume-feedback">{{ current_volume }}/30</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+(function() {
+    const volumeSlider = document.getElementById('master-volume');
+    const volumeFeedback = document.getElementById('volume-feedback');
+    
+    if (volumeSlider) {
+        // Update feedback immediately on input (before HTMX request completes)
+        volumeSlider.addEventListener('input', function() {
+            volumeFeedback.textContent = this.value + '/30';
+        });
+        
+        // After HTMX swap completes, update the slider value from response
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            if (evt.detail.target === volumeFeedback) {
+                // Parse the response text (format: "N/30") and extract the value
+                const text = volumeFeedback.textContent;
+                const value = text.split('/')[0];
+                if (value && !isNaN(value)) {
+                    volumeSlider.value = value;
+                }
+            }
+        });
+    }
+})();
+</script>

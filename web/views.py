@@ -357,7 +357,52 @@ class HomeView(View):
         context.update(_animation_context())
         context.update(_sounds_context())
 
+        # Get current master volume from persistent storage
+        storage: PersistentDict = PersistentDict()
+        system_settings: dict = storage.get("system_settings", {})
+        current_volume = system_settings.get("master_volume", 20)
+        context["current_volume"] = current_volume
+
         return render_template("home.html", context)
+
+
+class AudioVolumeView(View):
+    """Handle volume control for audio players."""
+
+    def post(self) -> str:
+        """Set the master volume for all audio players (0-30).
+
+        Reads the volume value from the form data (typically from a range input).
+        Sends the volume command to all configured audio players and persists
+        the setting for future power-ups.
+        """
+
+        try:
+            volume_str = self.request.form_data.get("master-volume", "20")
+            volume = int(volume_str)
+            volume = max(0, min(30, volume))  # Clamp to valid range
+        except (ValueError, TypeError):
+            volume = 20
+
+        # Persist the volume setting to disk
+        storage: PersistentDict = PersistentDict()
+        system_settings: dict = storage.get("system_settings", {})
+        system_settings["master_volume"] = volume
+        storage["system_settings"] = system_settings
+        storage.store()  # Explicitly persist to disk
+
+        # Send volume command to all active players and update the cached master volume
+        try:
+            from audio import AudioPlayer
+
+            player = AudioPlayer()
+            player.master_volume = volume
+            for p in player.players:
+                p.set_volume(volume)
+        except Exception as e:
+            print(f"AudioVolumeView: failed to set volume: {e}")
+
+        return f"{volume}/30"
 
 
 class SetSceneView(View):
@@ -386,6 +431,32 @@ class SetSceneView(View):
                 key: value for key, value in self.request.form_data.items() if key not in ("scene", "action")
             }
             lights.set_scene(scene_name, **extra_kwargs)
+
+            # Play associated sound if configured
+            try:
+                scene_meta: dict = lights.settings.get("scene_settings", {}).get(scene_name, {})
+                sound_name: str = scene_meta.get("sound", "").strip()
+                if sound_name:
+                    # Get sounds from persistent storage
+                    storage: PersistentDict = PersistentDict()
+                    lighting_root = storage.get("lighting_settings", {})
+                    sounds: dict = {}
+                    if isinstance(lighting_root, dict) and "models" in lighting_root:
+                        current = lighting_root.get("current_model")
+                        models = lighting_root.get("models", {})
+                        if current and current in models and isinstance(models[current], dict):
+                            sounds = models[current].get("sounds", {})
+                    if not sounds:
+                        sounds = storage.get("sounds", {})
+
+                    if sound_name in sounds:
+                        sound_config = sounds[sound_name]
+                        from audio import AudioPlayer
+
+                        player = AudioPlayer()
+                        player.play_file(sound_config.get("file", 0), sound_config.get("high_quality", False))
+            except Exception as e:
+                print(f"SetSceneView: failed to play scene sound: {e}")
 
         return render_template("scenes/scene_panel.html", _scenes_context())
 
@@ -471,6 +542,7 @@ class SetupView(View):
         context["scenes"] = _scenes_list(lights.settings.get("scenes", {}))
         context["effect_names"] = sorted(lights.settings.get("effects", {}).keys())
         context["filter_names"] = sorted(lights.settings.get("filters", {}).keys())
+        context.update(_sounds_context())
 
         return render_template("setup.html", context)
 
@@ -1882,8 +1954,12 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
         "killable_scenes": killable_scenes,
         "scene_kills": kills,
         "scene_kills_csv": ",".join(kills),
+        "scene_sound": scene_meta.get("sound", ""),
         "page_title": "Edit Scene",
     }
+
+    # Add sounds context
+    context.update(_sounds_context())
 
     if edit_entry_name:
         entry_dict: dict = scene_data.get(edit_entry_name, {})
@@ -2474,14 +2550,23 @@ class SceneEditView(View):
                     for s in kills_raw.split(",")
                     if s.strip() and s.strip() in lights.settings.get("scenes", {})
                 ]
+                scene_sound: str = self.request.form_data.get("scene_sound", "").strip()
+
                 if "scene_settings" not in lights.settings:
                     lights.settings["scene_settings"] = {}
                 if scene_name not in lights.settings["scene_settings"]:
                     lights.settings["scene_settings"][scene_name] = {}
+
                 if kills_list:
                     lights.settings["scene_settings"][scene_name]["kills"] = kills_list
                 elif "kills" in lights.settings["scene_settings"].get(scene_name, {}):
                     del lights.settings["scene_settings"][scene_name]["kills"]
+
+                if scene_sound:
+                    lights.settings["scene_settings"][scene_name]["sound"] = scene_sound
+                elif "sound" in lights.settings["scene_settings"].get(scene_name, {}):
+                    del lights.settings["scene_settings"][scene_name]["sound"]
+
                 lights.settings_object.store()
 
         return render_template("setup/scene_edit.html", _scene_edit_context(scene_name))

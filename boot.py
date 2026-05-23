@@ -83,6 +83,13 @@ web_server.start_in_thread()
 
 import web.routes
 
+# Initialise audio player — runs health check and logs module status at boot
+try:
+    from audio import AudioPlayer
+    AudioPlayer()
+except Exception as audio_err:
+    print("boot: audio init failed:", audio_err)
+
 # Start the I2C
 # I2CManager()
 
