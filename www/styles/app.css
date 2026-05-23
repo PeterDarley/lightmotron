@@ -100,6 +100,13 @@
     &::-moz-range-track { background: #dee2e6; border-radius: 4px; height: 6px; }
 }
 
+/* Input group text separators — dark default for all themes */
+.input-group-text {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: inherit;
+}
+
 /* Effect editor optional settings blocks and sliders */
 :root {
     --effect-optional-bg: rgba(255, 255, 255, 0.05);
@@ -195,3 +202,16 @@
 .theme-ongoing-btn {}
 .theme-immediate-btn {}
 .theme-sound-btn {}
+
+/* Audio/Volume control */
+.theme-audio-control-panel {}
+.theme-audio-label {}
+.theme-volume-slider {
+    cursor: pointer;
+    min-width: 120px;
+    max-width: 200px;
+}
+.theme-volume-value {
+    min-width: 3.5rem;
+    text-align: right;
+}

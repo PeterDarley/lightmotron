@@ -360,6 +360,13 @@ body {
     &::placeholder { color: var(--imp-text-dim); }
 }
 
+.input-group-text {
+    background-color: var(--imp-panel);
+    border: 1px solid var(--imp-border);
+    border-radius: 0;
+    color: var(--imp-readout);
+}
+
 /* ---- Tables ---- */
 .table {
     color: var(--imp-text);

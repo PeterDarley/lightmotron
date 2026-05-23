@@ -383,6 +383,13 @@ body {
     &::placeholder { color: var(--sw-muted); }
 }
 
+.input-group-text {
+    background-color: var(--sw-panel-alt);
+    border: 1px solid var(--sw-border);
+    border-radius: 0;
+    color: var(--sw-text);
+}
+
 /* ---- Tables ---- */
 .table {
     color: var(--sw-text);

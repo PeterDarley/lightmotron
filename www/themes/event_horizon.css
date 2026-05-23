@@ -249,6 +249,12 @@ body {
     &::placeholder { color: #b38591; }
 }
 
+.input-group-text {
+    background-color: #1d1320;
+    border-color: #6f3142;
+    color: var(--eh-text);
+}
+
 .form-check-input {
     background-color: #0f1a2d;
     border-color: #33527e;

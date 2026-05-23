@@ -469,6 +469,13 @@ body {
     &::placeholder { color: var(--lcars-muted); }
 }
 
+.input-group-text {
+    background-color: #1a0a00;
+    border: 2px solid var(--lcars-orange);
+    border-radius: 0;
+    color: var(--lcars-text);
+}
+
 /* ---- Checkboxes ---- */
 .theme-check-label {
     color: var(--lcars-text);

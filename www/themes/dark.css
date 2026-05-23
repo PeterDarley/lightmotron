@@ -134,6 +134,12 @@ body {
     &::placeholder { color: #666; }
 }
 
+.input-group-text {
+    background-color: #252525;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
 /* Tables */
 .table {
     color: #e0e0e0;

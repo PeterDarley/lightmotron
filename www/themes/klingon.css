@@ -407,6 +407,13 @@ body {
     &::placeholder { color: var(--kli-muted); }
 }
 
+.input-group-text {
+    background-color: var(--kli-panel);
+    border: 2px solid var(--kli-frame-lo);
+    border-radius: 0;
+    color: var(--kli-text);
+}
+
 /* ---- Tables ---- */
 .table {
     color: var(--kli-text);
