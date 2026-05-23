@@ -2,20 +2,11 @@
 
 import machine  # type: ignore
 import micropython  # type: ignore
-import sys  # type: ignore
 
 import settings
 
 # set up the exception buffer so we can see what happens if we crash
 micropython.alloc_emergency_exception_buf(100)
-
-# Ensure shared modules in /lib are resolved before stale root-level files.
-if "/lib" in sys.path:
-    try:
-        sys.path.remove("/lib")
-    except Exception:
-        pass
-sys.path.insert(0, "/lib")
 
 from comms import WIFIManager, I2CManager  # type: ignore
 from webserver import WebServer  # type: ignore
@@ -94,37 +85,9 @@ import web.routes
 
 # Initialise audio player — runs health check and logs module status at boot
 try:
-    import audio
+    from audio import AudioPlayer
 
-    audio_module_path = getattr(audio, "__file__", "<unknown>")
-    print("boot: audio module:", audio_module_path)
-
-    audio_player_class = getattr(audio, "AudioPlayer", None)
-    if audio_player_class is None:
-        try:
-            exported_names = [name for name in dir(audio) if not str(name).startswith("__")]
-            print("boot: audio exports:", exported_names)
-        except Exception:
-            print("boot: audio exports: <unavailable>")
-
-        print("boot: audio module missing AudioPlayer export; retrying clean import")
-        try:
-            if "audio" in sys.modules:
-                del sys.modules["audio"]
-            import gc  # type: ignore
-
-            gc.collect()
-            import audio as audio_retry
-
-            retry_player_class = getattr(audio_retry, "AudioPlayer", None)
-            if retry_player_class is None:
-                print("boot: audio retry still missing AudioPlayer export")
-            else:
-                retry_player_class()
-        except Exception as retry_error:
-            print("boot: audio retry failed:", retry_error)
-    else:
-        audio_player_class()
+    AudioPlayer()
 except Exception as audio_err:
     print("boot: audio init failed:", audio_err)
 
