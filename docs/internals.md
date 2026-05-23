@@ -10,10 +10,14 @@ Static assets served by the built-in web server use content-type-based cache pol
 Static response writes use a send-all loop so larger CSS/JS payloads are not truncated by partial socket writes.
 The named-range LED picker template also appends a version query parameter to `led_picker.js` based on file mtime, ensuring the script URL changes when that file changes.
 Web server startup now handles transient socket creation `OSError 23` (ENFILE) by retrying briefly and then exiting cleanly (without uncaught thread traceback) if descriptors are still exhausted after retries.
+Client disconnect resets (`OSError 104` / `ECONNRESET`) during request reads are treated as normal disconnects and no longer logged as 500 server errors.
+Boot now prioritizes `/lib` on `sys.path` before runtime imports, reducing accidental shadowing by stale root-level modules (for example `/audio.py` overshadowing `/lib/audio.py`).
 Audio startup can send a UART soft-reset command (DFPlayer/YX5200 command `0x0C`) to each configured module during boot to recover players that occasionally fail after ESP32 reset. This is controlled by `system_settings.audio_reset_on_boot` (default true).
+When diagnosing sound stop/play state issues, enable `system_settings.audio_debug_logging` to print UART command/status traces, explicit `/sounds/status` endpoint hit/render traces, and mapped playing-state summaries to serial logs.
+Additionally, sound-status diagnostics now emit baseline serial traces (`sounds-status: ...` and `audio: status ...`) even when `audio_debug_logging` is off, so endpoint-hit and low-level status checks remain visible during troubleshooting.
 Home scene actions (`/set_scene`) return a server-rendered `scenes/scene_panel.html` fragment and swap `#scene_panel` so active-scene labels and ongoing/immediate button states always reflect server truth, including scene kills triggered by `scene_settings.kills`.
 Scene trigger sound playback (`scene_settings.sound`) is handled by the lighting runtime (`Lighting.set_scene` / `Lighting.add_scene`), not by web views, so sounds also play for non-UI scene activations.
-Home sound controls only include sounds where `show_on_home` is true and use HTMX polling (`every 5s`) against `/sounds/status` to keep each button in sync with hardware playback state (Play vs Stop) when tracks finish naturally.
+Home sound controls only include sounds where `show_on_home` is true and use adaptive HTMX polling against `/sounds/status`: `every 5s` while any sound is currently playing, and `every 30s` when all sounds are idle.
 The Home "Active Scenes" label/list intentionally shows only ongoing scenes; immediate scenes are trigger actions and are not displayed there.
 
 ## Lighting Module Layout

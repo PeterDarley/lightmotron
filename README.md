@@ -64,7 +64,8 @@ Credentials are stored persistently, so this only needs to be done once. To chan
 ```
 
 `upload.ps1` now attempts to quiet the runtime (stops the web server when possible)
-before transfer and retries transient mpremote transport/raw-REPL failures automatically.
+before transfer, uses mpremote resume mode to avoid upload-time soft resets, and retries transient transport/raw-REPL failures automatically.
+It also always recopies critical runtime files (`boot.py`, `main.py`, `lib/audio.py`, `lib/sounds.py`) even during incremental uploads, to self-heal from stale or partial files left by interrupted transfers.
 
 To hard reset the device after uploading:
 
@@ -78,6 +79,7 @@ Once the device is running and connected to WiFi, open your browser and navigate
 
 ### Home Page
 Control animation playback and trigger scenes. Start/stop lighting animations, switch between configured scenes, and play sounds from the audio modules.
+The Sounds section includes the master volume slider and home-visible sound triggers.
 The Immediate scenes section is only shown when at least one scene is configured as immediate.
 
 ![Home page](docs/screenshots/home.png)
@@ -129,7 +131,7 @@ Combine effects into complete lighting scenarios. Each scene contains one or mor
 ![Edit a job](docs/screenshots/setup-job-edit.png)
 
 #### Sounds
-Create named sounds that map to MP3 file numbers on the SD cards in your audio modules. Associate titles with files, set durations, and mark sounds as high quality for preferential playback on high-quality modules.
+Create named sounds that map to MP3 file numbers on the SD cards in your audio modules. Associate titles with files, choose whether they appear on Home, and mark sounds as high quality for preferential playback on high-quality modules.
 
 #### Theme
 Choose a CSS theme to customise the look of the interface.

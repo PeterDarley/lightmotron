@@ -199,6 +199,43 @@ body {
     }
 }
 
+.theme-sounds-panel {
+    background: var(--lcars-orange);
+    border-radius: var(--lcars-r-out) 0 0 0 !important;
+    position: relative;
+    overflow: hidden;
+
+    & > .card-body {
+        position: relative;
+        z-index: 1;
+        background: var(--lcars-panel);
+        border-top-left-radius: var(--lcars-r-in);
+        margin-left: var(--lcars-label-w);
+        margin-top: var(--lcars-bar-w);
+        padding: 1rem 1rem 1rem 1.5rem;
+    }
+
+    & .theme-sounds-label {
+        position: absolute;
+        left: calc(-1 * var(--lcars-label-w));
+        width: var(--lcars-label-w);
+        top: 0;
+        bottom: 0;
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-start;
+        color: #000000 !important;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        padding: 0 0.6rem 0.5rem 1rem;
+        margin: 0;
+        z-index: 2;
+    }
+}
+
 .theme-active-scene-panel {
     position: relative;
     background: var(--lcars-orange);
@@ -282,6 +319,11 @@ body {
 
 .theme-sounds-section {
     margin-top: 0.5rem;
+}
+
+.theme-animation-panel .theme-animation-label,
+.theme-animation-panel .theme-animation-label.text-muted {
+    color: #000000 !important;
 }
 
 .theme-section-heading {
@@ -637,4 +679,16 @@ body {
     &-success { background-color: #001a0a; border-color: var(--lcars-green); color: var(--lcars-green); }
     &-danger  { background-color: #1a0000; border-color: var(--lcars-red);   color: var(--lcars-red); }
     &-warning { background-color: #1a1000; border-color: var(--lcars-gold);  color: var(--lcars-gold); }
+}
+
+/* ---- Swoop labels must stay black (override muted/small card-body rules) ---- */
+.theme-animation-panel .card-body .theme-animation-label,
+.theme-animation-panel .card-body .theme-animation-label.text-muted,
+.theme-animation-panel .card-body .theme-animation-label.small,
+.theme-sounds-panel .card-body .theme-sounds-label,
+.theme-sounds-panel .card-body .theme-sounds-label.text-muted,
+.theme-sounds-panel .card-body .theme-sounds-label.small,
+.theme-active-scene-panel .theme-active-scene-label,
+.theme-home-subsection .theme-section-heading {
+    color: #000000 !important;
 }

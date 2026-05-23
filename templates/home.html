@@ -9,10 +9,12 @@
             </div>
             </div>
         </section>
-        {% include 'sounds/volume_control.html' %}
         {% include 'scenes/scene_panel.html' %}
-        <section class="theme-home-section theme-sounds-panel">
-            {% include 'sounds/buttons.html' %}
+        <section class="theme-home-section theme-sounds-panel card">
+            <div class="card-body theme-home-section-body">
+                <div class="theme-sounds-label text-muted small">Sounds</div>
+                {% include 'sounds/buttons.html' %}
+            </div>
         </section>
     </div>
 </div>

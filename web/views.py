@@ -2600,7 +2600,6 @@ def _sounds_list(sounds_dict: dict, playing_by_title: dict | None = None) -> lis
             {
                 "title": sound_title,
                 "file": sound.get("file", 0),
-                "duration_ms": sound.get("duration_ms", 0),
                 "high_quality": bool(sound.get("high_quality", False)),
                 "show_on_home": bool(sound.get("show_on_home", True)),
                 "is_playing": module_idx is not None,
@@ -2611,10 +2610,23 @@ def _sounds_list(sounds_dict: dict, playing_by_title: dict | None = None) -> lis
     return result
 
 
+def _audio_debug_enabled() -> bool:
+    """Return whether audio debug logging is enabled in system settings."""
+
+    try:
+        storage = PersistentDict()
+        system_settings = storage.get("system_settings", {})
+        return bool(system_settings.get("audio_debug_logging", False))
+    except Exception:
+        return False
+
+
 def _playing_sounds_by_title() -> dict:
     """Return a mapping of currently playing sound title to module index."""
 
     result: dict = {}
+    debug_enabled: bool = _audio_debug_enabled()
+
     try:
         from sounds import SoundManager
 
@@ -2623,7 +2635,12 @@ def _playing_sounds_by_title() -> dict:
         for module_idx, title in playing_state.items():
             if title:
                 result[str(title)] = int(module_idx)
-    except Exception:
+        if debug_enabled:
+            print(f"audio-debug: sounds_status playing_state={playing_state} mapped={result}")
+    except Exception as error:
+        print(f"sounds-status: state mapping error: {error}")
+        if debug_enabled:
+            print(f"audio-debug: sounds_status failed error={error}")
         return {}
 
     return result
@@ -2643,13 +2660,21 @@ def _sounds_context(include_playing: bool = False, home_only: bool = False) -> d
     if not sounds:
         sounds = storage.get("sounds", {})
 
+    system_settings: dict = storage.get("system_settings", {})
+    current_volume: int = int(system_settings.get("master_volume", 20))
+
     if home_only:
         sounds = {title: sound for title, sound in sounds.items() if bool(sound.get("show_on_home", True))}
 
     playing_by_title: dict = _playing_sounds_by_title() if include_playing else {}
+    sounds_list: list = _sounds_list(sounds, playing_by_title=playing_by_title)
+    any_sound_playing: bool = any(bool(sound.get("is_playing", False)) for sound in sounds_list)
+    poll_interval_seconds: int = 5 if any_sound_playing else 30
 
     context: dict = {
-        "sounds": _sounds_list(sounds, playing_by_title=playing_by_title),
+        "sounds": sounds_list,
+        "current_volume": current_volume,
+        "sounds_poll_interval_seconds": poll_interval_seconds,
     }
 
     return context
@@ -2675,8 +2700,7 @@ class SoundsView(View):
     def post(self) -> str:
         """Validate and save all sound definitions.
 
-        Accepts arrays of sound_title[], sound_file[], sound_duration_minutes[],
-        sound_duration_seconds[], sound_duration_ticks[], sound_high_quality[],
+        Accepts arrays of sound_title[], sound_file[], sound_high_quality[],
         and sound_show_on_home[].
         """
 
@@ -2689,9 +2713,6 @@ class SoundsView(View):
 
         titles = _as_list(fd.get("sound_title"), "")
         files = _as_list(fd.get("sound_file"), "1")
-        durations_min = _as_list(fd.get("sound_duration_minutes"), "0")
-        durations_sec = _as_list(fd.get("sound_duration_seconds"), "0")
-        durations_ticks = _as_list(fd.get("sound_duration_ticks"), "0")
         hq_flags = _as_list(fd.get("sound_high_quality"), "")
         show_on_home_flags = _as_list(fd.get("sound_show_on_home"), "")
 
@@ -2702,9 +2723,6 @@ class SoundsView(View):
             max(
                 len(titles),
                 len(files),
-                len(durations_min),
-                len(durations_sec),
-                len(durations_ticks),
                 len(hq_flags),
                 len(show_on_home_flags),
             )
@@ -2720,20 +2738,11 @@ class SoundsView(View):
             except (ValueError, IndexError):
                 file_num = 1
 
-            try:
-                mins: int = int(durations_min[i] if i < len(durations_min) else 0)
-                secs: int = int(durations_sec[i] if i < len(durations_sec) else 0)
-                ticks: int = int(durations_ticks[i] if i < len(durations_ticks) else 0)
-                duration_ms: int = (mins * 60 + secs) * 1000 + ticks * 100
-            except (ValueError, IndexError):
-                duration_ms = 0
-
             hq: bool = (hq_flags[i] if i < len(hq_flags) else "") == "1"
             show_on_home: bool = (show_on_home_flags[i] if i < len(show_on_home_flags) else "") == "1"
 
             sounds[title] = {
                 "file": file_num,
-                "duration_ms": duration_ms,
                 "high_quality": hq,
                 "show_on_home": show_on_home,
             }
@@ -2887,4 +2896,17 @@ class SoundsStatusView(View):
     def get(self) -> str:
         """Render sound buttons using current playing/not-playing state."""
 
-        return render_template("sounds/buttons.html", _sounds_context(include_playing=True, home_only=True))
+        debug_enabled: bool = _audio_debug_enabled()
+        print(f"sounds-status: endpoint hit debug_enabled={debug_enabled}")
+        if debug_enabled:
+            print("audio-debug: sounds_status endpoint hit")
+
+        context: dict = _sounds_context(include_playing=True, home_only=True)
+        if debug_enabled:
+            try:
+                sound_count: int = len(context.get("sounds", []))
+            except Exception:
+                sound_count = -1
+            print(f"audio-debug: sounds_status render sound_count={sound_count}")
+
+        return render_template("sounds/buttons.html", context)
