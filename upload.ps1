@@ -25,8 +25,29 @@ function Invoke-MpremoteWithRetry {
     )
 
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        $output = & $mpremote @MpArgs 2>&1
-        $exitCode = $LASTEXITCODE
+        $output = @()
+        $exitCode = 1
+        $oldNativePref = $null
+        $hasNativePref = $false
+        if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
+            $hasNativePref = $true
+            $oldNativePref = $Global:PSNativeCommandUseErrorActionPreference
+            $Global:PSNativeCommandUseErrorActionPreference = $false
+        }
+
+        try {
+            $output = & $mpremote @MpArgs 2>&1
+            $exitCode = $LASTEXITCODE
+        }
+        catch {
+            $output = @($_.ToString())
+            $exitCode = 1
+        }
+        finally {
+            if ($hasNativePref) {
+                $Global:PSNativeCommandUseErrorActionPreference = $oldNativePref
+            }
+        }
 
         if ($output) {
             $output | ForEach-Object { Write-Output $_ }
@@ -100,6 +121,15 @@ foreach ($path in $newManifest.Keys) {
     }
 }
 
+# Always refresh critical runtime modules to recover from partial/stale remote
+# files that may have been left behind by interrupted transfers.
+$alwaysUploadPaths = @('boot.py', 'main.py', 'lib/audio.py', 'lib/sounds.py')
+foreach ($criticalPath in $alwaysUploadPaths) {
+    if ($newManifest.ContainsKey($criticalPath) -and -not $changedFiles.Contains($criticalPath)) {
+        $changedFiles.Add($criticalPath)
+    }
+}
+
 if ($changedFiles.Count -eq 0) {
     Write-Output "No files changed since last upload."
     exit 0
@@ -117,7 +147,7 @@ except Exception:
     pass
 gc.collect()
 "@
-[void](Invoke-MpremoteWithRetry -MpArgs @('connect', $port, 'exec', $quietCode) -Description 'pre-upload quiet step' -MaxAttempts 2)
+[void](Invoke-MpremoteWithRetry -MpArgs @('connect', $port, 'resume', 'exec', $quietCode) -Description 'pre-upload quiet step' -MaxAttempts 2)
 
 # Collect unique remote directories that need to exist.
 $remoteDirs = [System.Collections.Generic.HashSet[string]]::new()
@@ -133,6 +163,7 @@ foreach ($path in $changedFiles) {
 $cpArgs = [System.Collections.Generic.List[string]]::new()
 $cpArgs.Add('connect')
 $cpArgs.Add($port)
+$cpArgs.Add('resume')
 
 # Ensure remote directories exist via MicroPython (handles already-existing dirs).
 if ($remoteDirs.Count -gt 0) {
@@ -155,7 +186,8 @@ foreach ($path in $changedFiles) {
 }
 
 if (-not (Invoke-MpremoteWithRetry -MpArgs $cpArgs -Description 'file upload' -MaxAttempts 3)) {
-    throw "Upload failed: mpremote could not complete file copy."
+    Write-Error "Upload failed: mpremote could not complete file copy."
+    exit 1
 }
 
 # Save updated manifest on success.
@@ -170,7 +202,7 @@ try {
         
         # Execute Python on device to write the commit file (use double quotes for interpolation).
         $pythonCode = "import json`nwith open('.ota_deployed_commit.json', 'w') as f:`n json.dump({'commit_sha': '$commitSha'}, f)"
-        if (-not (Invoke-MpremoteWithRetry -MpArgs @('connect', $port, 'exec', $pythonCode) -Description 'commit marker write' -MaxAttempts 2)) {
+        if (-not (Invoke-MpremoteWithRetry -MpArgs @('connect', $port, 'resume', 'exec', $pythonCode) -Description 'commit marker write' -MaxAttempts 2)) {
             Write-Warning "Could not write deployed commit marker to device"
         }
     }
