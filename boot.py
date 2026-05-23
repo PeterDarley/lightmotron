@@ -8,7 +8,7 @@ import settings
 # set up the exception buffer so we can see what happens if we crash
 micropython.alloc_emergency_exception_buf(100)
 
-from comms import WIFIManager, I2CManager  # type: ignore
+from comms import WIFIManager  # type: ignore
 from webserver import WebServer  # type: ignore
 import network  # type: ignore
 
@@ -27,13 +27,16 @@ from storage import PersistentDict  # type: ignore
 # After this call every system_settings key exists in storage.json.
 settings.seed_defaults()
 
+_storage = PersistentDict()
+_system_settings = _storage.get("system_settings", {})
+
 # Set mDNS hostname so the device is reachable at <hostname>.local
-_stored_hostname = PersistentDict().get("system_settings", {}).get("hostname", "")
+_stored_hostname = _system_settings.get("hostname", "")
 network.hostname(_stored_hostname if _stored_hostname else "lightmotron")
 
 # Determine stored WiFi credentials
-_wifi_ssid = PersistentDict().get("system_settings", {}).get("wifi", {}).get("ssid", "")
-_wifi_password = PersistentDict().get("system_settings", {}).get("wifi", {}).get("password", "")
+_wifi_ssid = _system_settings.get("wifi", {}).get("ssid", "")
+_wifi_password = _system_settings.get("wifi", {}).get("password", "")
 
 if not _wifi_ssid or not _wifi_password:
     # No credentials configured — start captive portal to collect them
@@ -74,13 +77,6 @@ print("Home URL (IP):   http://" + _active_ip + "/")
 web_server = WebServer()
 web_server.start_in_thread()
 
-# Import views to register routes
-# try:
-#     import views
-#     print("views imported")
-# except Exception as e:
-#     print('boot: failed to import views:', e)
-
 import web.routes
 
 # Initialise audio player — runs health check and logs module status at boot
@@ -90,8 +86,5 @@ try:
     AudioPlayer()
 except Exception as audio_err:
     print("boot: audio init failed:", audio_err)
-
-# Start the I2C
-# I2CManager()
 
 print("Boot complete.\n")

@@ -10,6 +10,16 @@ import os
 import sys
 import machine
 import settings
+
+
+def _as_list(val, default) -> list:
+    """Normalise a form value that may be a single item or list into a list."""
+
+    if val is None:
+        return [default]
+    return val if isinstance(val, list) else [val]
+
+
 from web import views_named_ranges
 
 
@@ -92,10 +102,8 @@ def _pretty_json(obj: dict, indent: int = 0) -> str:
 
 try:
     from network import WLAN, STA_IF
-
-    _wlan = WLAN(STA_IF)
 except Exception:
-    _wlan = None
+    pass
 
 lights = Lighting()
 _OTA_REPO_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
@@ -609,9 +617,9 @@ class StatusView(View):
         except Exception:
             cpu_freq_mhz = "N/A"
 
-        if _wlan is not None and _wlan.isconnected():
+        if WIFIManager().is_connected:
             wifi_connected = "Yes"
-            ip_address = _wlan.ifconfig()[0]
+            ip_address = WIFIManager().ip
         else:
             wifi_connected = "No"
             ip_address = "N/A"
@@ -1546,11 +1554,6 @@ class SystemSettingsView(View):
             error = "Hostname: only letters, numbers, hyphens; max 32 chars; no leading/trailing hyphens."
 
         # --- NeoPixel strips (multi-strip: parallel arrays from repeated fields) ---
-        def _as_list(val, default) -> list:
-            if val is None:
-                return [default]
-            return val if isinstance(val, list) else [val]
-
         strip_pins = _as_list(fd.get("strip_pin"), "4")
         strip_nums = _as_list(fd.get("strip_num"), "144")
         strip_orders = _as_list(fd.get("strip_order"), "GRB")
@@ -2648,18 +2651,13 @@ def _playing_sounds_by_title() -> dict:
 
 def _sounds_context(include_playing: bool = False, home_only: bool = False) -> dict:
     """Build template context from sounds in persistent storage."""
-    storage: PersistentDict = PersistentDict()
-    # Prefer per-model sounds when available
-    lighting_root = storage.get("lighting_settings", {})
-    sounds: dict = {}
-    if isinstance(lighting_root, dict) and "models" in lighting_root:
-        current = lighting_root.get("current_model")
-        models = lighting_root.get("models", {})
-        if current and current in models and isinstance(models[current], dict):
-            sounds = models[current].get("sounds", {})
-    if not sounds:
-        sounds = storage.get("sounds", {})
 
+    from sounds import SoundManager
+
+    manager: SoundManager = SoundManager()
+    sounds: dict = manager.get_sounds()
+
+    storage: PersistentDict = PersistentDict()
     system_settings: dict = storage.get("system_settings", {})
     current_volume: int = int(system_settings.get("master_volume", 20))
 
@@ -2705,11 +2703,6 @@ class SoundsView(View):
         """
 
         fd = self.request.form_data
-
-        def _as_list(val, default) -> list:
-            if val is None:
-                return [default]
-            return val if isinstance(val, list) else [val]
 
         titles = _as_list(fd.get("sound_title"), "")
         files = _as_list(fd.get("sound_file"), "1")
