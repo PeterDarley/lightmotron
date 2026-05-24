@@ -16,9 +16,17 @@ Audio startup can send a UART soft-reset command (DFPlayer/YX5200 command `0x0C`
 When diagnosing sound stop/play state issues, enable `system_settings.audio_debug_logging` to print UART command/status traces, explicit `/sounds/status` endpoint hit/render traces, and mapped playing-state summaries to serial logs.
 Additionally, sound-status diagnostics now emit baseline serial traces (`sounds-status: ...` and `audio: status ...`) even when `audio_debug_logging` is off, so endpoint-hit and low-level status checks remain visible during troubleshooting.
 Home scene actions (`/set_scene`) return a server-rendered `scenes/scene_panel.html` fragment and swap `#scene_panel` so active-scene labels and ongoing/immediate button states always reflect server truth, including scene kills triggered by `scene_settings.kills`.
-Scene trigger sound playback (`scene_settings.sound`) is handled by the lighting runtime (`Lighting.set_scene` / `Lighting.add_scene`), not by web views, so sounds also play for non-UI scene activations.
+Scene trigger sound playback (`scene_settings.sound`) is handled by the lighting runtime (`Lighting.set_scene` / `Lighting.add_scene`), not by web views, so sounds also play for non-UI scene activations, including the default scene selected at boot via `set_scene(None)`.
+Scene-level sound stop lists are also runtime-driven: `scene_settings.stop_sounds_on_start` is applied before scene activation, and `scene_settings.stop_sounds_on_end` is applied when a scene is removed or replaced.
 Home sound controls only include sounds where `show_on_home` is true and use adaptive HTMX polling against `/sounds/status`: `every 5s` while any sound is currently playing, and `every 30s` when all sounds are idle.
 The Home "Active Scenes" label/list intentionally shows only ongoing scenes; immediate scenes are trigger actions and are not displayed there.
+
+Sound playback supports three advanced features configured per-sound:
+- **Looping**: When `loop: true`, a sound automatically restarts when playback ends, repeating indefinitely until stopped manually.
+- **Stopping other sounds**: The `stops: [...]` list specifies which other sounds are stopped when this sound starts. Useful for enforcing mutually exclusive playback (e.g., muting background music when an alert plays).
+- **Chaining**: When `next_sound: "title"` is set, the specified sound automatically starts when the current sound ends. Enables sequences like intro→main→outro without UI intervention.
+
+Sound looping and chaining are detected by the continuous audio polling system (`_poll_tick()` every 100ms). When a module transitions from playing→stopped, `SoundManager.check_for_ended_sounds()` detects the transition and takes the configured action (restart if loop, or start next_sound if chaining).
 
 ## Lighting Module Layout
 

@@ -125,6 +125,7 @@ Create reusable lighting animations with a pattern, colors, and optional filters
 
 #### Scenes
 Combine effects into complete lighting scenarios. Each scene contains one or more jobs assigning effects to LED targets.
+Scenes can also define scene-level behavior: kill other scenes on start, play a trigger sound, stop selected sounds on start, and stop selected sounds when the scene ends.
 
 ![Scenes](docs/screenshots/setup-scenes.png)
 ![Edit a scene](docs/screenshots/setup-scene-edit.png)
@@ -150,7 +151,7 @@ Workflow:
 You can optionally remove local files that were deleted upstream when applying updates.
 
 ### Status Page
-Monitor system health and performance. View memory usage, storage space, WiFi connection, and animation state. Download/restore all configuration as JSON.
+Monitor system health and performance. View memory usage, storage space, networking details (hostname, IP, connection state, SSID), animation state, and configured audio modules with current responsiveness. Download/restore all configuration as JSON.
 Status cards use the same responsive card grid as Setup (up to four cards per row on wide screens), and status tables are rendered with theme-friendly styling so they blend with the active CSS theme.
 Restore now uses a `.json` file upload flow (select file -> review -> confirm) instead of pasting raw JSON into a textarea.
 

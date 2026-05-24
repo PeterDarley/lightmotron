@@ -1,4 +1,4 @@
-<div id="sounds-form">
+<div id="sounds-manager">
     {% if error %}
     <div class="alert alert-danger small py-2">{{ error }}</div>
     {% endif %}
@@ -7,76 +7,62 @@
     {% endif %}
 
     <form hx-post="/sounds"
-          hx-target="#sounds-form"
+          hx-target="#sounds-manager"
           hx-swap="outerHTML">
-
-        <h6 class="mt-0 mb-3">Sound Titles & Files</h6>
-        <div class="mb-2">
-            <table class="table table-sm table-borderless mb-2" id="sounds-table">
-                <thead>
-                    <tr>
-                        <th class="form-label-sm ps-0">Title</th>
-                        <th class="form-label-sm">File #</th>
-                        <th class="form-label-sm">HQ</th>
-                        <th class="form-label-sm">Home</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="sounds-tbody">
-                    {% for sound in sounds %}
-                    <tr>
-                        <td class="ps-0">
-                            <input type="text" class="form-control form-control-sm" name="sound_title"
-                                   value="{{ sound.title }}" placeholder="Title" maxlength="64" required>
-                        </td>
-                        <td>
-                            <input type="number" class="form-control form-control-sm" name="sound_file"
-                                   value="{{ sound.file }}" min="1" max="9999" required>
-                        </td>
-                        <td class="text-center align-middle">
-                            <input class="form-check-input" type="checkbox" name="sound_high_quality"
-                                   value="1" {% if sound.high_quality %}checked{% endif %}>
-                        </td>
-                        <td class="text-center align-middle">
-                            <input class="form-check-input" type="checkbox" name="sound_show_on_home"
-                                   value="1" {% if sound.show_on_home %}checked{% endif %}>
-                        </td>
-                        <td>
-                            <button type="button" class="btn btn-sm btn-outline-danger"
-                                    onclick="this.closest('tr').remove()">✕</button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addSoundRow()">+ Add Sound</button>
-            <div class="form-text">Enter title, file number (0001-9999 on SD card), and choose whether each sound should appear on the home page.</div>
+        <input type="hidden" name="action" value="create_sound">
+        <div class="input-group mb-3" style="max-width: 400px;">
+            <input type="text" class="form-control" name="sound_title" placeholder="New sound name" required>
+            <button type="submit" class="btn btn-primary">Add Sound</button>
         </div>
-
-        <button type="submit" class="btn btn-primary btn-sm">Save Sounds</button>
     </form>
-</div>
 
-<script>
-function addSoundRow() {
-    var tbody = document.getElementById('sounds-tbody');
-    var row = '<tr>' +
-        '<td class="ps-0">' +
-        '<input type="text" class="form-control form-control-sm" name="sound_title" placeholder="Title" maxlength="64" required>' +
-        '</td>' +
-        '<td>' +
-        '<input type="number" class="form-control form-control-sm" name="sound_file" value="1" min="1" max="9999" required>' +
-        '</td>' +
-        '<td class="text-center align-middle">' +
-        '<input class="form-check-input" type="checkbox" name="sound_high_quality" value="1">' +
-        '</td>' +
-        '<td class="text-center align-middle">' +
-        '<input class="form-check-input" type="checkbox" name="sound_show_on_home" value="1" checked>' +
-        '</td>' +
-        '<td>' +
-        '<button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()">✕</button>' +
-        '</td>' +
-        '</tr>';
-    tbody.insertAdjacentHTML('beforeend', row);
-}
-</script>
+    {% if sounds %}
+    <table class="table table-hover align-middle mb-0">
+        <thead>
+            <tr>
+                <th>Sound</th>
+                <th class="text-center" style="width: 100px;">File #</th>
+                <th class="text-center" style="width: 80px;">HQ</th>
+                <th class="text-center" style="width: 100px;">Home</th>
+                <th style="width: 140px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sound in sounds %}
+            <tr>
+                <td><strong>{{ sound.title }}</strong></td>
+                <td class="text-center text-muted">{{ sound.file }}</td>
+                <td class="text-center">
+                    {% if sound.high_quality %}
+                    <span class="badge bg-secondary">HQ</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if sound.show_on_home %}
+                    <span class="badge bg-info">Home</span>
+                    {% endif %}
+                </td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-primary me-1"
+                            hx-get="/sounds/edit?sound={{ sound.title }}"
+                            hx-target="#modal-body"
+                            hx-swap="innerHTML">
+                        Edit
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger"
+                            hx-post="/sounds"
+                            hx-target="#sounds-manager"
+                            hx-swap="outerHTML"
+                            hx-vals='{"sound_title": "{{ sound.title }}", "action": "delete_sound"}'
+                            hx-confirm="Delete sound '{{ sound.title }}'?">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted small mt-2">No sounds yet. Add one above.</p>
+    {% endif %}
+</div>

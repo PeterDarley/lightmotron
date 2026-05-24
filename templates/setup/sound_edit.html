@@ -1,0 +1,88 @@
+<div id="sound-editor">
+    <div class="d-flex align-items-center mb-3">
+        <button class="btn btn-outline-secondary btn-sm me-3"
+                hx-get="/sounds"
+                hx-target="#modal-body"
+                hx-swap="innerHTML">
+            &larr; Back to Sounds
+        </button>
+        <h5 class="mb-0">{{ sound_title }}</h5>
+    </div>
+
+    <form hx-post="/sounds/edit"
+          hx-target="#modal-body"
+          hx-swap="innerHTML">
+        <input type="hidden" name="action" value="update_sound">
+        <input type="hidden" name="old_sound_title" value="{{ sound_title }}">
+
+        <div class="mb-3">
+            <label for="sound-title-input" class="form-label">Title</label>
+            <input type="text" class="form-control" id="sound-title-input" name="sound_title"
+                   value="{{ sound_title }}"
+                   placeholder="Sound name" maxlength="64" required style="max-width: 400px;">
+            <small class="text-muted">Display name for this sound (shown in UI)</small>
+        </div>
+
+        <div class="mb-3">
+            <label for="sound-file-input" class="form-label">File #</label>
+            <input type="number" class="form-control" id="sound-file-input" name="sound_file"
+                   value="{{ sound_file }}"
+                   min="1" max="9999" required style="max-width: 200px;">
+            <small class="text-muted">SD card file number (0001-9999)</small>
+        </div>
+
+        <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input theme-check" id="sound-hq-checkbox" name="sound_high_quality" value="1"{% if sound_high_quality %} checked{% endif %}>
+            <label class="form-check-label theme-check-label" for="sound-hq-checkbox">
+                High Quality
+            </label>
+            <br><small class="text-muted">Use high-quality audio file if available</small>
+        </div>
+
+        <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input theme-check" id="sound-home-checkbox" name="sound_show_on_home" value="1"{% if sound_show_on_home %} checked{% endif %}>
+            <label class="form-check-label theme-check-label" for="sound-home-checkbox">
+                Show on Home Page
+            </label>
+            <br><small class="text-muted">Display this sound as a button on the home page</small>
+        </div>
+
+        <div class="border-top pt-3 mt-3">
+            <h6 class="mb-3">Playback Options</h6>
+
+            <div class="mb-3">
+                <label for="sound-loop-input" class="form-label">Loop Count</label>
+                <input type="number" class="form-control" id="sound-loop-input" name="sound_loop_count"
+                       value="{{ sound_loop_count }}"
+                       min="0" max="100" style="max-width: 200px;">
+                <small class="text-muted">Number of times to loop (0 = no loop, play once; 1 = play twice total, etc.)</small>
+            </div>
+
+            <div class="mb-3">
+                <label for="sound-chain-input" class="form-label">Chain to Next Sound</label>
+                <select class="form-select" id="sound-chain-input" name="sound_chain_next" style="max-width: 300px;">
+                    <option value="">None - stop after playing</option>
+                    {% for other_sound in available_sounds %}
+                        {% if other_sound != sound_title %}
+                        <option value="{{ other_sound }}"{% if other_sound == sound_chain_next %} selected{% endif %}>{{ other_sound }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+                <small class="text-muted">Play another sound automatically when this one finishes</small>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">
+                Save Sound
+            </button>
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    hx-get="/sounds"
+                    hx-target="#modal-body"
+                    hx-swap="innerHTML">
+                Cancel
+            </button>
+        </div>
+    </form>
+</div>

@@ -106,17 +106,17 @@
 }
 
 /* Setup sounds modal table integration */
-#sounds-form {
-    & #sounds-table {
+#sounds-manager {
+    & table {
         --bs-table-bg: transparent;
         --bs-table-striped-bg: transparent;
         --bs-table-active-bg: transparent;
         --bs-table-hover-bg: transparent;
-        color: inherit;
+        color: #fff;
 
         & > :not(caption) > * > * {
             background-color: transparent;
-            color: inherit;
+            color: #fff;
         }
     }
 }

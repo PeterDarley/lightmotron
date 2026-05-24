@@ -53,9 +53,10 @@
 
         <div class="col dashboard-card-col">
             <div class="card setup-card status-card h-100">
-                <div class="card-header">WiFi</div>
+                <div class="card-header">Networking</div>
                 <div class="card-body">
                     <table class="table table-sm status-table mb-0">
+                        <tr><th>Hostname</th><td>{{ hostname }}</td></tr>
                         <tr><th>IP Address</th><td>{{ ip_address }}</td></tr>
                         <tr><th>Connected</th><td>{{ wifi_connected }}</td></tr>
                         <tr><th>SSID</th><td>{{ wifi_ssid }}</td></tr>

@@ -126,12 +126,18 @@ optional; hardcoded defaults in settings.py are used when a key is absent.
         "alert": {
             "file":          1,      # file number (0001.mp3, 0002.mp3, etc)
             "high_quality": false,   # whether to play on high-quality modules if available
-            "show_on_home": true     # whether to show this sound button on the Home page
+            "show_on_home": true,    # whether to show this sound button on the Home page
+            "loop": false,           # whether to loop/repeat when playback ends
+            "stops": [],             # list of sound titles to stop when this starts
+            "next_sound": None       # sound title to play when this ends (chaining)
         },
         "fanfare": {
             "file":          2,
             "high_quality": true,
-            "show_on_home": true
+            "show_on_home": true,
+            "loop": false,
+            "stops": [],
+            "next_sound": None
         }
         # ... more sounds
     }
@@ -162,3 +168,9 @@ Notes
     or ranges. The web setup UI and runtime will expand these references when
     resolving targets. Circular references are rejected by the UI and will not
     be saved.
+* Scene-level metadata lives under
+    ``lighting_settings.models.<model_name>.scene_settings.<scene_name>`` and may
+    include:
+    ``kills`` (scenes to remove on start), ``sound`` (sound to play on start),
+    ``stop_sounds_on_start`` (sounds to stop before activation), and
+    ``stop_sounds_on_end`` (sounds to stop when the scene is removed/replaced).

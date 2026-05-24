@@ -213,6 +213,60 @@
             <small class="text-muted ms-2">Select a sound to play automatically when this scene is activated.</small>
         </form>
 
+        {% if sounds %}
+        <form hx-post="/scenes/edit"
+              hx-target="#modal-body"
+              hx-swap="innerHTML"
+              class="mb-3">
+            <input type="hidden" name="action" value="update_scene_settings">
+            <input type="hidden" name="scene_name" value="{{ scene_name }}">
+            <label class="form-label small fw-semibold">Stop Sounds When This Scene Starts</label>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                {% for sound in sounds %}
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input theme-check scene-stop-on-start-check" type="checkbox"
+                           id="stop-on-start-{{ scene_name_id }}-{{ sound.file }}"
+                           value="{{ sound.title }}"
+                           {% if sound.title in scene_stop_sounds_on_start %}checked{% endif %}>
+                    <label class="form-check-label theme-check-label small" for="stop-on-start-{{ scene_name_id }}-{{ sound.file }}">{{ sound.title }}</label>
+                </div>
+                {% endfor %}
+            </div>
+            <input type="hidden" name="stop_sounds_on_start" id="stop-sounds-on-start-hidden-{{ scene_name_id }}" value="{{ scene_stop_sounds_on_start_csv }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary"
+                    onclick="document.getElementById('stop-sounds-on-start-hidden-{{ scene_name_id }}').value = Array.from(document.querySelectorAll('.scene-stop-on-start-check:checked')).map(function(c){return c.value;}).join(','); return true;">
+                Save
+            </button>
+            <small class="text-muted ms-2">Selected sounds are stopped before this scene is activated.</small>
+        </form>
+
+        <form hx-post="/scenes/edit"
+              hx-target="#modal-body"
+              hx-swap="innerHTML"
+              class="mb-3">
+            <input type="hidden" name="action" value="update_scene_settings">
+            <input type="hidden" name="scene_name" value="{{ scene_name }}">
+            <label class="form-label small fw-semibold">Stop Sounds When This Scene Ends</label>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                {% for sound in sounds %}
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input theme-check scene-stop-on-end-check" type="checkbox"
+                           id="stop-on-end-{{ scene_name_id }}-{{ sound.file }}"
+                           value="{{ sound.title }}"
+                           {% if sound.title in scene_stop_sounds_on_end %}checked{% endif %}>
+                    <label class="form-check-label theme-check-label small" for="stop-on-end-{{ scene_name_id }}-{{ sound.file }}">{{ sound.title }}</label>
+                </div>
+                {% endfor %}
+            </div>
+            <input type="hidden" name="stop_sounds_on_end" id="stop-sounds-on-end-hidden-{{ scene_name_id }}" value="{{ scene_stop_sounds_on_end_csv }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary"
+                    onclick="document.getElementById('stop-sounds-on-end-hidden-{{ scene_name_id }}').value = Array.from(document.querySelectorAll('.scene-stop-on-end-check:checked')).map(function(c){return c.value;}).join(','); return true;">
+                Save
+            </button>
+            <small class="text-muted ms-2">Selected sounds are stopped when this scene is removed or replaced.</small>
+        </form>
+        {% endif %}
+
         <div class="d-flex flex-wrap gap-3 align-items-end">
 
             <form hx-post="/scenes"

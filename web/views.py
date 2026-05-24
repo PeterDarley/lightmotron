@@ -617,12 +617,18 @@ class StatusView(View):
         except Exception:
             cpu_freq_mhz = "N/A"
 
+        storage: PersistentDict = PersistentDict()
+        system_settings: dict = storage.get("system_settings", {})
+
         if WIFIManager().is_connected:
             wifi_connected = "Yes"
             ip_address = WIFIManager().ip
         else:
             wifi_connected = "No"
             ip_address = "N/A"
+
+        hostname: str = str(system_settings.get("hostname", "") or "lightmotron")
+        wifi_ssid: str = str(system_settings.get("wifi", {}).get("ssid", ""))
 
         # Check for restore result from redirect.
         restore_status: str = self.request.query_params.get("restore", "")
@@ -635,32 +641,44 @@ class StatusView(View):
         elif restore_status == "invalid":
             restore_message = "Restore failed: invalid JSON data."
             restore_class = "danger"
-        # Gather audio health from the SoundManager (if available)
-        audio_health_list = []
-        audio_health_summary = "No audio modules configured"
+        # Show configured audio modules from system settings and overlay
+        # live health data when available.
+        configured_audio_players: list = system_settings.get("audio_players", [])
+        if not isinstance(configured_audio_players, list):
+            configured_audio_players = []
+
+        audio_health_list: list = []
+        audio_health_summary: str = "No audio modules configured"
+        raw_health: dict = {}
         try:
             from sounds import SoundManager
 
             sm = SoundManager()
-            raw_health = sm.get_last_health() or {}
-            # Convert to sorted list for templating
-            keys = sorted(raw_health.keys())
-            for k in keys:
-                info = raw_health.get(k, {})
-                audio_health_list.append(
-                    {
-                        "index": k,
-                        "uart": info.get("uart"),
-                        "ok": bool(info.get("ok")),
-                        "state": info.get("state"),
-                    }
-                )
-            if audio_health_list:
+            raw_health = sm.refresh_health() or {}
+        except Exception:
+            raw_health = {}
+
+        for module_index, module_cfg in enumerate(configured_audio_players):
+            info: dict = raw_health.get(module_index, {}) if isinstance(raw_health, dict) else {}
+            uart_id = module_cfg.get("uart") if isinstance(module_cfg, dict) else None
+            if uart_id is None:
+                uart_id = info.get("uart")
+
+            audio_health_list.append(
+                {
+                    "index": module_index,
+                    "uart": uart_id,
+                    "ok": bool(info.get("ok", False)),
+                    "state": info.get("state"),
+                }
+            )
+
+        if audio_health_list:
+            if raw_health:
                 healthy = sum(1 for it in audio_health_list if it.get("ok"))
                 audio_health_summary = f"{healthy}/{len(audio_health_list)} responsive"
-        except Exception:
-            audio_health_list = []
-            audio_health_summary = "Audio health not available"
+            else:
+                audio_health_summary = f"Configured modules: {len(audio_health_list)} (health unavailable)"
 
         return render_template(
             "status.html",
@@ -678,7 +696,8 @@ class StatusView(View):
                 "platform": sys.platform,
                 "wifi_connected": wifi_connected,
                 "ip_address": ip_address,
-                "wifi_ssid": PersistentDict().get("system_settings", {}).get("wifi", {}).get("ssid", ""),
+                "wifi_ssid": wifi_ssid,
+                "hostname": hostname,
                 "animation_running": str(lights.animation.running),
                 "current_scene": lights.scene_name,
                 "active_model": getattr(lights, "current_model_name", None),
@@ -1919,6 +1938,8 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
     kills: list = scene_meta.get("kills", [])
     all_scene_names: list = sorted(lights.settings.get("scenes", {}).keys())
     killable_scenes: list = [n for n in all_scene_names if n != scene_name]
+    stop_sounds_on_start: list = scene_meta.get("stop_sounds_on_start", [])
+    stop_sounds_on_end: list = scene_meta.get("stop_sounds_on_end", [])
 
     context: dict = {
         "scene_name": scene_name,
@@ -1932,6 +1953,10 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
         "scene_kills": kills,
         "scene_kills_csv": ",".join(kills),
         "scene_sound": scene_meta.get("sound", ""),
+        "scene_stop_sounds_on_start": stop_sounds_on_start,
+        "scene_stop_sounds_on_start_csv": ",".join(stop_sounds_on_start),
+        "scene_stop_sounds_on_end": stop_sounds_on_end,
+        "scene_stop_sounds_on_end_csv": ",".join(stop_sounds_on_end),
         "page_title": "Edit Scene",
     }
 
@@ -2528,6 +2553,23 @@ class SceneEditView(View):
                     if s.strip() and s.strip() in lights.settings.get("scenes", {})
                 ]
                 scene_sound: str = self.request.form_data.get("scene_sound", "").strip()
+                from sounds import SoundManager
+
+                sound_titles: set = set(SoundManager().get_sounds().keys())
+
+                stop_sounds_on_start_raw: str = self.request.form_data.get("stop_sounds_on_start", "").strip()
+                stop_sounds_on_start_list: list = [
+                    s.strip()
+                    for s in stop_sounds_on_start_raw.split(",")
+                    if s.strip() and s.strip() in sound_titles
+                ]
+
+                stop_sounds_on_end_raw: str = self.request.form_data.get("stop_sounds_on_end", "").strip()
+                stop_sounds_on_end_list: list = [
+                    s.strip()
+                    for s in stop_sounds_on_end_raw.split(",")
+                    if s.strip() and s.strip() in sound_titles
+                ]
 
                 if "scene_settings" not in lights.settings:
                     lights.settings["scene_settings"] = {}
@@ -2543,6 +2585,16 @@ class SceneEditView(View):
                     lights.settings["scene_settings"][scene_name]["sound"] = scene_sound
                 elif "sound" in lights.settings["scene_settings"].get(scene_name, {}):
                     del lights.settings["scene_settings"][scene_name]["sound"]
+
+                if stop_sounds_on_start_list:
+                    lights.settings["scene_settings"][scene_name]["stop_sounds_on_start"] = stop_sounds_on_start_list
+                elif "stop_sounds_on_start" in lights.settings["scene_settings"].get(scene_name, {}):
+                    del lights.settings["scene_settings"][scene_name]["stop_sounds_on_start"]
+
+                if stop_sounds_on_end_list:
+                    lights.settings["scene_settings"][scene_name]["stop_sounds_on_end"] = stop_sounds_on_end_list
+                elif "stop_sounds_on_end" in lights.settings["scene_settings"].get(scene_name, {}):
+                    del lights.settings["scene_settings"][scene_name]["stop_sounds_on_end"]
 
                 lights.settings_object.store()
 
@@ -2688,69 +2740,61 @@ class SoundsSummaryView(View):
 
 
 class SoundsView(View):
-    """Display and edit sound titles, files, and metadata."""
+    """List sounds and create or delete sounds."""
 
     def get(self) -> str:
-        """Return the sounds edit form fragment."""
+        """Show sound list and create-sound form."""
 
-        return render_template("setup/sounds.html", _sounds_context())
+        context: dict = _sounds_context()
+        context["page_title"] = "Sounds"
+        return render_template("setup/sounds.html", context)
 
     def post(self) -> str:
-        """Validate and save all sound definitions.
+        """Create or delete a sound."""
 
-        Accepts arrays of sound_title[], sound_file[], sound_high_quality[],
-        and sound_show_on_home[].
-        """
-
-        fd = self.request.form_data
-
-        titles = _as_list(fd.get("sound_title"), "")
-        files = _as_list(fd.get("sound_file"), "1")
-        hq_flags = _as_list(fd.get("sound_high_quality"), "")
-        show_on_home_flags = _as_list(fd.get("sound_show_on_home"), "")
-
-        sounds: dict = {}
-        error: str = ""
-
-        for i in range(
-            max(
-                len(titles),
-                len(files),
-                len(hq_flags),
-                len(show_on_home_flags),
-            )
-        ):
-            title = (titles[i] if i < len(titles) else "").strip()
-            if not title:
-                continue
-
-            try:
-                file_num: int = int(files[i] if i < len(files) else 1)
-                if file_num < 1 or file_num > 9999:
-                    file_num = 1
-            except (ValueError, IndexError):
-                file_num = 1
-
-            hq: bool = (hq_flags[i] if i < len(hq_flags) else "") == "1"
-            show_on_home: bool = (show_on_home_flags[i] if i < len(show_on_home_flags) else "") == "1"
-
-            sounds[title] = {
-                "file": file_num,
-                "high_quality": hq,
-                "show_on_home": show_on_home,
-            }
-
-        if error:
-            context = _sounds_context()
-            context["error"] = error
-            return render_template("setup/sounds.html", context)
-
-        print("Sounds: saving {} sound(s)".format(len(sounds)))
-        for title, sound in sounds.items():
-            print("  {}: {}".format(title, sound))
+        action: str = self.request.form_data.get("action", "").strip()
+        sound_title: str = self.request.form_data.get("sound_title", "").strip()
 
         storage: PersistentDict = PersistentDict()
-        # Save into the current model if models container exists, otherwise top-level
+        sounds: dict = self._get_sounds_dict(storage)
+
+        if action == "create_sound" and sound_title:
+            if sound_title not in sounds:
+                sounds[sound_title] = {
+                    "file": 1,
+                    "high_quality": False,
+                    "show_on_home": True,
+                    "loop_count": 0,
+                    "chain_next": None,
+                }
+                self._save_sounds_dict(storage, sounds)
+
+        elif action == "delete_sound" and sound_title and sound_title in sounds:
+            del sounds[sound_title]
+            self._save_sounds_dict(storage, sounds)
+
+        context: dict = _sounds_context()
+        context["page_title"] = "Sounds"
+        return render_template("setup/sounds.html", context)
+
+    def _get_sounds_dict(self, storage: PersistentDict) -> dict:
+        """Get the sounds dictionary from storage."""
+
+        lighting_root = storage.get("lighting_settings", {})
+        if isinstance(lighting_root, dict) and "models" in lighting_root:
+            current = lighting_root.get("current_model")
+            if current and current in lighting_root.get("models", {}):
+                if "sounds" not in lighting_root["models"][current]:
+                    lighting_root["models"][current]["sounds"] = {}
+                return lighting_root["models"][current]["sounds"]
+
+        if "sounds" not in storage:
+            storage["sounds"] = {}
+        return storage["sounds"]
+
+    def _save_sounds_dict(self, storage: PersistentDict, sounds: dict) -> None:
+        """Save the sounds dictionary to storage."""
+
         lighting_root = storage.get("lighting_settings", {})
         if isinstance(lighting_root, dict) and "models" in lighting_root:
             current = lighting_root.get("current_model")
@@ -2758,17 +2802,116 @@ class SoundsView(View):
                 lighting_root["models"][current]["sounds"] = sounds
                 storage["lighting_settings"] = lighting_root
                 storage.store()
-            else:
-                storage["sounds"] = sounds
-                storage.store()
-        else:
-            storage["sounds"] = sounds
-            storage.store()
-        print("Sounds: storage saved OK")
+                return
 
-        context = _sounds_context()
-        context["message"] = "Sounds saved."
+        storage["sounds"] = sounds
+        storage.store()
+
+
+class SoundEditView(View):
+    """Edit a specific sound's properties."""
+
+    def get(self) -> str:
+        """Show edit form for a specific sound."""
+
+        sound_title: str = self.request.query_params.get("sound", "").strip()
+
+        storage: PersistentDict = PersistentDict()
+        sounds: dict = self._get_sounds_dict(storage)
+
+        if not sound_title or sound_title not in sounds:
+            return '<p class="text-danger small">Sound not found.</p>'
+
+        sound: dict = sounds[sound_title]
+        context: dict = {
+            "sound_title": sound_title,
+            "sound_file": sound.get("file", 1),
+            "sound_high_quality": bool(sound.get("high_quality", False)),
+            "sound_show_on_home": bool(sound.get("show_on_home", True)),
+            "sound_loop_count": sound.get("loop_count", 0),
+            "sound_chain_next": sound.get("chain_next"),
+            "available_sounds": sorted(sounds.keys()),
+        }
+        return render_template("setup/sound_edit.html", context)
+
+    def post(self) -> str:
+        """Update a sound's properties."""
+
+        action: str = self.request.form_data.get("action", "").strip()
+        old_sound_title: str = self.request.form_data.get("old_sound_title", "").strip()
+        sound_title: str = self.request.form_data.get("sound_title", "").strip()
+
+        if action == "update_sound" and old_sound_title and sound_title:
+            storage: PersistentDict = PersistentDict()
+            sounds: dict = self._get_sounds_dict(storage)
+
+            if old_sound_title in sounds:
+                # Get the current sound data
+                sound_data: dict = sounds[old_sound_title]
+
+                # Update with new form values
+                try:
+                    sound_data["file"] = int(self.request.form_data.get("sound_file", 1))
+                except (ValueError, TypeError):
+                    sound_data["file"] = 1
+
+                sound_data["high_quality"] = self.request.form_data.get("sound_high_quality", "") == "1"
+                sound_data["show_on_home"] = self.request.form_data.get("sound_show_on_home", "") == "1"
+
+                try:
+                    sound_data["loop_count"] = int(self.request.form_data.get("sound_loop_count", 0))
+                except (ValueError, TypeError):
+                    sound_data["loop_count"] = 0
+
+                chain_next: str = self.request.form_data.get("sound_chain_next", "").strip()
+                sound_data["chain_next"] = chain_next if chain_next else None
+
+                # If title changed, delete old entry and create new one
+                if old_sound_title != sound_title:
+                    if sound_title not in sounds:
+                        del sounds[old_sound_title]
+                        sounds[sound_title] = sound_data
+                    else:
+                        # New title already exists, just update the old sound
+                        sounds[old_sound_title] = sound_data
+                else:
+                    sounds[sound_title] = sound_data
+
+                self._save_sounds_dict(storage, sounds)
+
+        context: dict = _sounds_context()
+        context["page_title"] = "Sounds"
         return render_template("setup/sounds.html", context)
+
+    def _get_sounds_dict(self, storage: PersistentDict) -> dict:
+        """Get the sounds dictionary from storage."""
+
+        lighting_root = storage.get("lighting_settings", {})
+        if isinstance(lighting_root, dict) and "models" in lighting_root:
+            current = lighting_root.get("current_model")
+            if current and current in lighting_root.get("models", {}):
+                if "sounds" not in lighting_root["models"][current]:
+                    lighting_root["models"][current]["sounds"] = {}
+                return lighting_root["models"][current]["sounds"]
+
+        if "sounds" not in storage:
+            storage["sounds"] = {}
+        return storage["sounds"]
+
+    def _save_sounds_dict(self, storage: PersistentDict, sounds: dict) -> None:
+        """Save the sounds dictionary to storage."""
+
+        lighting_root = storage.get("lighting_settings", {})
+        if isinstance(lighting_root, dict) and "models" in lighting_root:
+            current = lighting_root.get("current_model")
+            if current and current in lighting_root.get("models", {}):
+                lighting_root["models"][current]["sounds"] = sounds
+                storage["lighting_settings"] = lighting_root
+                storage.store()
+                return
+
+        storage["sounds"] = sounds
+        storage.store()
 
 
 class PlaySoundView(View):
