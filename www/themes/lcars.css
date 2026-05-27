@@ -143,26 +143,27 @@ body {
 }
 
 /* ---- Per-card color cycling ---- */
-.col:nth-child(20n+1)  > .card { background: var(--lcars-c1); }
-.col:nth-child(20n+2)  > .card { background: var(--lcars-c2); }
-.col:nth-child(20n+3)  > .card { background: var(--lcars-c3); }
-.col:nth-child(20n+4)  > .card { background: var(--lcars-c4); }
-.col:nth-child(20n+5)  > .card { background: var(--lcars-c5); }
-.col:nth-child(20n+6)  > .card { background: var(--lcars-c6); }
-.col:nth-child(20n+7)  > .card { background: var(--lcars-c7); }
-.col:nth-child(20n+8)  > .card { background: var(--lcars-c8); }
-.col:nth-child(20n+9)  > .card { background: var(--lcars-c9); }
-.col:nth-child(20n+10) > .card { background: var(--lcars-c10); }
-.col:nth-child(20n+11) > .card { background: var(--lcars-c11); }
-.col:nth-child(20n+12) > .card { background: var(--lcars-c12); }
-.col:nth-child(20n+13) > .card { background: var(--lcars-c13); }
-.col:nth-child(20n+14) > .card { background: var(--lcars-c14); }
-.col:nth-child(20n+15) > .card { background: var(--lcars-c15); }
-.col:nth-child(20n+16) > .card { background: var(--lcars-c16); }
-.col:nth-child(20n+17) > .card { background: var(--lcars-c17); }
-.col:nth-child(20n+18) > .card { background: var(--lcars-c18); }
-.col:nth-child(20n+19) > .card { background: var(--lcars-c19); }
-.col:nth-child(20n)    > .card { background: var(--lcars-c20); }
+/* Covers both generic .col wrappers and the setup page's .dashboard-card-col wrappers. */
+:is(.col, .dashboard-card-col):nth-child(20n+1)  > .card { background: var(--lcars-c1); }
+:is(.col, .dashboard-card-col):nth-child(20n+2)  > .card { background: var(--lcars-c2); }
+:is(.col, .dashboard-card-col):nth-child(20n+3)  > .card { background: var(--lcars-c3); }
+:is(.col, .dashboard-card-col):nth-child(20n+4)  > .card { background: var(--lcars-c4); }
+:is(.col, .dashboard-card-col):nth-child(20n+5)  > .card { background: var(--lcars-c5); }
+:is(.col, .dashboard-card-col):nth-child(20n+6)  > .card { background: var(--lcars-c6); }
+:is(.col, .dashboard-card-col):nth-child(20n+7)  > .card { background: var(--lcars-c7); }
+:is(.col, .dashboard-card-col):nth-child(20n+8)  > .card { background: var(--lcars-c8); }
+:is(.col, .dashboard-card-col):nth-child(20n+9)  > .card { background: var(--lcars-c9); }
+:is(.col, .dashboard-card-col):nth-child(20n+10) > .card { background: var(--lcars-c10); }
+:is(.col, .dashboard-card-col):nth-child(20n+11) > .card { background: var(--lcars-c11); }
+:is(.col, .dashboard-card-col):nth-child(20n+12) > .card { background: var(--lcars-c12); }
+:is(.col, .dashboard-card-col):nth-child(20n+13) > .card { background: var(--lcars-c13); }
+:is(.col, .dashboard-card-col):nth-child(20n+14) > .card { background: var(--lcars-c14); }
+:is(.col, .dashboard-card-col):nth-child(20n+15) > .card { background: var(--lcars-c15); }
+:is(.col, .dashboard-card-col):nth-child(20n+16) > .card { background: var(--lcars-c16); }
+:is(.col, .dashboard-card-col):nth-child(20n+17) > .card { background: var(--lcars-c17); }
+:is(.col, .dashboard-card-col):nth-child(20n+18) > .card { background: var(--lcars-c18); }
+:is(.col, .dashboard-card-col):nth-child(20n+19) > .card { background: var(--lcars-c19); }
+:is(.col, .dashboard-card-col):nth-child(20n)    > .card { background: var(--lcars-c20); }
 
 /* ---- Home page ---- */
 .theme-page { padding-top: 1rem; }

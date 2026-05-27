@@ -44,6 +44,8 @@ git submodule init
 git submodule update
 ```
 
+Code is parsed by MicroPython on-device, so use MicroPython-safe Python syntax in runtime files (for example, avoid PEP 604 union annotations like `str | None`).
+
 ## First Boot — WiFi Setup
 
 On first boot (or whenever WiFi credentials are missing or fail to connect), the device starts a **captive portal** access point:
@@ -66,6 +68,7 @@ Credentials are stored persistently, so this only needs to be done once. To chan
 `upload.ps1` now attempts to quiet the runtime (stops the web server when possible)
 before transfer, uses mpremote resume mode to avoid upload-time soft resets, and retries transient transport/raw-REPL failures automatically.
 It also always recopies critical runtime files (`boot.py`, `main.py`, `lib/audio.py`, `lib/sounds.py`) even during incremental uploads, to self-heal from stale or partial files left by interrupted transfers.
+The upload summary distinguishes true hash-detected changes from these mandatory refresh files.
 
 To hard reset the device after uploading:
 
@@ -77,8 +80,12 @@ python tools\reset_device.py COM3
 
 Once the device is running and connected to WiFi, open your browser and navigate to the device's IP address (e.g., `http://192.168.1.100/` or use the hostname `http://lightmotron.local/` if mDNS is available). (These screen shots are messed up.  I'll fix them at some point.)
 
+At boot, routes are registered before the HTTP server thread starts so `/` consistently resolves to the dynamic Home page rather than transiently falling back to `www/index.html`.
+
 ### Home Page
 Control animation playback and trigger scenes. Start/stop lighting animations, switch between configured scenes, and play sounds from the audio modules.
+When stopping animation, the runtime now waits for any in-flight frame to finish before applying the stop clear, so LEDs reliably settle to black/off.
+The Home animation controls also now update to the stopped button state immediately when Stop is pressed.
 The Sounds section includes the master volume slider and home-visible sound triggers.
 The Immediate scenes section is only shown when at least one scene is configured as immediate.
 

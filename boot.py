@@ -73,11 +73,13 @@ print("Hostname:", _active_hostname)
 print("Home URL (mDNS): http://" + _active_hostname + ".local/")
 print("Home URL (IP):   http://" + _active_ip + "/")
 
-# Create the web server
+# Register routes before starting the server so '/' resolves to HomeView
+# immediately and does not transiently fall back to static www/index.html.
+import web.routes
+
+# Create/start the web server after routes are in place.
 web_server = WebServer()
 web_server.start_in_thread()
-
-import web.routes
 
 # Initialise audio player — runs health check and logs module status at boot
 try:

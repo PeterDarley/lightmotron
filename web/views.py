@@ -245,8 +245,8 @@ NamedRangeRemoveSubrangeView = views_named_ranges.NamedRangeRemoveSubrangeView
 def _animation_context() -> dict:
     """Return a context dict with the current animation running state."""
 
-    running = lights.animation.running
-    return {"animation_running": running, "animation_stopped": not running}
+    animation_is_running = bool(lights.animation.running) and not bool(lights.animation.stopped)
+    return {"animation_running": animation_is_running, "animation_stopped": not animation_is_running}
 
 
 def _scenes_context() -> dict:
@@ -416,7 +416,7 @@ class AudioVolumeView(View):
 class SetSceneView(View):
     """Handle POST requests to set or modify the current lighting scene(s)."""
 
-    def post(self) -> str | tuple | None:
+    def post(self):
         """Set, add, or remove an active scene.
 
         action=set (default): replace all active scenes with the given scene.
@@ -446,7 +446,7 @@ class SetSceneView(View):
 class AnimationView(View):
     """Handle POST requests to start or stop the lighting animation."""
 
-    def post(self) -> str | tuple:
+    def post(self):
         """Start or stop the animation based on the POST data."""
         action = self.request.form_data.get("action")
         if action == "start":
@@ -480,7 +480,7 @@ def _redact_system_settings(storage_dict: dict) -> dict:
 class StorageView(View):
     """Display the persistent storage dictionary as pretty-printed JSON."""
 
-    def get(self) -> str | tuple:
+    def get(self):
         """Return the storage contents as JSON."""
 
         try:
@@ -2265,7 +2265,7 @@ def _filter_edit_context(filter_name: str = None) -> dict:
         context["old_filter_name"] = filter_name
 
         if filter_type in ("sizzle", "scintillate"):
-            variation_percent: float | None = None
+            variation_percent = None
 
             if "variation_percent" in filter_def:
                 try:
@@ -2643,7 +2643,7 @@ class ColorSelectView(View):
         return render_template("setup/color_select.html", context)
 
 
-def _sounds_list(sounds_dict: dict, playing_by_title: dict | None = None) -> list:
+def _sounds_list(sounds_dict: dict, playing_by_title: dict = None) -> list:
     """Build a list of sound summary dicts for template rendering, sorted alphabetically."""
 
     result: list = []
@@ -2933,7 +2933,7 @@ class PlaySoundView(View):
             from sounds import SoundManager
 
             manager: SoundManager = SoundManager()
-            sound_info: dict | None = None
+            sound_info = None
             try:
                 sound_info = manager.get_sound_by_title(title)
             except Exception:

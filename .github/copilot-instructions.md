@@ -84,6 +84,9 @@ All CSS files should use native CSS nesting. Group related selectors under their
 }
 ```
 
+### LCARS setup card colors
+In the LCARS theme, each card on the Setup page should use a different color selected from the LCARS palette (do not use one uniform card color for all setup cards).
+
 ### Lighting filter design
 Filters always receive both the **target color** (from the pattern) and the **current color** (from `logical_colors`). Differences are calculated against the target color but applied to the current color. This makes filters order-independent — the result is the same regardless of which order filters are applied in.
 

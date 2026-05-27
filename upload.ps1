@@ -113,29 +113,46 @@ foreach ($dir in $directories) {
     }
 }
 
-# Determine which files have changed.
-$changedFiles = [System.Collections.Generic.List[string]]::new()
+# Determine which files have content changes.
+$contentChangedFiles = [System.Collections.Generic.List[string]]::new()
 foreach ($path in $newManifest.Keys) {
     if (-not $oldManifest.ContainsKey($path) -or $oldManifest[$path] -ne $newManifest[$path]) {
-        $changedFiles.Add($path)
+        $contentChangedFiles.Add($path)
     }
 }
 
 # Always refresh critical runtime modules to recover from partial/stale remote
 # files that may have been left behind by interrupted transfers.
 $alwaysUploadPaths = @('boot.py', 'main.py', 'lib/audio.py', 'lib/sounds.py')
+$forcedRefreshFiles = [System.Collections.Generic.List[string]]::new()
 foreach ($criticalPath in $alwaysUploadPaths) {
-    if ($newManifest.ContainsKey($criticalPath) -and -not $changedFiles.Contains($criticalPath)) {
-        $changedFiles.Add($criticalPath)
+    if ($newManifest.ContainsKey($criticalPath) -and -not $contentChangedFiles.Contains($criticalPath)) {
+        $forcedRefreshFiles.Add($criticalPath)
     }
 }
 
-if ($changedFiles.Count -eq 0) {
+$uploadFiles = [System.Collections.Generic.List[string]]::new()
+foreach ($path in $contentChangedFiles) {
+    $uploadFiles.Add($path)
+}
+foreach ($path in $forcedRefreshFiles) {
+    $uploadFiles.Add($path)
+}
+
+if ($uploadFiles.Count -eq 0) {
     Write-Output "No files changed since last upload."
     exit 0
 }
 
-Write-Output "Uploading $($changedFiles.Count) changed file(s) to ${port}..."
+if ($contentChangedFiles.Count -gt 0 -and $forcedRefreshFiles.Count -gt 0) {
+    Write-Output "Uploading $($uploadFiles.Count) file(s) to ${port}: $($contentChangedFiles.Count) changed + $($forcedRefreshFiles.Count) mandatory refresh."
+}
+elseif ($contentChangedFiles.Count -gt 0) {
+    Write-Output "Uploading $($contentChangedFiles.Count) changed file(s) to ${port}."
+}
+else {
+    Write-Output "No content changes detected. Uploading $($forcedRefreshFiles.Count) mandatory runtime refresh file(s) to ${port}."
+}
 
 # Try to quiet the runtime before file copy to reduce serial output during raw REPL operations.
 $quietCode = @"
@@ -151,7 +168,7 @@ gc.collect()
 
 # Collect unique remote directories that need to exist.
 $remoteDirs = [System.Collections.Generic.HashSet[string]]::new()
-foreach ($path in $changedFiles) {
+foreach ($path in $uploadFiles) {
     $parts = $path.Split('/')
     for ($i = 1; $i -lt $parts.Length; $i++) {
         [void]$remoteDirs.Add(($parts[0..($i-1)] -join '/'))
@@ -178,7 +195,7 @@ if ($remoteDirs.Count -gt 0) {
 }
 
 # Chain individual file copies.
-foreach ($path in $changedFiles) {
+foreach ($path in $uploadFiles) {
     $localPath = Join-Path $PSScriptRoot ($path.Replace('/', '\'))
     Write-Output "  $path"
     $cpArgs.Add('+')
