@@ -2559,16 +2559,12 @@ class SceneEditView(View):
 
                 stop_sounds_on_start_raw: str = self.request.form_data.get("stop_sounds_on_start", "").strip()
                 stop_sounds_on_start_list: list = [
-                    s.strip()
-                    for s in stop_sounds_on_start_raw.split(",")
-                    if s.strip() and s.strip() in sound_titles
+                    s.strip() for s in stop_sounds_on_start_raw.split(",") if s.strip() and s.strip() in sound_titles
                 ]
 
                 stop_sounds_on_end_raw: str = self.request.form_data.get("stop_sounds_on_end", "").strip()
                 stop_sounds_on_end_list: list = [
-                    s.strip()
-                    for s in stop_sounds_on_end_raw.split(",")
-                    if s.strip() and s.strip() in sound_titles
+                    s.strip() for s in stop_sounds_on_end_raw.split(",") if s.strip() and s.strip() in sound_titles
                 ]
 
                 if "scene_settings" not in lights.settings:
