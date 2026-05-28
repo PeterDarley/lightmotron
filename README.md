@@ -86,9 +86,10 @@ At boot, routes are registered before the HTTP server thread starts so `/` consi
 
 ### Home Page
 Control animation playback and trigger scenes. Start/stop lighting animations, switch between configured scenes, and play sounds from the audio modules.
+The Active Scenes list includes both ongoing scenes and immediate scenes while they are currently running.
 When stopping animation, the runtime now waits for any in-flight frame to finish before applying the stop clear, so LEDs reliably settle to black/off.
 The Home animation controls also now update to the stopped button state immediately when Stop is pressed.
-The Sounds section includes the master volume slider and home-visible sound triggers.
+Home now uses a single Soundscapes section for audio controls; the master volume slider and Stop All Sounds control are shown there.
 The Immediate scenes section is only shown when at least one scene is configured as immediate.
 
 ![Home page](docs/screenshots/home.png)
@@ -145,6 +146,7 @@ Create named sounds that map to MP3 file numbers on the SD cards in your audio m
 
 #### Soundscapes
 Create ordered groups of sound entries. Entries are editable in Setup after creation (sound, repeat enabled, repeat count). Repeat behavior is: with Repeat disabled it plays once, with Repeat enabled and count `0` it repeats forever, and with Repeat enabled and a positive count it repeats that many additional times.
+Soundscape progression is tied to the active soundscape entry finishing; unrelated sound end events do not advance or retrigger the soundscape.
 
 #### Theme
 Choose a CSS theme to customise the look of the interface.

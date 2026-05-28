@@ -19,10 +19,13 @@ Home scene actions (`/set_scene`) return a server-rendered `scenes/scene_panel.h
 Scene trigger sound playback (`scene_settings.sound`) is handled by the lighting runtime (`Lighting.set_scene` / `Lighting.add_scene`), not by web views, so sounds also play for non-UI scene activations, including the default scene selected at boot via `set_scene(None)`.
 Scene-level sound stop lists are also runtime-driven: `scene_settings.stop_sounds_on_start` is applied before scene activation, and `scene_settings.stop_sounds_on_end` is applied when a scene is removed or replaced.
 Home sound controls only include sounds where `show_on_home` is true and use adaptive HTMX polling against `/sounds/status`: `every 5s` while any sound is currently playing, and `every 30s` when all sounds are idle.
-Setup modal soundscape editing posts to `/soundscapes/edit` via HTMX for add, update, and delete entry actions, avoiding fallback form posts to the current page URL.
-Saving an existing soundscape entry returns to the soundscapes manager table view in the modal (editor closes and table refreshes immediately).
+Setup modal soundscape editing posts to `/soundscapes/edit` via HTMX for add and update entry actions, avoiding fallback form posts to the current page URL.
+Entry delete is available only on the soundscapes manager list (not within the per-soundscape editor).
+The soundscape editor uses mutually exclusive modes: add/list mode or single-entry edit mode (never both at once).
+Saving an existing soundscape entry returns to the soundscapes manager table view in the modal (editor closes and table refreshes immediately), and the edit mode includes a Cancel button that also returns to the manager list.
 Home soundscape buttons use sanitized DOM ids for per-button HTMX swap targets, so soundscape names containing spaces still update and trigger correctly.
 Soundscape entries now store `repeat_enabled` and `repeat`. Runtime semantics are: repeat disabled = play once; repeat enabled + `repeat=0` = infinite repeat; repeat enabled + positive `repeat` = repeat that many additional times.
+When a sound is started from a soundscape entry, entry repeat settings take precedence and per-sound `loop_count` is suppressed for that playback.
 The Setup Soundscapes manager table includes metadata columns (entry count, repeat summary, and a sound-name preview) so users can inspect configurations without opening each soundscape.
 The Setup Soundscapes summary card now uses precomputed count/plural fields from server context (rather than template filters) and is refreshed when the setup modal closes after soundscape saves.
 The Home "Active Scenes" label/list intentionally shows only ongoing scenes; immediate scenes are trigger actions and are not displayed there.
