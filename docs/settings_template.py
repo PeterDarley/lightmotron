@@ -174,3 +174,21 @@ Notes
     ``kills`` (scenes to remove on start), ``sound`` (sound to play on start),
     ``stop_sounds_on_start`` (sounds to stop before activation), and
     ``stop_sounds_on_end`` (sounds to stop when the scene is removed/replaced).
+* Soundscapes live under
+    ``lighting_settings.models.<model_name>.soundscapes.<soundscape_name>`` as a
+    mapping of entry names to entry objects, for example::
+
+        "soundscapes": {
+            "Tripple Moo": {
+                "entry1": {
+                    "sound": "Moo",
+                    "repeat_enabled": true,
+                    "repeat": 0
+                }
+            }
+        }
+
+  Repeat semantics are: ``repeat_enabled=false`` means no repeat,
+  ``repeat_enabled=true`` with ``repeat=0`` means infinite repeat, and
+  ``repeat_enabled=true`` with positive ``repeat`` means repeat that many
+  additional times.

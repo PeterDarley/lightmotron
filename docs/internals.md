@@ -19,6 +19,12 @@ Home scene actions (`/set_scene`) return a server-rendered `scenes/scene_panel.h
 Scene trigger sound playback (`scene_settings.sound`) is handled by the lighting runtime (`Lighting.set_scene` / `Lighting.add_scene`), not by web views, so sounds also play for non-UI scene activations, including the default scene selected at boot via `set_scene(None)`.
 Scene-level sound stop lists are also runtime-driven: `scene_settings.stop_sounds_on_start` is applied before scene activation, and `scene_settings.stop_sounds_on_end` is applied when a scene is removed or replaced.
 Home sound controls only include sounds where `show_on_home` is true and use adaptive HTMX polling against `/sounds/status`: `every 5s` while any sound is currently playing, and `every 30s` when all sounds are idle.
+Setup modal soundscape editing posts to `/soundscapes/edit` via HTMX for add, update, and delete entry actions, avoiding fallback form posts to the current page URL.
+Saving an existing soundscape entry returns to the soundscapes manager table view in the modal (editor closes and table refreshes immediately).
+Home soundscape buttons use sanitized DOM ids for per-button HTMX swap targets, so soundscape names containing spaces still update and trigger correctly.
+Soundscape entries now store `repeat_enabled` and `repeat`. Runtime semantics are: repeat disabled = play once; repeat enabled + `repeat=0` = infinite repeat; repeat enabled + positive `repeat` = repeat that many additional times.
+The Setup Soundscapes manager table includes metadata columns (entry count, repeat summary, and a sound-name preview) so users can inspect configurations without opening each soundscape.
+The Setup Soundscapes summary card now uses precomputed count/plural fields from server context (rather than template filters) and is refreshed when the setup modal closes after soundscape saves.
 The Home "Active Scenes" label/list intentionally shows only ongoing scenes; immediate scenes are trigger actions and are not displayed there.
 
 Sound playback supports three advanced features configured per-sound:
@@ -27,6 +33,7 @@ Sound playback supports three advanced features configured per-sound:
 - **Chaining**: When `next_sound: "title"` is set, the specified sound automatically starts when the current sound ends. Enables sequences like intro→main→outro without UI intervention.
 
 Sound looping and chaining are detected by the continuous audio polling system (`_poll_tick()` every 100ms). When a module transitions from playing→stopped, `SoundManager.check_for_ended_sounds()` detects the transition and takes the configured action (restart if loop, or start next_sound if chaining).
+Audio polling is fail-fast: if polling setup or a polling tick raises, the firmware prints a full traceback (`sys.print_exception`), stops the polling timer to avoid repeated hidden failures, and re-raises the exception rather than suppressing it.
 
 ## Lighting Module Layout
 
