@@ -261,9 +261,9 @@ def _scenes_context() -> dict:
     scene_names = sorted(lights.settings["scenes"].keys())
     ongoing_scenes = [name for name in scene_names if lights.is_scene_ongoing(name)]
     immediate_scenes = [name for name in scene_names if not lights.is_scene_ongoing(name)]
-    # Home panel only treats ongoing scenes as "active". Immediate scenes are
-    # one-shot triggers and are not shown in the active-scenes label/list.
-    active_scenes = [name for name in lights._active_scenes if name in ongoing_scenes]
+    # Show all currently active scenes (ongoing and immediate) in the Home
+    # running/active list so one-shot immediate scenes are visible while active.
+    active_scenes = [name for name in lights._active_scenes if name in scene_names]
 
     # Ensure label construction is robust: convert non-string entries to
     # strings so join() does not raise if a malformed value appears.
@@ -370,13 +370,6 @@ class HomeView(View):
         context.update(_scenes_context())
         context.update(_animation_context())
         context.update(_soundscapes_context(include_active=True))
-        context.update(_sounds_context(include_playing=True, home_only=True))
-
-        # Get current master volume from persistent storage
-        storage: PersistentDict = PersistentDict()
-        system_settings: dict = storage.get("system_settings", {})
-        current_volume = system_settings.get("master_volume", 20)
-        context["current_volume"] = current_volume
 
         return render_template("home.html", context)
 
@@ -494,6 +487,50 @@ class SoundscapesStatusView(View):
         return render_template("soundscapes/buttons.html", _soundscapes_context(include_active=True))
 
 
+def _is_enabled_setting(value: object) -> bool:
+    """Return True when a setting value represents an enabled/checked state."""
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, int):
+        return value != 0
+
+    if isinstance(value, str):
+        normalized: str = value.strip().lower()
+        return normalized in ("1", "true", "yes", "on")
+
+    return bool(value)
+
+
+def _parse_non_negative_int(value: object) -> int:
+    """Parse value as a non-negative integer, tolerating numeric strings/floats."""
+
+    try:
+        if isinstance(value, bool):
+            return int(value)
+
+        if isinstance(value, int):
+            return max(0, value)
+
+        if isinstance(value, float):
+            return max(0, int(value))
+
+        if isinstance(value, str):
+            normalized: str = value.strip()
+            if not normalized:
+                return 0
+
+            if "." in normalized:
+                return max(0, int(float(normalized)))
+
+            return max(0, int(normalized))
+
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
 class SoundscapeEditView(View):
     """Handle editing a soundscape's entries."""
 
@@ -501,6 +538,7 @@ class SoundscapeEditView(View):
         """Show soundscape entry editor."""
 
         soundscape_name: str = self.request.query_params.get("soundscape", "").strip()
+        edit_entry_name: str = self.request.query_params.get("edit_entry", "").strip()
 
         from sounds import SoundManager
 
@@ -508,42 +546,7 @@ class SoundscapeEditView(View):
         soundscape: dict = manager.get_soundscape(soundscape_name)
         sounds: dict = manager.get_sounds()
 
-        context: dict = {
-            "soundscape_name": soundscape_name,
-            "soundscape": soundscape,
-            "sounds": sorted(sounds.keys()),
-            "entries": [],
-        }
-
-        # Build entries list with entry names
-        for entry_name, entry_data in soundscape.items():
-            if isinstance(entry_data, dict):
-                repeat_count: int = (
-                    int(entry_data.get("repeat", 0)) if str(entry_data.get("repeat", 0)).isdigit() else 0
-                )
-                repeat_enabled: bool = bool(entry_data.get("repeat_enabled", False))
-                if not repeat_enabled and repeat_count > 0:
-                    # Backward compatibility for entries created before repeat_enabled existed.
-                    repeat_enabled = True
-
-                if not repeat_enabled:
-                    repeat_mode_label: str = "off"
-                elif repeat_count == 0:
-                    repeat_mode_label = "infinite"
-                else:
-                    repeat_mode_label = str(repeat_count)
-
-                context["entries"].append(
-                    {
-                        "name": entry_name,
-                        "sound": entry_data.get("sound", ""),
-                        "repeat": repeat_count,
-                        "repeat_enabled": repeat_enabled,
-                        "repeat_mode_label": repeat_mode_label,
-                        "after": entry_data.get("after", ""),
-                    }
-                )
-
+        context: dict = self._build_soundscape_edit_context(soundscape_name, soundscape, sounds, edit_entry_name)
         return render_template("setup/soundscape_edit.html", context)
 
     def post(self) -> str:
@@ -560,11 +563,9 @@ class SoundscapeEditView(View):
         if action == "add_entry":
             entry_sound: str = self.request.form_data.get("entry_sound", "").strip()
             entry_repeat: str = self.request.form_data.get("entry_repeat", "0").strip()
-            entry_repeat_enabled: bool = bool(self.request.form_data.get("entry_repeat_enabled", "").strip())
+            entry_repeat_enabled: bool = _is_enabled_setting(self.request.form_data.get("entry_repeat_enabled", ""))
 
-            repeat_count: int = 0
-            if entry_repeat.isdigit():
-                repeat_count = max(0, int(entry_repeat))
+            repeat_count: int = _parse_non_negative_int(entry_repeat)
 
             if entry_sound and soundscape_name:
                 soundscape: dict = manager.get_soundscape(soundscape_name)
@@ -590,11 +591,9 @@ class SoundscapeEditView(View):
             entry_name: str = self.request.form_data.get("entry_name", "").strip()
             entry_sound: str = self.request.form_data.get("entry_sound", "").strip()
             entry_repeat: str = self.request.form_data.get("entry_repeat", "0").strip()
-            entry_repeat_enabled: bool = bool(self.request.form_data.get("entry_repeat_enabled", "").strip())
+            entry_repeat_enabled: bool = _is_enabled_setting(self.request.form_data.get("entry_repeat_enabled", ""))
 
-            repeat_count: int = 0
-            if entry_repeat.isdigit():
-                repeat_count = max(0, int(entry_repeat))
+            repeat_count: int = _parse_non_negative_int(entry_repeat)
 
             if entry_name and entry_sound and soundscape_name:
                 soundscape: dict = manager.get_soundscape(soundscape_name)
@@ -611,43 +610,61 @@ class SoundscapeEditView(View):
         # Return updated edit view
         soundscape: dict = manager.get_soundscape(soundscape_name)
         sounds: dict = manager.get_sounds()
+        context: dict = self._build_soundscape_edit_context(soundscape_name, soundscape, sounds)
+        return render_template("setup/soundscape_edit.html", context)
+
+    def _build_soundscape_edit_context(
+        self,
+        soundscape_name: str,
+        soundscape: dict,
+        sounds: dict,
+        edit_entry_name: str = "",
+    ) -> dict:
+        """Build context for soundscape edit modal, optionally selecting one entry for edit mode."""
 
         context: dict = {
             "soundscape_name": soundscape_name,
             "soundscape": soundscape,
             "sounds": sorted(sounds.keys()),
             "entries": [],
+            "edit_entry_name": "",
+            "edit_entry": {},
         }
 
         for entry_name, entry_data in soundscape.items():
-            if isinstance(entry_data, dict):
-                repeat_count: int = (
-                    int(entry_data.get("repeat", 0)) if str(entry_data.get("repeat", 0)).isdigit() else 0
-                )
-                repeat_enabled: bool = bool(entry_data.get("repeat_enabled", False))
-                if not repeat_enabled and repeat_count > 0:
-                    # Backward compatibility for entries created before repeat_enabled existed.
-                    repeat_enabled = True
+            if not isinstance(entry_data, dict):
+                continue
 
-                if not repeat_enabled:
-                    repeat_mode_label: str = "off"
-                elif repeat_count == 0:
-                    repeat_mode_label = "infinite"
-                else:
-                    repeat_mode_label = str(repeat_count)
+            repeat_raw = entry_data.get("repeat", 0)
+            repeat_count: int = _parse_non_negative_int(repeat_raw)
+            if "repeat_enabled" in entry_data:
+                repeat_enabled: bool = _is_enabled_setting(entry_data.get("repeat_enabled", False))
+            else:
+                # Backward compatibility for entries created before repeat_enabled existed.
+                repeat_enabled = repeat_count > 0
 
-                context["entries"].append(
-                    {
-                        "name": entry_name,
-                        "sound": entry_data.get("sound", ""),
-                        "repeat": repeat_count,
-                        "repeat_enabled": repeat_enabled,
-                        "repeat_mode_label": repeat_mode_label,
-                        "after": entry_data.get("after", ""),
-                    }
-                )
+            if not repeat_enabled:
+                repeat_mode_label: str = "off"
+            elif repeat_count == 0:
+                repeat_mode_label = "infinite"
+            else:
+                repeat_mode_label = str(repeat_count)
 
-        return render_template("setup/soundscape_edit.html", context)
+            entry_context: dict = {
+                "name": entry_name,
+                "sound": entry_data.get("sound", ""),
+                "repeat": repeat_count,
+                "repeat_enabled": repeat_enabled,
+                "repeat_mode_label": repeat_mode_label,
+                "after": entry_data.get("after", ""),
+            }
+            context["entries"].append(entry_context)
+
+            if edit_entry_name and entry_name == edit_entry_name:
+                context["edit_entry_name"] = edit_entry_name
+                context["edit_entry"] = entry_context
+
+        return context
 
     def _save_soundscape(self, storage: PersistentDict, soundscape_name: str, soundscape: dict) -> None:
         """Save a soundscape to storage."""
@@ -3112,6 +3129,14 @@ def _soundscapes_context(include_active: bool = False, home_only: bool = False) 
     manager: SoundManager = SoundManager()
     soundscapes: dict = manager.get_soundscapes()
 
+    storage: PersistentDict = PersistentDict()
+    system_settings: dict = storage.get("system_settings", {})
+    try:
+        current_volume: int = int(system_settings.get("master_volume", 20))
+    except (TypeError, ValueError):
+        current_volume = 20
+    current_volume = max(0, min(30, current_volume))
+
     soundscapes_list: list = sorted(soundscapes.keys())
     active_soundscape = manager.get_active_soundscape() if include_active else None
     soundscape_rows: list = []
@@ -3134,11 +3159,12 @@ def _soundscapes_context(include_active: bool = False, home_only: bool = False) 
             if sound_title:
                 distinct_sounds[sound_title] = True
 
-            repeat_enabled: bool = bool(entry_data.get("repeat_enabled", False))
             repeat_raw = entry_data.get("repeat", 0)
-            repeat_count: int = int(repeat_raw) if str(repeat_raw).isdigit() else 0
-            if not repeat_enabled and repeat_count > 0:
-                repeat_enabled = True
+            repeat_count: int = _parse_non_negative_int(repeat_raw)
+            if "repeat_enabled" in entry_data:
+                repeat_enabled: bool = _is_enabled_setting(entry_data.get("repeat_enabled", False))
+            else:
+                repeat_enabled = repeat_count > 0
 
             if repeat_enabled:
                 if repeat_count == 0:
@@ -3178,6 +3204,7 @@ def _soundscapes_context(include_active: bool = False, home_only: bool = False) 
         "soundscape_plural_suffix": "" if len(soundscapes_list) == 1 else "s",
         "soundscape_items": soundscape_items,
         "active_soundscape": active_soundscape,
+        "current_volume": current_volume,
     }
 
     return context

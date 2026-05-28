@@ -1,95 +1,107 @@
 <div>
     <h5 class="mb-3">Edit Soundscape: {{ soundscape_name }}</h5>
 
-    {% if entries %}
+    {% if edit_entry %}
     <div class="mb-4">
-        <h6>Existing Entries</h6>
-        <div class="list-group mb-3">
-            {% for entry in entries %}
-            <div class="list-group-item">
-                <form hx-post="/soundscapes/edit"
-                      hx-target="#modal-body"
-                      hx-swap="innerHTML"
-                      class="mb-2">
-                    <input type="hidden" name="soundscape_name" value="{{ soundscape_name }}">
-                    <input type="hidden" name="entry_name" value="{{ entry.name }}">
-                    <input type="hidden" name="action" value="update_entry">
+        <h6>Edit Entry: {{ edit_entry.name }}</h6>
+        <div class="list-group-item">
+            <form hx-post="/soundscapes/edit"
+                  hx-target="#modal-body"
+                  hx-swap="innerHTML"
+                  class="mb-2">
+                <input type="hidden" name="soundscape_name" value="{{ soundscape_name }}">
+                <input type="hidden" name="entry_name" value="{{ edit_entry.name }}">
+                <input type="hidden" name="action" value="update_entry">
 
-                    <div class="mb-2">
-                        <strong>{{ entry.name }}</strong>
-                    </div>
+                <div class="mb-2">
+                    <label class="form-label small">Sound</label>
+                    <select class="form-control" name="entry_sound" required>
+                        <option value="">-- Select a sound --</option>
+                        {% for sound_title in sounds %}
+                        <option value="{{ sound_title }}" {% if sound_title == edit_entry.sound %}selected{% endif %}>{{ sound_title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-                    <div class="mb-2">
-                        <label class="form-label small">Sound</label>
-                        <select class="form-control" name="entry_sound" required>
-                            <option value="">-- Select a sound --</option>
-                            {% for sound_title in sounds %}
-                            <option value="{{ sound_title }}" {% if sound_title == entry.sound %}selected{% endif %}>{{ sound_title }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+                <div class="mb-2">
+                    <label class="form-label small">Repeat Count</label>
+                    <input type="number" class="form-control" name="entry_repeat" min="0" value="{{ edit_entry.repeat }}">
+                    <small class="text-muted d-block mt-1">When Repeat is enabled: 0 = infinite repeat, positive number = repeat that many times.</small>
+                </div>
 
-                    <div class="mb-2">
-                        <label class="form-label small">Repeat Count</label>
-                        <input type="number" class="form-control" name="entry_repeat" min="0" value="{{ entry.repeat }}">
-                        <small class="text-muted d-block mt-1">When Repeat is enabled: 0 = infinite repeat, positive number = repeat that many times.</small>
-                    </div>
+                <div class="mb-2 form-check">
+                    <input class="form-check-input" type="checkbox" name="entry_repeat_enabled" value="1" {% if edit_entry.repeat_enabled %}checked{% endif %}>
+                    <label class="form-check-label small">Enable Repeat</label>
+                </div>
 
-                    <div class="mb-2 form-check">
-                        <input class="form-check-input" type="checkbox" name="entry_repeat_enabled" value="1" {% if entry.repeat_enabled %}checked{% endif %}>
-                        <label class="form-check-label small">Enable Repeat</label>
-                    </div>
-
-                    <div class="d-flex gap-2 mt-2">
-                        <button type="submit" class="btn btn-sm btn-outline-primary">Save & Close</button>
-                        <button type="button" class="btn btn-sm btn-outline-danger"
-                                hx-post="/soundscapes/edit"
-                                hx-target="#modal-body"
-                                hx-swap="innerHTML"
-                                hx-vals='{"soundscape_name": "{{ soundscape_name }}", "entry_name": "{{ entry.name }}", "action": "delete_entry"}'
-                                hx-confirm="Delete soundscape entry '{{ entry.name }}'?">
-                            Delete
-                        </button>
-                    </div>
-                </form>
-            </div>
-            {% endfor %}
+                <div class="d-flex gap-2 mt-2">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Save & Close</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            hx-get="/soundscapes"
+                            hx-target="#modal-body"
+                            hx-swap="innerHTML">
+                        Cancel
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
+    {% else %}
+        {% if entries %}
+        <div class="mb-4">
+            <h6>Existing Entries</h6>
+            <div class="list-group mb-3">
+                {% for entry in entries %}
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>{{ entry.name }}</strong>
+                        <div class="small text-muted">Sound: {{ entry.sound }}, Repeat: {{ entry.repeat_mode_label }}</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            hx-get="/soundscapes/edit?soundscape={{ soundscape_name }}&edit_entry={{ entry.name }}"
+                            hx-target="#modal-body"
+                            hx-swap="innerHTML">
+                        Edit
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="mb-3">
+            <h6>Add Entry</h6>
+            <form hx-post="/soundscapes/edit"
+                  hx-target="#modal-body"
+                  hx-swap="innerHTML">
+                <input type="hidden" name="soundscape_name" value="{{ soundscape_name }}">
+                <input type="hidden" name="action" value="add_entry">
+                
+                <div class="mb-2">
+                    <label for="entry_sound" class="form-label">Sound</label>
+                    <select class="form-control" id="entry_sound" name="entry_sound" required>
+                        <option value="">-- Select a sound --</option>
+                        {% for sound_title in sounds %}
+                        <option value="{{ sound_title }}">{{ sound_title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label for="entry_repeat" class="form-label">Repeat Count</label>
+                    <input type="number" class="form-control" id="entry_repeat" name="entry_repeat" min="0" value="0">
+                    <small class="text-muted d-block mt-1">When Repeat is enabled: 0 = infinite repeat, positive number = repeat that many times.</small>
+                </div>
+
+                <div class="mb-3 form-check">
+                    <input class="form-check-input" type="checkbox" id="entry_repeat_enabled" name="entry_repeat_enabled" value="1">
+                    <label class="form-check-label" for="entry_repeat_enabled">
+                        Enable Repeat
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-sm btn-primary">Add Entry</button>
+            </form>
+        </div>
     {% endif %}
-
-    <div class="mb-3">
-        <h6>Add Entry</h6>
-        <form hx-post="/soundscapes/edit"
-              hx-target="#modal-body"
-              hx-swap="innerHTML">
-            <input type="hidden" name="soundscape_name" value="{{ soundscape_name }}">
-            <input type="hidden" name="action" value="add_entry">
-            
-            <div class="mb-2">
-                <label for="entry_sound" class="form-label">Sound</label>
-                <select class="form-control" id="entry_sound" name="entry_sound" required>
-                    <option value="">-- Select a sound --</option>
-                    {% for sound_title in sounds %}
-                    <option value="{{ sound_title }}">{{ sound_title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="mb-2">
-                <label for="entry_repeat" class="form-label">Repeat Count</label>
-                <input type="number" class="form-control" id="entry_repeat" name="entry_repeat" min="0" value="0">
-                <small class="text-muted d-block mt-1">When Repeat is enabled: 0 = infinite repeat, positive number = repeat that many times.</small>
-            </div>
-
-            <div class="mb-3 form-check">
-                <input class="form-check-input" type="checkbox" id="entry_repeat_enabled" name="entry_repeat_enabled">
-                <label class="form-check-label" for="entry_repeat_enabled">
-                    Enable Repeat
-                </label>
-            </div>
-
-            <button type="submit" class="btn btn-sm btn-primary">Add Entry</button>
-        </form>
-    </div>
 </div>

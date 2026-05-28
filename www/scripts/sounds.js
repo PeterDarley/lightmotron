@@ -22,7 +22,6 @@ class SoundManager {
         const cssValue = getComputedStyle(root).getPropertyValue('--sound-files').trim();
 
         if (!cssValue) {
-            console.log('No sounds configured (--sound-files not set in CSS)');
             return;
         }
 
@@ -40,7 +39,6 @@ class SoundManager {
         });
 
         this.initialized = true;
-        console.log(`Sound manager initialized with ${soundFiles.length} files`);
     }
 
     initCloseSounds() {
@@ -49,7 +47,6 @@ class SoundManager {
         const cssValue = getComputedStyle(root).getPropertyValue('--sound-files-close').trim();
 
         if (!cssValue) {
-            console.log('No close sounds configured (--sound-files-close not set in CSS)');
             return;
         }
 
@@ -67,7 +64,6 @@ class SoundManager {
         });
 
         this.closeInitialized = true;
-        console.log(`Close sound manager initialized with ${soundFiles.length} files`);
     }
 
     initNavSounds() {
@@ -76,7 +72,6 @@ class SoundManager {
         const cssValue = getComputedStyle(root).getPropertyValue('--sound-files-nav').trim();
 
         if (!cssValue) {
-            console.log('No nav sounds configured (--sound-files-nav not set in CSS)');
             return;
         }
 
@@ -94,7 +89,6 @@ class SoundManager {
         });
 
         this.navInitialized = true;
-        console.log(`Nav sound manager initialized with ${soundFiles.length} files`);
     }
 
     play() {
@@ -105,9 +99,6 @@ class SoundManager {
         // Select random file
         const randomIndex = Math.floor(Math.random() * this.audioPool.length);
         const audio = this.audioPool[randomIndex];
-        const filename = audio.src.split('/').pop();
-
-        console.log(`Playing sound: ${filename} (index ${randomIndex}/${this.audioPool.length})`);
 
         // Reset to start and play
         audio.currentTime = 0;
@@ -124,9 +115,6 @@ class SoundManager {
         // Select random file
         const randomIndex = Math.floor(Math.random() * this.closeSoundPool.length);
         const audio = this.closeSoundPool[randomIndex];
-        const filename = audio.src.split('/').pop();
-
-        console.log(`Playing close sound: ${filename} (index ${randomIndex}/${this.closeSoundPool.length})`);
 
         // Reset to start and play
         audio.currentTime = 0;
@@ -143,9 +131,6 @@ class SoundManager {
         // Select random file
         const randomIndex = Math.floor(Math.random() * this.navSoundPool.length);
         const audio = this.navSoundPool[randomIndex];
-        const filename = audio.src.split('/').pop();
-
-        console.log(`Playing nav sound: ${filename} (index ${randomIndex}/${this.navSoundPool.length})`);
 
         // Reset to start and play
         audio.currentTime = 0;

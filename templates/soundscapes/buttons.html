@@ -3,13 +3,34 @@
     hx-get="/soundscapes/status"
     hx-trigger="every 5s"
     hx-swap="outerHTML">
+    <div class="theme-soundscape-master-controls d-flex align-items-center flex-wrap gap-3 mb-3">
+        <form hx-post="/soundscapes/stop"
+              hx-target="#soundscape_buttons"
+              hx-swap="outerHTML">
+            <button type="submit" class="btn btn-sm btn-outline-danger theme-stop-all-btn">
+                &#9632; Stop All Sounds
+            </button>
+        </form>
+        <div class="theme-soundscape-volume-wrap d-flex align-items-center gap-2">
+            <label for="soundscape-master-volume" class="form-label theme-audio-label text-muted small mb-0">Volume</label>
+            <input type="range" id="soundscape-master-volume" name="master-volume" class="form-range theme-volume-slider theme-soundscape-volume-slider"
+                   min="0" max="30" value="{{ current_volume }}"
+                   hx-post="/audio/volume"
+                   hx-trigger="change"
+                   hx-target="#soundscape-volume-feedback"
+                   hx-swap="innerHTML"
+                   oninput="document.getElementById('soundscape-volume-feedback').textContent = this.value + '/30'">
+            <span class="small text-muted theme-volume-value" id="soundscape-volume-feedback">{{ current_volume }}/30</span>
+        </div>
+    </div>
+
     {% if soundscape_items %}
         <div class="theme-section-actions d-flex flex-wrap gap-2">
             {% for soundscape in soundscape_items %}
             <div id="soundscape-{{ soundscape.id }}-result">
                 {% if active_soundscape == soundscape.name %}
                 <form hx-post="/soundscapes/stop"
-                      hx-target="#soundscape-{{ soundscape.id }}-result"
+                      hx-target="#soundscape_buttons"
                       hx-swap="outerHTML">
                     <button type="submit" class="btn btn-sm btn-danger theme-soundscape-stop-btn">
                         &#9632; {{ soundscape.name }}
@@ -17,7 +38,7 @@
                 </form>
                 {% else %}
                 <form hx-post="/soundscapes/play"
-                      hx-target="#soundscape-{{ soundscape.id }}-result"
+                      hx-target="#soundscape_buttons"
                       hx-swap="outerHTML">
                     <input type="hidden" name="soundscape" value="{{ soundscape.name }}">
                     <button type="submit" class="theme-soundscape-btn btn btn-sm btn-outline-primary">

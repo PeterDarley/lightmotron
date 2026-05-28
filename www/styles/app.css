@@ -241,6 +241,12 @@
 .theme-ongoing-btn {}
 .theme-immediate-btn {}
 .theme-sound-btn {}
+.theme-soundscape-master-controls {}
+.theme-soundscape-volume-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
 
 /* Audio/Volume control */
 .theme-audio-control-panel {}
@@ -253,4 +259,9 @@
 .theme-volume-value {
     min-width: 3.5rem;
     text-align: right;
+}
+.theme-soundscape-volume-slider {
+    width: clamp(14rem, 38vw, 24rem);
+    min-width: 14rem;
+    max-width: 24rem;
 }
