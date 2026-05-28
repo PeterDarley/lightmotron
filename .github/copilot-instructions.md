@@ -101,6 +101,9 @@ Mixing multiple YX5200 DAC_R outputs into the PAM8403 is done with a passive res
 ### Logic level converter
 Using a **Teyleten Robot 4 Channels Logic Level Converter** (3.3V ↔ 5V) for interfacing between ESP32-S3 GPIO (3.3V) and 5V components (MAX7219 SPI lines: CLK, DIN, CS).
 
+### Settings editability
+Everything in settings should be editable through the UI.
+
 
 
 
