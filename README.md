@@ -76,6 +76,8 @@ To hard reset the device after uploading:
 python tools\reset_device.py COM3
 ```
 
+For browser-install deployment images (`deployment/lightmotron.bin`), build with `tools/build_deployment.py`. On ESP32-S3 N16 boards the default build now uses a full remainder-of-flash LittleFS image (14336 KB from `0x200000` to end of 16MB flash) so the filesystem mounts correctly on first boot.
+
 ## Web Interface
 
 Once the device is running and connected to WiFi, open your browser and navigate to the device's IP address (e.g., `http://192.168.1.100/` or use the hostname `http://lightmotron.local/` if mDNS is available). (These screen shots are messed up.  I'll fix them at some point.)

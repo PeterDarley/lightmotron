@@ -16,7 +16,7 @@ Usage
 
     --firmware PATH   Path to the MicroPython .bin (default: auto-detected
                       ESP32_GENERIC_S3-SPIRAM_OCT-*.bin in the project root).
-    --fs-size KB      Filesystem image size in KB (default: 1024).
+    --fs-size KB      Filesystem image size in KB (default: 14336 for 16MB flash).
 """
 
 import argparse
@@ -25,7 +25,6 @@ import os
 import sys
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -33,9 +32,17 @@ from pathlib import Path
 ROOT: Path = Path(__file__).parent.parent
 DEPLOYMENT_DIR: Path = ROOT / "deployment"
 
+# Target board flash capacity.
+TARGET_FLASH_SIZE_MB: int = 16
+TARGET_FLASH_SIZE_BYTES: int = TARGET_FLASH_SIZE_MB * 1024 * 1024
+
 # VFS partition offset for ESP32-S3 MicroPython with 16MB flash.
 # Matches the standard partitions-16MiB.csv shipped with MicroPython.
 VFS_OFFSET: int = 0x200000
+
+# For current ESP32-S3 firmware builds used by this project, the app region
+# ends at 0x200000 and the filesystem occupies the remainder of flash.
+DEFAULT_FS_SIZE_KB: int = (TARGET_FLASH_SIZE_BYTES - VFS_OFFSET) // 1024
 
 # Files/directories to copy into the device filesystem.
 INCLUDE_DIRS: list = ["lib", "www", "templates", "web"]
@@ -47,10 +54,11 @@ EXCLUDE_PATHS: set = {
     "lib/README.md",
 }
 
-# LittleFS parameters that match MicroPython's defaults for ESP32.
+# LittleFS parameters that match MicroPython's ESP32 port defaults.
+# MicroPython uses read_size=prog_size=block_size=4096 (flash sector size).
 FS_BLOCK_SIZE: int = 4096
-FS_READ_SIZE: int = 256
-FS_PROG_SIZE: int = 256
+FS_READ_SIZE: int = 4096
+FS_PROG_SIZE: int = 4096
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +176,32 @@ def build(firmware_path: Path, fs_size_kb: int) -> None:
 
     print("Firmware: {}".format(firmware_path))
     print("Building filesystem image ({} KB)...".format(fs_size_kb))
+
+    if fs_size_kb <= 0:
+        print("ERROR: --fs-size must be greater than zero.")
+        sys.exit(1)
+
+    max_fs_size_kb: int = (TARGET_FLASH_SIZE_BYTES - VFS_OFFSET) // 1024
+    if fs_size_kb > max_fs_size_kb:
+        print(
+            "ERROR: --fs-size {} KB exceeds available flash region ({} KB from 0x{:x} to end of {}MB flash).".format(
+                fs_size_kb,
+                max_fs_size_kb,
+                VFS_OFFSET,
+                TARGET_FLASH_SIZE_MB,
+            )
+        )
+        sys.exit(1)
+
+    if fs_size_kb != DEFAULT_FS_SIZE_KB:
+        print(
+            "WARNING: Using non-default filesystem size ({} KB). "
+            "For ESP32-S3 N16 boards, {} KB is recommended to match flash layout.".format(
+                fs_size_kb,
+                DEFAULT_FS_SIZE_KB,
+            )
+        )
+
     fs_image: bytes = _build_filesystem(fs_size_kb)
 
     print("\nMerging firmware + filesystem at offset 0x{:x}...".format(VFS_OFFSET))
@@ -206,7 +240,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--firmware", type=Path, default=None, help="Path to MicroPython firmware .bin")
     parser.add_argument(
-        "--fs-size", type=int, default=1024, metavar="KB", help="Filesystem image size in KB (default: 1024)"
+        "--fs-size",
+        type=int,
+        default=DEFAULT_FS_SIZE_KB,
+        metavar="KB",
+        help="Filesystem image size in KB (default: {} for {}MB flash)".format(
+            DEFAULT_FS_SIZE_KB,
+            TARGET_FLASH_SIZE_MB,
+        ),
     )
     args = parser.parse_args()
 
