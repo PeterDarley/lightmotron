@@ -1,0 +1,36 @@
+<div class="mb-3" id="trigger-scenes-control-{{ scene_name_id }}">
+    <label class="form-label small fw-semibold">Trigger Scenes on Completion</label>
+    <small class="text-muted d-block mb-2">Automatically start these scenes when this scene finishes.</small>
+    
+    <form hx-post="/scenes/edit/add_trigger_scene"
+          hx-target="#trigger-scenes-control-{{ scene_name_id }}"
+          hx-swap="outerHTML"
+          class="mb-3">
+        <input type="hidden" name="scene_name" value="{{ scene_name }}">
+        <div class="d-flex gap-2" style="max-width: 500px;">
+            <select class="form-select form-select-sm" name="trigger_scene_to_add" style="flex: 1; max-width: 250px;" required>
+                <option value="">Choose scene…</option>
+                {% for other_scene in triggerable_scenes %}
+                <option value="{{ other_scene }}">{{ other_scene }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Add</button>
+        </div>
+    </form>
+    
+    {% if trigger_scenes_on_completion %}
+    <div class="d-flex flex-wrap gap-1 mb-2">
+        {% for scene in trigger_scenes_on_completion %}
+        <span class="badge bg-secondary">
+            {{ scene }}
+            <button type="button" class="btn btn-outline-light btn-sm ms-2 py-0 px-1" 
+                    hx-post="/scenes/edit/remove_trigger_scene"
+                    hx-target="#trigger-scenes-control-{{ scene_name_id }}"
+                    hx-swap="outerHTML"
+                    hx-vals='{"scene_name": "{{ scene_name }}", "trigger_scene_to_remove": "{{ scene }}"}'
+                    aria-label="Remove {{ scene }}">×</button>
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>

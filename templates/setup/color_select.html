@@ -1,6 +1,7 @@
 {% if is_named %}
-<span class="badge rounded-pill"
-      style="background-color: {{ color_hex_val }}; min-width: 60px; height: 30px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">{{ color_display_name }}</span>
+<span class="badge rounded-pill contrast-text"
+      data-hex="{{ color_hex_val }}"
+      style="background-color: {{ color_hex_val }}; min-width: 60px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold;">{{ color_display_name }}</span>
 {% else %}
 {% if is_picker %}
 <input type="color" class="form-control form-control-color"
@@ -9,3 +10,19 @@
        style="max-width: 80px;">
 {% endif %}
 {% endif %}
+
+<script>
+    // Set text color based on background luminance
+    document.querySelectorAll('.contrast-text').forEach(element => {
+        const hex = element.dataset.hex.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        
+        // Calculate relative luminance using WCAG formula
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        
+        // Use white text for dark backgrounds, black for light backgrounds
+        element.style.color = luminance > 0.5 ? '#000' : '#fff';
+    });
+</script>

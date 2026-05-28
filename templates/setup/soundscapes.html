@@ -1,0 +1,64 @@
+<div id="soundscapes-manager">
+    <form hx-post="/soundscapes"
+          hx-target="#soundscapes-manager"
+          hx-swap="outerHTML">
+        <input type="hidden" name="action" value="create">
+        <div class="input-group mb-3" style="max-width: 400px;">
+            <input type="text" class="form-control" name="soundscape_name" placeholder="New soundscape name" required>
+            <button type="submit" class="btn btn-primary">Create Soundscape</button>
+        </div>
+    </form>
+
+    {% if soundscape_rows %}
+    <table class="table table-hover align-middle mb-0">
+        <thead>
+            <tr>
+                <th>Soundscape</th>
+                <th class="text-center" style="width: 80px;">Entries</th>
+                <th class="text-center" style="width: 120px;">Repeats</th>
+                <th>Sounds</th>
+                <th style="width: 140px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for soundscape in soundscape_rows %}
+            <tr>
+                <td><strong>{{ soundscape.name }}</strong></td>
+                <td class="text-center"><span class="badge bg-secondary">{{ soundscape.entry_count }}</span></td>
+                <td class="text-center small">
+                    {% if soundscape.infinite_repeat_count %}
+                    <span class="badge bg-warning text-dark me-1">{{ soundscape.infinite_repeat_count }} inf</span>
+                    {% endif %}
+                    {% if soundscape.finite_repeat_count %}
+                    <span class="badge bg-info text-dark">{{ soundscape.finite_repeat_count }} finite</span>
+                    {% endif %}
+                    {% if not soundscape.infinite_repeat_count and not soundscape.finite_repeat_count %}
+                    <span class="text-muted">none</span>
+                    {% endif %}
+                </td>
+                <td class="small text-muted">{{ soundscape.sounds_preview }}</td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-primary me-1"
+                            hx-get="/soundscapes/edit?soundscape={{ soundscape.name }}"
+                            hx-target="#modal-body"
+                            hx-swap="innerHTML">
+                        Edit
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger"
+                            hx-post="/soundscapes"
+                            hx-target="#soundscapes-manager"
+                            hx-swap="outerHTML"
+                            hx-vals='{"soundscape_name": "{{ soundscape.name }}", "action": "delete"}'
+                            hx-confirm="Delete soundscape '{{ soundscape.name }}'?">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted small mt-2">No soundscapes yet. Create one above.</p>
+    {% endif %}
+</div>
+

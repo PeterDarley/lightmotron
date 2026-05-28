@@ -1,0 +1,34 @@
+<div id="soundscape_buttons"
+    class="theme-soundscape-buttons"
+    hx-get="/soundscapes/status"
+    hx-trigger="every 5s"
+    hx-swap="outerHTML">
+    {% if soundscape_items %}
+        <div class="theme-section-actions d-flex flex-wrap gap-2">
+            {% for soundscape in soundscape_items %}
+            <div id="soundscape-{{ soundscape.id }}-result">
+                {% if active_soundscape == soundscape.name %}
+                <form hx-post="/soundscapes/stop"
+                      hx-target="#soundscape-{{ soundscape.id }}-result"
+                      hx-swap="outerHTML">
+                    <button type="submit" class="btn btn-sm btn-danger theme-soundscape-stop-btn">
+                        &#9632; {{ soundscape.name }}
+                    </button>
+                </form>
+                {% else %}
+                <form hx-post="/soundscapes/play"
+                      hx-target="#soundscape-{{ soundscape.id }}-result"
+                      hx-swap="outerHTML">
+                    <input type="hidden" name="soundscape" value="{{ soundscape.name }}">
+                    <button type="submit" class="theme-soundscape-btn btn btn-sm btn-outline-primary">
+                        {{ soundscape.name }}
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+    <div class="small text-muted">No soundscapes configured.</div>
+    {% endif %}
+</div>

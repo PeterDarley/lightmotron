@@ -2,6 +2,7 @@
 
 import machine  # type: ignore
 import micropython  # type: ignore
+import sys
 
 import settings
 
@@ -89,5 +90,7 @@ try:
     AudioPlayer().start_continuous_polling()
 except Exception as audio_err:
     print("boot: audio init failed:", audio_err)
+    sys.print_exception(audio_err)
+    raise
 
 print("Boot complete.\n")

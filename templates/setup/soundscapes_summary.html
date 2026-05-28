@@ -1,0 +1,10 @@
+{% if soundscapes %}
+<div class="d-flex flex-wrap gap-1 mb-0">
+    {% for soundscape in soundscape_rows %}
+    <span class="badge bg-secondary">{{ soundscape.name }}</span>
+    {% endfor %}
+</div>
+<div class="summary-footer small text-muted">{{ soundscape_count }} soundscape{{ soundscape_plural_suffix }}</div>
+{% else %}
+<small class="text-muted">No soundscapes yet.</small>
+{% endif %}

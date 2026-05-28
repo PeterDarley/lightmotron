@@ -1,4 +1,7 @@
-<div id="scene_panel" class="theme-home-section theme-scenes-panel">
+<div id="scene_panel" class="theme-home-section theme-scenes-panel"
+     hx-get="/scenes/panel/status"
+     hx-trigger="every 10s"
+     hx-swap="outerHTML">
     <div class="theme-active-scene-panel mb-4">
         <div class="theme-active-scene-label text-muted small mb-1">Active Scenes</div>
         <div class="theme-scene-name" id="active-scene-name">{{ active_scenes_label }}</div>

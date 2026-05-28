@@ -43,7 +43,8 @@
                             hx-post="/scenes/edit"
                             hx-target="#modal-body"
                             hx-swap="innerHTML"
-                            hx-vals='{"scene_name": "{{ scene_name }}", "entry_name": "{{ entry_name }}", "action": "delete_entry"}'>
+                            hx-vals='{"scene_name": "{{ scene_name }}", "entry_name": "{{ entry_name }}", "action": "delete_entry"}'
+                            hx-confirm="Delete entry '{{ entry_name }}'?">
                         Delete
                     </button>
                 </td>
@@ -265,6 +266,10 @@
             </button>
             <small class="text-muted ms-2">Selected sounds are stopped when this scene is removed or replaced.</small>
         </form>
+        {% endif %}
+
+        {% if triggerable_scenes %}
+        {% include 'setup/scene_edit_trigger_control.html' %}
         {% endif %}
 
         <div class="d-flex flex-wrap gap-3 align-items-end">

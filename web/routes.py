@@ -13,6 +13,7 @@ web_server.add_routes(
     {
         "/": views.HomeView,
         "/set_scene": views.SetSceneView,
+        "/scenes/panel/status": views.ScenePanelStatusView,
         "/animation": views.AnimationView,
         "/storage": views.StorageView,
         "/setup": views.SetupView,
@@ -30,6 +31,8 @@ web_server.add_routes(
         "/custom_colors/summary": views.CustomColorsSummaryView,
         "/scenes": views.ScenesView,
         "/scenes/edit": views.SceneEditView,
+        "/scenes/edit/add_trigger_scene": views.SceneEditAddTriggerSceneView,
+        "/scenes/edit/remove_trigger_scene": views.SceneEditRemoveTriggerSceneView,
         "/scenes/color_select": views.ColorSelectView,
         "/scenes/summary": views.ScenesSummaryView,
         "/effects": views.EffectsView,
@@ -59,6 +62,12 @@ web_server.add_routes(
         "/sounds/play": views.PlaySoundView,
         "/sounds/stop": views.StopSoundView,
         "/sounds/stop-all": views.StopAllSoundsView,
+        "/soundscapes": views.SoundscapesView,
+        "/soundscapes/summary": views.SoundscapesSummaryView,
+        "/soundscapes/status": views.SoundscapesStatusView,
+        "/soundscapes/edit": views.SoundscapeEditView,
+        "/soundscapes/play": views.PlaySoundscapeView,
+        "/soundscapes/stop": views.StopSoundscapeView,
         "/audio/volume": views.AudioVolumeView,
     }
 )

@@ -48,6 +48,7 @@
                             hx-target="#custom-colors-picker"
                             hx-swap="outerHTML"
                             hx-vals='{"color_name": "{{ color_name }}", "action": "delete"}'
+                            hx-confirm="Delete color '{{ color_name }}'?"
                             style="width: 100%; margin-top: 4px;">
                         Delete
                     </button>

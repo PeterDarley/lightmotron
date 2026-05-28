@@ -181,7 +181,7 @@ def _rename_filter_refs(old_name: str, new_name: str) -> None:
 
 
 def _rename_scene_refs(old_name: str, new_name: str) -> None:
-    """Update scene_settings key and kills lists that reference a scene by its old name."""
+    """Update scene_settings key and kills and trigger_scenes_on_completion lists that reference a scene by its old name."""
 
     scene_settings: dict = lights.settings.get("scene_settings", {})
     if old_name in scene_settings:
@@ -193,6 +193,12 @@ def _rename_scene_refs(old_name: str, new_name: str) -> None:
             for i, item in enumerate(kills):
                 if item == old_name:
                     kills[i] = new_name
+
+        trigger_scenes: list = meta.get("trigger_scenes_on_completion")
+        if isinstance(trigger_scenes, list):
+            for i, item in enumerate(trigger_scenes):
+                if item == old_name:
+                    trigger_scenes[i] = new_name
 
 
 def _rename_scene_entry_after_refs(scene_dict: dict, old_entry_name: str, new_entry_name: str) -> None:
@@ -363,6 +369,7 @@ class HomeView(View):
         context = {"message": "Lighting", "page_title": "Home"}
         context.update(_scenes_context())
         context.update(_animation_context())
+        context.update(_soundscapes_context(include_active=True))
         context.update(_sounds_context(include_playing=True, home_only=True))
 
         # Get current master volume from persistent storage
@@ -372,6 +379,288 @@ class HomeView(View):
         context["current_volume"] = current_volume
 
         return render_template("home.html", context)
+
+
+class SoundscapesSummaryView(View):
+    """Return a summary snippet of soundscapes for the setup card."""
+
+    def get(self) -> str:
+        """Return soundscapes summary HTML fragment."""
+
+        return render_template("setup/soundscapes_summary.html", _soundscapes_context())
+
+
+class SoundscapesView(View):
+    """List soundscapes and create or delete soundscapes."""
+
+    def get(self) -> str:
+        """Show soundscape list and create-soundscape form."""
+
+        context: dict = _soundscapes_context()
+        context["page_title"] = "Soundscapes"
+        context.update(_sounds_context())
+        return render_template("setup/soundscapes.html", context)
+
+    def post(self) -> str:
+        """Create or delete a soundscape."""
+
+        action: str = self.request.form_data.get("action", "").strip()
+        soundscape_name: str = self.request.form_data.get("soundscape_name", "").strip()
+
+        storage: PersistentDict = PersistentDict()
+        soundscapes: dict = self._get_soundscapes_dict(storage)
+
+        if action == "create" and soundscape_name:
+            if soundscape_name not in soundscapes:
+                soundscapes[soundscape_name] = {}
+                self._save_soundscapes_dict(storage, soundscapes)
+
+        elif action == "delete" and soundscape_name and soundscape_name in soundscapes:
+            del soundscapes[soundscape_name]
+            self._save_soundscapes_dict(storage, soundscapes)
+
+        # Return updated manager fragment
+        context: dict = _soundscapes_context()
+        return render_template("setup/soundscapes.html", context)
+
+    def _get_soundscapes_dict(self, storage: PersistentDict) -> dict:
+        """Get the soundscapes dictionary from storage."""
+
+        lighting_root = storage.get("lighting_settings", {})
+        if isinstance(lighting_root, dict) and "models" in lighting_root:
+            current = lighting_root.get("current_model")
+            if current and current in lighting_root.get("models", {}):
+                if "soundscapes" not in lighting_root["models"][current]:
+                    lighting_root["models"][current]["soundscapes"] = {}
+                return lighting_root["models"][current]["soundscapes"]
+
+        return {}
+
+    def _save_soundscapes_dict(self, storage: PersistentDict, soundscapes: dict) -> None:
+        """Save the soundscapes dictionary to storage."""
+
+        lighting_root = storage.get("lighting_settings", {})
+        if isinstance(lighting_root, dict) and "models" in lighting_root:
+            current = lighting_root.get("current_model")
+            if current and current in lighting_root.get("models", {}):
+                lighting_root["models"][current]["soundscapes"] = soundscapes
+                storage["lighting_settings"] = lighting_root
+                storage.store()
+
+
+class PlaySoundscapeView(View):
+    """Handle requests to play a soundscape."""
+
+    def post(self) -> str:
+        """Start a soundscape and return updated soundscape button area."""
+
+        soundscape_name: str = self.request.form_data.get("soundscape", "").strip()
+
+        try:
+            from sounds import SoundManager
+
+            manager: SoundManager = SoundManager()
+            if not manager.play_soundscape(soundscape_name):
+                print(f"PlaySoundscapeView: failed to play soundscape '{soundscape_name}'")
+        except Exception as err:
+            print(f"PlaySoundscapeView: error playing soundscape: {err}")
+
+        return render_template("soundscapes/buttons.html", _soundscapes_context(include_active=True))
+
+
+class StopSoundscapeView(View):
+    """Handle requests to stop the currently playing soundscape."""
+
+    def post(self) -> str:
+        """Stop current soundscape and return updated soundscape button area."""
+
+        try:
+            from sounds import SoundManager
+
+            manager: SoundManager = SoundManager()
+            manager.stop_all()
+        except Exception as err:
+            print(f"StopSoundscapeView: error stopping soundscape: {err}")
+
+        return render_template("soundscapes/buttons.html", _soundscapes_context(include_active=True))
+
+
+class SoundscapesStatusView(View):
+    """Return the home soundscapes controls fragment with current playback state."""
+
+    def get(self) -> str:
+        """Render soundscape buttons using current active state."""
+
+        return render_template("soundscapes/buttons.html", _soundscapes_context(include_active=True))
+
+
+class SoundscapeEditView(View):
+    """Handle editing a soundscape's entries."""
+
+    def get(self) -> str:
+        """Show soundscape entry editor."""
+
+        soundscape_name: str = self.request.query_params.get("soundscape", "").strip()
+
+        from sounds import SoundManager
+
+        manager: SoundManager = SoundManager()
+        soundscape: dict = manager.get_soundscape(soundscape_name)
+        sounds: dict = manager.get_sounds()
+
+        context: dict = {
+            "soundscape_name": soundscape_name,
+            "soundscape": soundscape,
+            "sounds": sorted(sounds.keys()),
+            "entries": [],
+        }
+
+        # Build entries list with entry names
+        for entry_name, entry_data in soundscape.items():
+            if isinstance(entry_data, dict):
+                repeat_count: int = (
+                    int(entry_data.get("repeat", 0)) if str(entry_data.get("repeat", 0)).isdigit() else 0
+                )
+                repeat_enabled: bool = bool(entry_data.get("repeat_enabled", False))
+                if not repeat_enabled and repeat_count > 0:
+                    # Backward compatibility for entries created before repeat_enabled existed.
+                    repeat_enabled = True
+
+                if not repeat_enabled:
+                    repeat_mode_label: str = "off"
+                elif repeat_count == 0:
+                    repeat_mode_label = "infinite"
+                else:
+                    repeat_mode_label = str(repeat_count)
+
+                context["entries"].append(
+                    {
+                        "name": entry_name,
+                        "sound": entry_data.get("sound", ""),
+                        "repeat": repeat_count,
+                        "repeat_enabled": repeat_enabled,
+                        "repeat_mode_label": repeat_mode_label,
+                        "after": entry_data.get("after", ""),
+                    }
+                )
+
+        return render_template("setup/soundscape_edit.html", context)
+
+    def post(self) -> str:
+        """Create or update soundscape entries."""
+
+        soundscape_name: str = self.request.form_data.get("soundscape_name", "").strip()
+        action: str = self.request.form_data.get("action", "").strip()
+
+        from sounds import SoundManager
+
+        manager: SoundManager = SoundManager()
+        storage: PersistentDict = PersistentDict()
+
+        if action == "add_entry":
+            entry_sound: str = self.request.form_data.get("entry_sound", "").strip()
+            entry_repeat: str = self.request.form_data.get("entry_repeat", "0").strip()
+            entry_repeat_enabled: bool = bool(self.request.form_data.get("entry_repeat_enabled", "").strip())
+
+            repeat_count: int = 0
+            if entry_repeat.isdigit():
+                repeat_count = max(0, int(entry_repeat))
+
+            if entry_sound and soundscape_name:
+                soundscape: dict = manager.get_soundscape(soundscape_name)
+                # Generate a unique entry name
+                entry_num = len(soundscape) + 1
+                entry_name = f"entry{entry_num}"
+                soundscape[entry_name] = {
+                    "sound": entry_sound,
+                    "repeat_enabled": entry_repeat_enabled,
+                    "repeat": repeat_count,
+                }
+                self._save_soundscape(storage, soundscape_name, soundscape)
+
+        elif action == "delete_entry":
+            entry_name: str = self.request.form_data.get("entry_name", "").strip()
+            if entry_name and soundscape_name:
+                soundscape: dict = manager.get_soundscape(soundscape_name)
+                if entry_name in soundscape:
+                    del soundscape[entry_name]
+                    self._save_soundscape(storage, soundscape_name, soundscape)
+
+        elif action == "update_entry":
+            entry_name: str = self.request.form_data.get("entry_name", "").strip()
+            entry_sound: str = self.request.form_data.get("entry_sound", "").strip()
+            entry_repeat: str = self.request.form_data.get("entry_repeat", "0").strip()
+            entry_repeat_enabled: bool = bool(self.request.form_data.get("entry_repeat_enabled", "").strip())
+
+            repeat_count: int = 0
+            if entry_repeat.isdigit():
+                repeat_count = max(0, int(entry_repeat))
+
+            if entry_name and entry_sound and soundscape_name:
+                soundscape: dict = manager.get_soundscape(soundscape_name)
+                if entry_name in soundscape and isinstance(soundscape.get(entry_name), dict):
+                    soundscape[entry_name]["sound"] = entry_sound
+                    soundscape[entry_name]["repeat_enabled"] = entry_repeat_enabled
+                    soundscape[entry_name]["repeat"] = repeat_count
+                    self._save_soundscape(storage, soundscape_name, soundscape)
+
+            # Saving an entry returns to the manager list, effectively closing
+            # the per-soundscape editor and refreshing the soundscapes table.
+            return render_template("setup/soundscapes.html", _soundscapes_context())
+
+        # Return updated edit view
+        soundscape: dict = manager.get_soundscape(soundscape_name)
+        sounds: dict = manager.get_sounds()
+
+        context: dict = {
+            "soundscape_name": soundscape_name,
+            "soundscape": soundscape,
+            "sounds": sorted(sounds.keys()),
+            "entries": [],
+        }
+
+        for entry_name, entry_data in soundscape.items():
+            if isinstance(entry_data, dict):
+                repeat_count: int = (
+                    int(entry_data.get("repeat", 0)) if str(entry_data.get("repeat", 0)).isdigit() else 0
+                )
+                repeat_enabled: bool = bool(entry_data.get("repeat_enabled", False))
+                if not repeat_enabled and repeat_count > 0:
+                    # Backward compatibility for entries created before repeat_enabled existed.
+                    repeat_enabled = True
+
+                if not repeat_enabled:
+                    repeat_mode_label: str = "off"
+                elif repeat_count == 0:
+                    repeat_mode_label = "infinite"
+                else:
+                    repeat_mode_label = str(repeat_count)
+
+                context["entries"].append(
+                    {
+                        "name": entry_name,
+                        "sound": entry_data.get("sound", ""),
+                        "repeat": repeat_count,
+                        "repeat_enabled": repeat_enabled,
+                        "repeat_mode_label": repeat_mode_label,
+                        "after": entry_data.get("after", ""),
+                    }
+                )
+
+        return render_template("setup/soundscape_edit.html", context)
+
+    def _save_soundscape(self, storage: PersistentDict, soundscape_name: str, soundscape: dict) -> None:
+        """Save a soundscape to storage."""
+
+        lighting_root = storage.get("lighting_settings", {})
+        if isinstance(lighting_root, dict) and "models" in lighting_root:
+            current = lighting_root.get("current_model")
+            if current and current in lighting_root.get("models", {}):
+                soundscapes = lighting_root["models"][current].get("soundscapes", {})
+                soundscapes[soundscape_name] = soundscape
+                lighting_root["models"][current]["soundscapes"] = soundscapes
+                storage["lighting_settings"] = lighting_root
+                storage.store()
 
 
 class AudioVolumeView(View):
@@ -440,6 +729,14 @@ class SetSceneView(View):
             }
             lights.set_scene(scene_name, **extra_kwargs)
 
+        return render_template("scenes/scene_panel.html", _scenes_context())
+
+
+class ScenePanelStatusView(View):
+    """Handle GET requests to return updated scene panel status."""
+
+    def get(self) -> str:
+        """Return the scene panel HTML with current active scenes."""
         return render_template("scenes/scene_panel.html", _scenes_context())
 
 
@@ -524,6 +821,7 @@ class SetupView(View):
         context["scenes"] = _scenes_list(lights.settings.get("scenes", {}))
         context["effect_names"] = sorted(lights.settings.get("effects", {}).keys())
         context["filter_names"] = sorted(lights.settings.get("filters", {}).keys())
+        context.update(_soundscapes_context())
         context.update(_sounds_context())
 
         return render_template("setup.html", context)
@@ -1933,11 +2231,13 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
     all_entry_names: list = sorted(scene_data.keys())
     chainable_entries: list = [n for n in all_entry_names if n != edit_entry_name]
 
-    # Scene-level settings (kills list).
+    # Scene-level settings (kills list, trigger scenes on completion).
     scene_meta: dict = lights.settings.get("scene_settings", {}).get(scene_name, {})
     kills: list = scene_meta.get("kills", [])
     all_scene_names: list = sorted(lights.settings.get("scenes", {}).keys())
     killable_scenes: list = [n for n in all_scene_names if n != scene_name]
+    trigger_scenes_on_completion: list = scene_meta.get("trigger_scenes_on_completion", [])
+    triggerable_scenes: list = [n for n in all_scene_names if n != scene_name]
     stop_sounds_on_start: list = scene_meta.get("stop_sounds_on_start", [])
     stop_sounds_on_end: list = scene_meta.get("stop_sounds_on_end", [])
 
@@ -1952,6 +2252,8 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
         "killable_scenes": killable_scenes,
         "scene_kills": kills,
         "scene_kills_csv": ",".join(kills),
+        "trigger_scenes_on_completion": trigger_scenes_on_completion,
+        "triggerable_scenes": triggerable_scenes,
         "scene_sound": scene_meta.get("sound", ""),
         "scene_stop_sounds_on_start": stop_sounds_on_start,
         "scene_stop_sounds_on_start_csv": ",".join(stop_sounds_on_start),
@@ -2552,6 +2854,14 @@ class SceneEditView(View):
                     for s in kills_raw.split(",")
                     if s.strip() and s.strip() in lights.settings.get("scenes", {})
                 ]
+
+                trigger_scenes_raw: str = self.request.form_data.get("trigger_scenes_on_completion", "").strip()
+                trigger_scenes_list: list = [
+                    s.strip()
+                    for s in trigger_scenes_raw.split(",")
+                    if s.strip() and s.strip() in lights.settings.get("scenes", {})
+                ]
+
                 scene_sound: str = self.request.form_data.get("scene_sound", "").strip()
                 from sounds import SoundManager
 
@@ -2577,6 +2887,11 @@ class SceneEditView(View):
                 elif "kills" in lights.settings["scene_settings"].get(scene_name, {}):
                     del lights.settings["scene_settings"][scene_name]["kills"]
 
+                if trigger_scenes_list:
+                    lights.settings["scene_settings"][scene_name]["trigger_scenes_on_completion"] = trigger_scenes_list
+                elif "trigger_scenes_on_completion" in lights.settings["scene_settings"].get(scene_name, {}):
+                    del lights.settings["scene_settings"][scene_name]["trigger_scenes_on_completion"]
+
                 if scene_sound:
                     lights.settings["scene_settings"][scene_name]["sound"] = scene_sound
                 elif "sound" in lights.settings["scene_settings"].get(scene_name, {}):
@@ -2595,6 +2910,98 @@ class SceneEditView(View):
                 lights.settings_object.store()
 
         return render_template("setup/scene_edit.html", _scene_edit_context(scene_name))
+
+
+class SceneEditAddTriggerSceneView(View):
+    """Handle HTMX request to add a trigger scene to the list."""
+
+    def post(self) -> str:
+        """Add a scene to the trigger_scenes_on_completion list and return updated control."""
+
+        scene_name: str = self.request.form_data.get("scene_name", "").strip()
+        trigger_scene_to_add: str = self.request.form_data.get("trigger_scene_to_add", "").strip()
+
+        # Validate both scenes exist
+        all_scenes = lights.settings.get("scenes", {})
+        if not scene_name or scene_name not in all_scenes:
+            return '<div class="alert alert-danger small">Scene not found.</div>'
+
+        if not trigger_scene_to_add or trigger_scene_to_add not in all_scenes:
+            return '<div class="alert alert-danger small">Invalid trigger scene.</div>'
+
+        # Initialize scene_settings if needed
+        if "scene_settings" not in lights.settings:
+            lights.settings["scene_settings"] = {}
+        if scene_name not in lights.settings["scene_settings"]:
+            lights.settings["scene_settings"][scene_name] = {}
+
+        # Get current trigger scenes list
+        trigger_scenes: list = list(
+            lights.settings["scene_settings"][scene_name].get("trigger_scenes_on_completion", [])
+        )
+
+        # Add scene if not already present
+        if trigger_scene_to_add not in trigger_scenes:
+            trigger_scenes.append(trigger_scene_to_add)
+            lights.settings["scene_settings"][scene_name]["trigger_scenes_on_completion"] = trigger_scenes
+            lights.settings_object.store()
+
+        # Build the updated control fragment context
+        context = {
+            "scene_name": scene_name,
+            "scene_name_id": _scene_name_id(scene_name),
+            "trigger_scenes_on_completion": trigger_scenes,
+            "triggerable_scenes": [n for n in sorted(all_scenes.keys()) if n != scene_name],
+            "trigger_scene_to_add": "",  # Reset dropdown
+        }
+
+        return render_template("setup/scene_edit_trigger_control.html", context)
+
+
+class SceneEditRemoveTriggerSceneView(View):
+    """Handle HTMX request to remove a trigger scene from the list."""
+
+    def post(self) -> str:
+        """Remove a scene from the trigger_scenes_on_completion list and return updated control."""
+
+        scene_name: str = self.request.form_data.get("scene_name", "").strip()
+        trigger_scene_to_remove: str = self.request.form_data.get("trigger_scene_to_remove", "").strip()
+
+        # Validate scene exists
+        all_scenes = lights.settings.get("scenes", {})
+        if not scene_name or scene_name not in all_scenes:
+            return '<div class="alert alert-danger small">Scene not found.</div>'
+
+        # Initialize scene_settings if needed
+        if "scene_settings" not in lights.settings:
+            lights.settings["scene_settings"] = {}
+        if scene_name not in lights.settings["scene_settings"]:
+            lights.settings["scene_settings"][scene_name] = {}
+
+        # Get current trigger scenes list
+        trigger_scenes: list = list(
+            lights.settings["scene_settings"][scene_name].get("trigger_scenes_on_completion", [])
+        )
+
+        # Remove scene if present
+        if trigger_scene_to_remove in trigger_scenes:
+            trigger_scenes.remove(trigger_scene_to_remove)
+            if trigger_scenes:
+                lights.settings["scene_settings"][scene_name]["trigger_scenes_on_completion"] = trigger_scenes
+            elif "trigger_scenes_on_completion" in lights.settings["scene_settings"][scene_name]:
+                del lights.settings["scene_settings"][scene_name]["trigger_scenes_on_completion"]
+            lights.settings_object.store()
+
+        # Build the updated control fragment context
+        context = {
+            "scene_name": scene_name,
+            "scene_name_id": _scene_name_id(scene_name),
+            "trigger_scenes_on_completion": trigger_scenes,
+            "triggerable_scenes": [n for n in sorted(all_scenes.keys()) if n != scene_name],
+            "trigger_scene_to_add": "",  # Reset dropdown
+        }
+
+        return render_template("setup/scene_edit_trigger_control.html", context)
 
 
 class ColorSelectView(View):
@@ -2695,6 +3102,85 @@ def _playing_sounds_by_title() -> dict:
         return {}
 
     return result
+
+
+def _soundscapes_context(include_active: bool = False, home_only: bool = False) -> dict:
+    """Build template context from soundscapes in persistent storage."""
+
+    from sounds import SoundManager
+
+    manager: SoundManager = SoundManager()
+    soundscapes: dict = manager.get_soundscapes()
+
+    soundscapes_list: list = sorted(soundscapes.keys())
+    active_soundscape = manager.get_active_soundscape() if include_active else None
+    soundscape_rows: list = []
+    for soundscape_name in soundscapes_list:
+        raw_entries = soundscapes.get(soundscape_name, {})
+        if not isinstance(raw_entries, dict):
+            raw_entries = {}
+
+        entry_names: list = [
+            entry_name for entry_name, entry_data in raw_entries.items() if isinstance(entry_data, dict)
+        ]
+        entry_count: int = len(entry_names)
+
+        infinite_repeat_count: int = 0
+        finite_repeat_count: int = 0
+        distinct_sounds: dict = {}
+        for entry_name in entry_names:
+            entry_data = raw_entries.get(entry_name, {})
+            sound_title = str(entry_data.get("sound", "")).strip()
+            if sound_title:
+                distinct_sounds[sound_title] = True
+
+            repeat_enabled: bool = bool(entry_data.get("repeat_enabled", False))
+            repeat_raw = entry_data.get("repeat", 0)
+            repeat_count: int = int(repeat_raw) if str(repeat_raw).isdigit() else 0
+            if not repeat_enabled and repeat_count > 0:
+                repeat_enabled = True
+
+            if repeat_enabled:
+                if repeat_count == 0:
+                    infinite_repeat_count += 1
+                else:
+                    finite_repeat_count += 1
+
+        sound_names: list = sorted(distinct_sounds.keys())
+        preview_names: list = sound_names[:2]
+        extra_sound_count: int = max(0, len(sound_names) - len(preview_names))
+        preview_suffix: str = f" +{extra_sound_count}" if extra_sound_count > 0 else ""
+        sounds_preview: str = ", ".join(preview_names) + preview_suffix if preview_names else "-"
+
+        soundscape_rows.append(
+            {
+                "name": soundscape_name,
+                "entry_count": entry_count,
+                "infinite_repeat_count": infinite_repeat_count,
+                "finite_repeat_count": finite_repeat_count,
+                "sounds_preview": sounds_preview,
+            }
+        )
+
+    soundscape_items: list = []
+    for soundscape_name in soundscapes_list:
+        soundscape_items.append(
+            {
+                "name": soundscape_name,
+                "id": _scene_name_id(soundscape_name),
+            }
+        )
+
+    context: dict = {
+        "soundscapes": soundscapes_list,
+        "soundscape_rows": soundscape_rows,
+        "soundscape_count": len(soundscapes_list),
+        "soundscape_plural_suffix": "" if len(soundscapes_list) == 1 else "s",
+        "soundscape_items": soundscape_items,
+        "active_soundscape": active_soundscape,
+    }
+
+    return context
 
 
 def _sounds_context(include_playing: bool = False, home_only: bool = False) -> dict:
