@@ -3492,12 +3492,19 @@ class StopSoundView(View):
         file_str: str = self.request.form_data.get("file", "0")
 
         try:
-            from audio import AudioPlayer
+            from sounds import SoundManager
 
-            audio_player: AudioPlayer = AudioPlayer()
-            module_idx: int = int(module_idx_str)
-            if 0 <= module_idx < len(audio_player.players):
-                audio_player.players[module_idx].stop()
+            manager: SoundManager = SoundManager()
+            module_idx: int | None = None
+            try:
+                parsed_module_idx: int = int(module_idx_str)
+                module_idx = parsed_module_idx
+            except (ValueError, TypeError):
+                module_idx = None
+
+            stop_ok: bool = manager.stop_sound(title, module_idx)
+            if not stop_ok:
+                print(f"StopSoundView: stop command did not confirm stopped for title='{title}' module={module_idx}")
         except Exception as err:
             print(f"StopSoundView: error stopping module: {err}")
 

@@ -143,10 +143,13 @@ Scenes can also define scene-level behavior: kill other scenes on start, play a 
 
 #### Sounds
 Create named sounds that map to MP3 file numbers on the SD cards in your audio modules. Associate titles with files, choose whether they appear on Home, and mark sounds as high quality for preferential playback on high-quality modules.
+Home single-sound Stop now verifies module state and retries the stop command when needed, reducing cases where UI switches to Play but hardware keeps playing.
+Playback-end detection now requires multiple consecutive stopped status reads from the module to reduce false "ended" transitions while audio is still audible.
 
 #### Soundscapes
 Create ordered groups of sound entries. Entries are editable in Setup after creation (sound, repeat enabled, repeat count). Repeat behavior is: with Repeat disabled it plays once, with Repeat enabled and count `0` it repeats forever, and with Repeat enabled and a positive count it repeats that many additional times.
 Soundscape progression is tied to the active soundscape entry finishing; unrelated sound end events do not advance or retrigger the soundscape.
+Home status polling also reconciles active soundscape state with current playback, so controls recover if a playback-end transition is missed.
 
 #### Theme
 Choose a CSS theme to customise the look of the interface.
