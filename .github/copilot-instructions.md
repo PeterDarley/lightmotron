@@ -7,6 +7,9 @@ Guideline:
 
 ## Notes
 
+### Dual implementation (Python + C)
+The Python (MicroPython) implementation is the reference that defines system behavior. The C implementation (in `c_project/`) may diverge in *how* it achieves things, but the observable behavior must match. Whenever changes are requested, they should be made to both implementations in the same session.
+
 ### Documentation must be kept in sync
 Whenever code changes are made, update the relevant documentation (README.md, docs/*.md, docs/settings_template.py) in the same session. Do not leave documentation stale after a code change.
 
