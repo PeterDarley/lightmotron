@@ -28,8 +28,8 @@ All function and method parameters should be typed. Return types should also be 
 ### Running Python locally
 The project code is MicroPython-only and cannot be run on the Windows machine — not even for syntax checking, because the code imports MicroPython-specific modules (e.g. `machine`, `network`) that do not exist in standard CPython. Do not attempt to execute or syntax-check project files locally.
 
-### ESP32 Board Pinout
-The file `/docs/esp32_pinout.png` shows the pinout for the ESP32 dev board in use (ESP32-WROOM-32).
+### Hardware Board
+YD-ESP32-S3 board (16MB flash, 8MB PSRAM, compatible with ESP32-S3-WROOM-1 N16R8 pinout). The file `/docs/esp32_pinout.png` shows the pinout.
 
 ### MAX7219 4-module LED matrix display wiring
 Uses **SPI** (not I2C). Pin mapping (set in `settings.BILLBOARD`):
