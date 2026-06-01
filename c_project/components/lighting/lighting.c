@@ -207,7 +207,12 @@ void lighting_process_tick(uint32_t tick)
 
                 /* Build current colors array for the target LEDs */
                 for (int o = 0; o < output_count; o++) {
-                    tick_filter_buf[o] = logical_colors[tick_output_buf[o].led_index];
+                    int idx = tick_output_buf[o].led_index;
+                    if (idx >= 0 && idx < MAX_LEDS) {
+                        tick_filter_buf[o] = logical_colors[idx];
+                    } else {
+                        tick_filter_buf[o] = (rgb_t){0, 0, 0};
+                    }
                 }
 
                 filter_fn(job->filters[f].params, tick_output_buf, tick_filter_buf,
@@ -232,6 +237,20 @@ void lighting_process_tick(uint32_t tick)
             metadata_get_scene(scene->name, &meta);
             for (int ss = 0; ss < meta.stop_sounds_on_end_count; ss++) {
                 sound_manager_stop(meta.stop_sounds_on_end[ss]);
+            }
+
+            /* Free filter resources */
+            for (int j = 0; j < scene->job_count; j++) {
+                for (int f = 0; f < scene->jobs[j].filter_count; f++) {
+                    if (scene->jobs[j].filters[f].params) {
+                        cJSON_Delete(scene->jobs[j].filters[f].params);
+                        scene->jobs[j].filters[f].params = NULL;
+                    }
+                    if (scene->jobs[j].filters[f].state.cached_params) {
+                        cJSON_Delete(scene->jobs[j].filters[f].state.cached_params);
+                        scene->jobs[j].filters[f].state.cached_params = NULL;
+                    }
+                }
             }
 
             scene->active = false;
@@ -261,12 +280,7 @@ void lighting_process_tick(uint32_t tick)
 
 esp_err_t lighting_set_scene(const char *scene_name)
 {
-    xSemaphoreTake(lighting_mutex, portMAX_DELAY);
-    /* Clear all existing scenes */
-    active_scene_count = 0;
-    memset(active_scenes, 0, sizeof(active_scenes));
-    xSemaphoreGive(lighting_mutex);
-
+    lighting_clear_scenes();
     return activate_scene(scene_name);
 }
 
@@ -325,6 +339,9 @@ void lighting_clear_scenes(void)
             for (int f = 0; f < active_scenes[i].jobs[j].filter_count; f++) {
                 if (active_scenes[i].jobs[j].filters[f].params) {
                     cJSON_Delete(active_scenes[i].jobs[j].filters[f].params);
+                }
+                if (active_scenes[i].jobs[j].filters[f].state.cached_params) {
+                    cJSON_Delete(active_scenes[i].jobs[j].filters[f].state.cached_params);
                 }
             }
         }

@@ -251,10 +251,12 @@ esp_err_t max7219_show(max7219_t *dev)
     if (!dev || !dev->initialized) return ESP_ERR_INVALID_STATE;
 
     /* Send row by row — MAX7219 digit registers are row-based */
+    int buf_len = dev->num_modules * 2;
+    uint8_t tx_buf[16]; /* Max 8 modules × 2 bytes */
+    if (buf_len > (int)sizeof(tx_buf)) buf_len = sizeof(tx_buf);
+
     for (int row = 0; row < 8; row++) {
-        int buf_len = dev->num_modules * 2;
-        uint8_t *tx_buf = calloc(buf_len, 1);
-        if (!tx_buf) return ESP_ERR_NO_MEM;
+        memset(tx_buf, 0, buf_len);
 
         for (int mod = 0; mod < dev->num_modules; mod++) {
             /* Modules are daisy-chained: last in chain is first sent */
@@ -269,10 +271,10 @@ esp_err_t max7219_show(max7219_t *dev)
         };
 
         gpio_set_level(dev->cs_pin, 0);
-        spi_device_transmit(dev->spi, &trans);
+        esp_err_t ret = spi_device_transmit(dev->spi, &trans);
         gpio_set_level(dev->cs_pin, 1);
 
-        free(tx_buf);
+        if (ret != ESP_OK) return ret;
     }
 
     return ESP_OK;

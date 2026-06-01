@@ -16,6 +16,11 @@ http_response_t *static_file_serve(const char *url_path, const char *if_none_mat
         return NULL;
     }
 
+    /* Reject path traversal attempts */
+    if (strstr(url_path, "..") != NULL) {
+        return NULL;
+    }
+
     /* Build file path */
     char file_path[256];
     if (strcmp(url_path, "/") == 0 || strcmp(url_path, "/index.html") == 0) {

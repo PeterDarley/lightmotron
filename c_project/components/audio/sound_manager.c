@@ -149,7 +149,12 @@ esp_err_t sound_manager_play(const char *title, int loop_count_override)
             break;
         }
     }
-    if (slot < 0) slot = 0; /* Overwrite oldest */
+    if (slot < 0) {
+        /* All slots full — stop the oldest and reuse its slot */
+        slot = 0;
+        audio_player_stop_module(playing_sounds[slot].module_index);
+        playing_sounds[slot].active = false;
+    }
 
     strncpy(playing_sounds[slot].title, title, sizeof(playing_sounds[slot].title) - 1);
     playing_sounds[slot].module_index = module_idx;

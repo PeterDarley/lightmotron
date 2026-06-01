@@ -81,7 +81,7 @@ static void dns_task(void *pvParameters)
     while (portal_running) {
         int len = recvfrom(sock, buffer, sizeof(buffer), 0,
                            (struct sockaddr *)&client_addr, &client_len);
-        if (len < 12) {
+        if (len < 12 || len > (int)(sizeof(buffer) - 16)) {
             continue;
         }
 

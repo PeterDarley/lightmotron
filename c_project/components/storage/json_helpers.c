@@ -111,7 +111,10 @@ cJSON *json_read_file(const char *filepath)
     long file_size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    if (file_size <= 0) {
+    if (file_size <= 0 || file_size > 256 * 1024) {
+        if (file_size > 256 * 1024) {
+            ESP_LOGE(TAG, "File too large: %s (%ld bytes)", filepath, file_size);
+        }
         fclose(f);
         return NULL;
     }
@@ -152,9 +155,13 @@ esp_err_t json_write_file(const char *filepath, const cJSON *obj)
         return ESP_FAIL;
     }
 
-    FILE *f = fopen(filepath, "w");
+    /* Write to temp file first, then rename for atomicity */
+    char tmp_path[140];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", filepath);
+
+    FILE *f = fopen(tmp_path, "w");
     if (!f) {
-        ESP_LOGE(TAG, "Failed to open %s for writing", filepath);
+        ESP_LOGE(TAG, "Failed to open %s for writing", tmp_path);
         free(json_str);
         return ESP_FAIL;
     }
@@ -166,6 +173,14 @@ esp_err_t json_write_file(const char *filepath, const cJSON *obj)
 
     if (written != len) {
         ESP_LOGE(TAG, "Write incomplete for %s (%d/%d)", filepath, (int)written, (int)len);
+        remove(tmp_path);
+        return ESP_FAIL;
+    }
+
+    /* Atomic rename — if this fails the old file remains intact */
+    remove(filepath);
+    if (rename(tmp_path, filepath) != 0) {
+        ESP_LOGE(TAG, "Failed to rename %s -> %s", tmp_path, filepath);
         return ESP_FAIL;
     }
 

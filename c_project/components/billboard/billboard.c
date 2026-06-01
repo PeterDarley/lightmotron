@@ -96,7 +96,11 @@ void billboard_scroll_text(const char *text, int delay_ms, int repeat)
     params->delay_ms = delay_ms > 0 ? delay_ms : 60;
     params->repeat = repeat > 0 ? repeat : 1;
 
-    xTaskCreate(scroll_task, "bb_scroll", 2048, params, 3, &scroll_task_handle);
+    BaseType_t ret = xTaskCreate(scroll_task, "bb_scroll", 2048, params, 3, &scroll_task_handle);
+    if (ret != pdPASS) {
+        free(params->text);
+        free(params);
+    }
 }
 
 void billboard_stop_scroll(void)
