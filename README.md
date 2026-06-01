@@ -23,7 +23,7 @@ Distribution of the software itself, except as part of a larger product or servi
 ## Hardware
 
 ### Microcontroller
-* ESP32-S3-DevKitC-1 (ESP32-S3-WROOM-1 N16R8 module — 16MB flash, 8MB octal PSRAM)
+* YD-ESP32-S3 board (ESP32-S3-WROOM-1 N16R8 module — 16MB flash, 8MB octal PSRAM)
 
 ### Lighting
 * NeoPixel LED strip (default GPIO 4; configurable via System Settings)
