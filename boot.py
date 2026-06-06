@@ -74,6 +74,63 @@ print("Hostname:", _active_hostname)
 print("Home URL (mDNS): http://" + _active_hostname + ".local/")
 print("Home URL (IP):   http://" + _active_ip + "/")
 
+
+def _flash_ip_last_octet(ip_address: str) -> None:
+    """Flash the onboard LED to report the last octet of the given IP address.
+
+    The last octet is split into hundreds, tens, and ones digits.
+    Each digit is flashed the corresponding number of times:
+      - Red   for the hundreds digit
+      - Green for the tens digit
+      - Blue  for the ones digit
+    Each flash is 1 second on followed by 1 second off.
+    Digits with a value of 0 are skipped entirely.
+    """
+    import time
+    from leds import OnboardLED
+
+    last_octet = int(ip_address.split(".")[-1])
+    hundreds = last_octet // 100
+    tens = (last_octet % 100) // 10
+    ones = last_octet % 10
+
+    onboard_led = OnboardLED()
+
+    digit_colors = [
+        (hundreds, 255, 0, 0),
+        (tens, 0, 255, 0),
+        (ones, 0, 0, 255),
+    ]
+
+    for count, red, green, blue in digit_colors:
+        if count == 0:
+            continue
+
+        for _ in range(count):
+            onboard_led.set(red, green, blue)
+            time.sleep(1)
+            onboard_led.off()
+            time.sleep(1)
+
+
+def _run_ip_flash_sequence(ip_address: str) -> None:
+    """Run the IP flash sequence three times in a background thread.
+
+    Flashes the last octet three times with a 2-second gap between each set,
+    without blocking the main boot sequence.
+    """
+    import time
+
+    for flash_set_index in range(3):
+        _flash_ip_last_octet(ip_address)
+        if flash_set_index < 2:
+            time.sleep(2)
+
+
+print("Flashing IP last octet:", _active_ip.split(".")[-1])
+import _thread
+_thread.start_new_thread(_run_ip_flash_sequence, (_active_ip,))
+
 # Register routes before starting the server so '/' resolves to HomeView
 # immediately and does not transiently fall back to static www/index.html.
 import web.routes
