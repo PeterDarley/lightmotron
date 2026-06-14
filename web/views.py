@@ -1646,7 +1646,6 @@ def _updates_context(
     error: str = "",
     check_result: dict = None,
     apply_result: dict = None,
-    remove_deleted: bool = False,
 ) -> dict:
     """Build template context for the OTA updates modal."""
 
@@ -1679,7 +1678,6 @@ def _updates_context(
         "message": message,
         "error": error,
         "apply_result": apply_result or {},
-        "remove_deleted": bool(remove_deleted),
         "last_deploy_commit": last_deploy_info.get("commit_sha", ""),
         "last_deploy_branch": last_deploy_info.get("branch", ""),
     }
@@ -1779,13 +1777,10 @@ class UpdatesView(View):
                     _updates_context(error="Run a check first so changed files can be reviewed."),
                 )
 
-            remove_deleted: bool = self.request.form_data.get("remove_deleted", "") == "1"
-
             try:
                 apply_result = updater.apply_updates(
                     _ota_last_check.get("branch", "main"),
                     _ota_last_check.get("updates", []),
-                    remove_deleted=remove_deleted,
                     commit_sha=_ota_last_check.get("commit_sha", ""),
                 )
 
@@ -1823,7 +1818,6 @@ class UpdatesView(View):
                         message=" ".join(message_parts),
                         check_result=check_result,
                         apply_result=apply_result,
-                        remove_deleted=remove_deleted,
                     ),
                 )
             except Exception as error:
@@ -1831,7 +1825,6 @@ class UpdatesView(View):
                     "setup/updates.html",
                     _updates_context(
                         error="Update apply failed: {}".format(str(error)),
-                        remove_deleted=remove_deleted,
                     ),
                 )
 
@@ -1987,6 +1980,39 @@ class SystemSettingsView(View):
         context = _system_settings_context()
         context["message"] = "Settings saved."
         return render_template("setup/system_settings.html", context)
+
+
+class SystemSettingsIPAnnouncedView(View):
+    """Mark the current IP address as announced in persistent storage."""
+
+    def post(self) -> str:
+        """Store the current IP so it won't be announced again.
+
+        Returns:
+            Empty response (HTMX swap='none')
+        """
+
+        try:
+            from ip_announcement import set_ip_announced  # type: ignore
+            from comms import WIFIManager  # type: ignore
+
+            wifi_mgr: object = WIFIManager()
+            current_ip: str = str(getattr(wifi_mgr, "ip", "")).strip()
+
+            if current_ip and current_ip != "N/A":
+                set_ip_announced(current_ip)
+                print(f"SystemSettingsIPAnnounced: marked IP {current_ip} as announced")
+                return ""
+            else:
+                print("SystemSettingsIPAnnounced: no valid IP address available")
+                return ""
+
+        except Exception as err:
+            print(f"SystemSettingsIPAnnounced: error: {err}")
+            import sys
+
+            sys.print_exception(err)
+            return ""
 
 
 class SystemRebootView(View):
@@ -3495,7 +3521,7 @@ class StopSoundView(View):
             from sounds import SoundManager
 
             manager: SoundManager = SoundManager()
-            module_idx: int | None = None
+            module_idx = None
             try:
                 parsed_module_idx: int = int(module_idx_str)
                 module_idx = parsed_module_idx

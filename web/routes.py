@@ -51,6 +51,7 @@ web_server.add_routes(
         "/hostname": views.HostnameView,
         "/system_settings": views.SystemSettingsView,
         "/system_settings/summary": views.SystemSettingsSummaryView,
+        "/system_settings/ip_announced": views.SystemSettingsIPAnnouncedView,
         "/system_reboot": views.SystemRebootView,
         "/system_reboot/confirm": views.SystemRebootConfirmView,
         "/updates": views.UpdatesView,

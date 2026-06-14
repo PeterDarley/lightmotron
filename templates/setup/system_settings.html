@@ -39,6 +39,18 @@
             </div>
         </div>
 
+        {% if ss_audio_players %}
+        <div class="mb-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    hx-post="/system_settings/ip_announced"
+                    hx-swap="none"
+                    onclick="this.disabled=true; this.textContent='Marked...'; setTimeout(() => { this.disabled=false; this.textContent='Mark Current IP as Announced'; }, 2000)">
+                Mark Current IP as Announced
+            </button>
+            <div class="form-text">Click to store the current IP so it won't be announced again next boot.</div>
+        </div>
+        {% endif %}
+
         <h6 class="mb-3">NeoPixel Strips</h6>
         <div class="mb-2">
             <table class="table table-sm table-borderless mb-2" id="strips-table">

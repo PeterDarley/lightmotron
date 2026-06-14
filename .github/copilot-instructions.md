@@ -7,14 +7,14 @@ Guideline:
 
 ## Notes
 
-### Dual implementation (Python + C)
-The Python (MicroPython) implementation is the reference that defines system behavior. The C implementation (in `c_project/`) may diverge in *how* it achieves things, but the observable behavior must match. Whenever changes are requested, they should be made to both implementations in the same session.
+### C project
+The `c_project/` directory exists but does not need to be kept in sync with the Python implementation. Do not update `c_project/` when making changes to the Python code.
 
 ### Documentation must be kept in sync
 Whenever code changes are made, update the relevant documentation (README.md, docs/*.md, docs/settings_template.py) in the same session. Do not leave documentation stale after a code change.
 
 ### Deployment scripts
-Do not use `upload.ps1` or `repl.ps1`. These are for manual use by the user only. The AI should never run these scripts.
+Do not use `upload.ps1` or `repl.ps1`. These are for manual use by the user only. The AI should never run these scripts. Never invoke them via terminal/shell, PowerShell, or any other execution method.
 
 ### Temporary working files
 Put any temporary files needed during work (screenshots, logs, test outputs, etc.) into the `copilot_working` directory, which is excluded from the repo.

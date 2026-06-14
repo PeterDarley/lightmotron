@@ -117,7 +117,14 @@ optional; hardcoded defaults in settings.py are used when a key is absent.
 
         # If true, print detailed audio state diagnostics to serial output.
         # Useful when investigating early stop detection or module state drift.
-        "audio_debug_logging": false
+        "audio_debug_logging": false,
+
+        # Stored IP address for IP announcement detection.
+        # When the device boots and this IP differs from the current assigned IP,
+        # the system will announce the new IP address via audio (if audio players
+        # are configured).  This prevents repeated announcements of the same IP.
+        # Can be cleared via "Mark Current IP as Announced" button in System Settings.
+        "stored_ip_address": ""
     },
 
     # Sounds configuration.

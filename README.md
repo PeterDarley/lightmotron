@@ -103,6 +103,8 @@ Cards use a consistent responsive grid layout (up to four cards per row on wide 
 #### System Settings
 Configure WiFi credentials, mDNS hostname, NeoPixel strip settings, and audio player UART pins. Changes take effect on the next reboot.
 
+**IP Address Announcement**: When the device boots with audio players configured and its IP address has changed since the last boot, it will automatically announce the new IP address. This uses randomly-selected voice 8 or 9, playing the digits of each octet with 2-second pauses between them, then repeating once after 15 seconds. Click **Mark Current IP as Announced** to store the current IP so it won't be announced again unless the IP changes.
+
 #### Models
 Manage multiple named "Models" — each Model is a self-contained collection of lighting configuration (scenes, effects, filters, named ranges, custom colors, and optional per-model sounds). Use the Models card on the Setup page to create, rename, delete, or switch the active model. The device stores the active model in persistent settings; older single-model installations are automatically migrated into a default model named "Model".
 
@@ -162,10 +164,10 @@ Use Setup -> Updates for OTA code updates directly from GitHub.
 Workflow:
 1. Choose the repository owner/name (defaults to `PeterDarley/lightmotron`) and save.
 2. Run **Check Now** to compare local files with the selected repository.
-3. Review the changed file list (added / modified / deleted).
+3. Review the changed file list (added / modified).
 4. Run **Apply Updates** to pull and write changed files.
 
-You can optionally remove local files that were deleted upstream when applying updates.
+GitHub is the canonical source — any file on the device that differs from the repo will be overwritten. Files on the device that are not in the repo are left untouched.
 
 ### Status Page
 Monitor system health and performance. View memory usage, storage space, networking details (hostname, IP, connection state, SSID), animation state, and configured audio modules with current responsiveness. Download/restore all configuration as JSON.

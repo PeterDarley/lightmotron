@@ -74,6 +74,15 @@ print("Hostname:", _active_hostname)
 print("Home URL (mDNS): http://" + _active_hostname + ".local/")
 print("Home URL (IP):   http://" + _active_ip + "/")
 
+# Check if IP needs to be announced
+try:
+    from ip_announcement import check_and_announce_ip  # type: ignore
+
+    check_and_announce_ip()
+except Exception as ip_announce_err:
+    print("boot: IP announcement check failed:", ip_announce_err)
+    sys.print_exception(ip_announce_err)
+
 
 def _flash_ip_last_octet(ip_address: str) -> None:
     """Flash the onboard LED to report the last octet of the given IP address.
@@ -129,6 +138,7 @@ def _run_ip_flash_sequence(ip_address: str) -> None:
 
 print("Flashing IP last octet:", _active_ip.split(".")[-1])
 import _thread
+
 _thread.start_new_thread(_run_ip_flash_sequence, (_active_ip,))
 
 # Register routes before starting the server so '/' resolves to HomeView
