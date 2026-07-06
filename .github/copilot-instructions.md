@@ -7,6 +7,8 @@ Guideline:
 
 ## Notes
 
+### Johnny is the name of the AI agent.
+
 ### C project
 The `c_project/` directory exists but does not need to be kept in sync with the Python implementation. Do not update `c_project/` when making changes to the Python code.
 
