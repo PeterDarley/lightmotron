@@ -2596,9 +2596,11 @@ def _filter_edit_context(filter_name: str = None) -> dict:
     filters_dict: dict = lights.settings.get("filters", {})
     filter_order: list = lights.settings.get("filter_order", [])
     filter_metadata: dict = lights.get_filter_metadata()
+    custom_colors: dict = lights.settings.get("custom_colors", {})
     context: dict = {
         "filters": _filters_list(filters_dict, filter_order),
         "filter_metadata": filter_metadata,
+        "custom_colors": custom_colors,
         "page_title": "Filters",
     }
 
@@ -2635,6 +2637,42 @@ def _filter_edit_context(filter_name: str = None) -> dict:
             for param_name in filter_metadata[filter_type].get("optional", []):
                 if param_name in filter_def:
                     context["filter_val_" + param_name] = str(filter_def[param_name])
+
+        # Resolve the "color" param into dropdown/swatch context, mirroring
+        # the pattern-effect color selector (see _pattern_params_context).
+        if "color" in filter_def:
+            existing_color = filter_def["color"]
+            if isinstance(existing_color, (list, tuple)) and len(existing_color) == 3:
+                context["filter_color_hex"] = "#{:02X}{:02X}{:02X}".format(
+                    int(existing_color[0]), int(existing_color[1]), int(existing_color[2])
+                )
+                context["filter_color_selected"] = "__picker__"
+                context["filter_color_display_name"] = ""
+                context["filter_color_is_named"] = False
+                context["filter_color_is_picker"] = True
+            elif isinstance(existing_color, str) and existing_color.startswith("#"):
+                context["filter_color_hex"] = existing_color
+                context["filter_color_selected"] = "__picker__"
+                context["filter_color_display_name"] = ""
+                context["filter_color_is_named"] = False
+                context["filter_color_is_picker"] = True
+            else:
+                existing_color = str(existing_color)
+                if existing_color.startswith("custom:"):
+                    raw_name: str = existing_color[7:]
+                else:
+                    raw_name = existing_color
+                context["filter_color_selected"] = raw_name
+                context["filter_color_display_name"] = raw_name
+                context["filter_color_hex"] = _color_name_to_hex(raw_name, custom_colors)
+                context["filter_color_is_named"] = True
+                context["filter_color_is_picker"] = False
+        else:
+            context["filter_color_hex"] = "#FF0000"
+            context["filter_color_selected"] = ""
+            context["filter_color_display_name"] = ""
+            context["filter_color_is_named"] = False
+            context["filter_color_is_picker"] = False
 
     return context
 
@@ -2708,12 +2746,28 @@ class FilterEditView(View):
             filter_def: dict = {"filter": filter_type}
             filter_metadata: dict = lights.get_filter_metadata()
             for param_name in filter_metadata.get(filter_type, {}).get("optional", []):
-                param_value: str = self.request.form_data.get("filter_param_" + param_name, "").strip()
+                raw_value = self.request.form_data.get("filter_param_" + param_name, "")
+                # The color select and its paired color-picker swatch share a
+                # form field name, so submissions may arrive as a list; the
+                # picker's value (submitted last) reflects the actual choice.
+                param_value: str = (raw_value[-1] if raw_value else "").strip() if isinstance(raw_value, list) else raw_value.strip()
                 if param_value:
-                    try:
-                        filter_def[param_name] = float(param_value) if "." in param_value else int(param_value)
-                    except ValueError:
-                        filter_def[param_name] = param_value
+                    if param_name == "color" and (
+                        param_value.startswith("#")
+                        and len(param_value) == 7
+                        and all(c in "0123456789ABCDEFabcdef" for c in param_value[1:])
+                    ):
+                        hex_color = param_value.lstrip("#")
+                        filter_def[param_name] = [
+                            int(hex_color[0:2], 16),
+                            int(hex_color[2:4], 16),
+                            int(hex_color[4:6], 16),
+                        ]
+                    else:
+                        try:
+                            filter_def[param_name] = float(param_value) if "." in param_value else int(param_value)
+                        except ValueError:
+                            filter_def[param_name] = param_value
 
             if filter_type in ("sizzle", "scintillate"):
                 variation_percent_value: str = self.request.form_data.get("filter_param_variation_percent", "").strip()
@@ -3053,8 +3107,11 @@ class ColorSelectView(View):
     def post(self) -> str:
         """Return a pill, color picker, or empty based on the selected color."""
 
+        field_name: str = self.request.form_data.get("field_name", "").strip()
         color_index: str = self.request.form_data.get("color_index", "0").strip()
-        color_value: str = self.request.form_data.get(f"param_color_{color_index}", "").strip()
+        if not field_name:
+            field_name = f"param_color_{color_index}"
+        color_value: str = self.request.form_data.get(field_name, "").strip()
         custom_colors: dict = lights.settings.get("custom_colors", {})
 
         is_named: bool = bool(color_value and color_value != "__picker__" and not color_value.startswith("#"))
@@ -3079,6 +3136,7 @@ class ColorSelectView(View):
 
         context: dict = {
             "color_index": color_index,
+            "field_name": field_name,
             "color_name": stored_name,
             "color_display_name": display_name,
             "color_hex_val": hex_val,

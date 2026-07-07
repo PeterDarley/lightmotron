@@ -82,10 +82,51 @@
                         </div>
                         <div class="col-auto filter-param" data-param="color">
                             <label class="form-label" for="filter_param_color">Color</label>
-                            <input type="text" class="form-control" name="filter_param_color"
-                                   id="filter_param_color"
-                                   value="{{ filter_val_color }}"
-                                   placeholder="white" style="width: 150px;">
+                            <div class="d-flex align-items-center gap-2">
+                                <select class="form-select" id="filter_param_color" name="filter_param_color"
+                                        hx-post="/filters/color_select"
+                                        hx-trigger="change"
+                                        hx-target="#filter-color-display"
+                                        hx-swap="innerHTML"
+                                        hx-vals='{"field_name": "filter_param_color"}'
+                                        style="width: 150px;">
+                                    <option value="">Select color...</option>
+                                    <optgroup label="Standard">
+                                        <option value="white"{% if filter_color_selected == "white" %} selected{% endif %}>White</option>
+                                        <option value="black"{% if filter_color_selected == "black" %} selected{% endif %}>Black</option>
+                                        <option value="red"{% if filter_color_selected == "red" %} selected{% endif %}>Red</option>
+                                        <option value="green"{% if filter_color_selected == "green" %} selected{% endif %}>Green</option>
+                                        <option value="blue"{% if filter_color_selected == "blue" %} selected{% endif %}>Blue</option>
+                                    </optgroup>
+                                    {% if custom_colors %}
+                                    <optgroup label="Custom">
+                                        {% for color_name in custom_colors.keys() %}
+                                        <option value="custom:{{ color_name }}"{% if filter_color_selected == color_name %} selected{% endif %}>{{ color_name }}</option>
+                                        {% endfor %}
+                                    </optgroup>
+                                    {% endif %}
+                                    {% if filter_color_is_picker %}
+                                    <option value="{{ filter_color_hex }}" selected>Use Color Picker</option>
+                                    {% else %}
+                                    <option value="__picker__">Use Color Picker</option>
+                                    {% endif %}
+                                </select>
+
+                                <div id="filter-color-display" class="d-flex align-items-center">
+                                    {% if filter_color_is_named %}
+                                    <span class="badge rounded-pill contrast-text"
+                                          data-hex="{{ filter_color_hex }}"
+                                          style="background-color: {{ filter_color_hex }}; min-width: 60px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold;">{{ filter_color_display_name }}</span>
+                                    {% else %}
+                                    {% if filter_color_is_picker %}
+                                    <input type="color" class="form-control form-control-color"
+                                           name="filter_param_color"
+                                           value="{{ filter_color_hex }}"
+                                           style="max-width: 80px;">
+                                    {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
                             <small class="text-muted">Spike color name or custom:name.</small>
                         </div>
                         <div class="col-auto filter-param" data-param="duration">
@@ -278,4 +319,18 @@ function initializeFilterTickControls() {
 
 toggleFilterEditParams();
 initializeFilterTickControls();
+
+// Set text color based on background luminance for contrast-text elements
+document.querySelectorAll('.contrast-text').forEach(element => {
+    const hex = element.dataset.hex.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    // Calculate relative luminance using WCAG formula
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+    // Use white text for dark backgrounds, black for light backgrounds
+    element.style.color = luminance > 0.5 ? '#000' : '#fff';
+});
 </script>

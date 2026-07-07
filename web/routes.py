@@ -41,6 +41,7 @@ web_server.add_routes(
         "/effects/summary": views.EffectsSummaryView,
         "/filters": views.FiltersView,
         "/filters/edit": views.FilterEditView,
+        "/filters/color_select": views.ColorSelectView,
         "/filters/summary": views.FiltersSummaryView,
         "/backup": views.BackupView,
         "/restore": views.RestoreView,
