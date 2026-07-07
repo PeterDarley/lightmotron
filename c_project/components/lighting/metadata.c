@@ -75,3 +75,149 @@ void metadata_get_scene(const char *scene_name, scene_metadata_t *meta)
         }
     }
 }
+
+/* Mirrors PATTERN_METADATA in lib/lighting/metadata.py exactly - name
+ * spelling of required/optional params matters, since they are used
+ * verbatim as web form field name suffixes (e.g. "pattern_param_width"). */
+const pattern_metadata_t pattern_metadata_table[] = {
+    {
+        .name = "solid",
+        .description = "Solid color",
+        .required = {"target", "colors"},
+        .required_count = 2,
+        .optional = {0},
+        .optional_count = 0,
+        .color_count = 1,
+    },
+    {
+        .name = "blink",
+        .description = "Blinking color",
+        .required = {"target", "colors"},
+        .required_count = 2,
+        .optional = {"duration", "frequency"},
+        .optional_count = 2,
+        .color_count = 2,
+    },
+    {
+        .name = "pulse",
+        .description = "Pulsing color",
+        .required = {"target", "colors"},
+        .required_count = 2,
+        .optional = {"duration", "period"},
+        .optional_count = 2,
+        .color_count = 2,
+    },
+    {
+        .name = "fade_in",
+        .description = "Fade between two colors",
+        .required = {"target", "colors"},
+        .required_count = 2,
+        .optional = {"duration"},
+        .optional_count = 1,
+        .color_count = 2,
+    },
+    {
+        .name = "breathe",
+        .description = "Breathing effect",
+        .required = {"target", "colors"},
+        .required_count = 2,
+        .optional = {"duration"},
+        .optional_count = 1,
+        .color_count = 2,
+    },
+    {
+        .name = "wave",
+        .description = "Moving wave effect",
+        .required = {"target", "colors"},
+        .required_count = 2,
+        .optional = {"duration", "number", "width", "reverse"},
+        .optional_count = 4,
+        .color_count = 2,
+    },
+    {
+        .name = "cylon",
+        .description = "Cylon bouncing effect",
+        .required = {"target", "colors"},
+        .required_count = 2,
+        .optional = {"duration", "width"},
+        .optional_count = 2,
+        .color_count = 2,
+    },
+    {
+        .name = "phaser_strip",
+        .description = "Two waves from each end converging on a random meeting point",
+        .required = {"target", "colors"},
+        .required_count = 2,
+        .optional = {"duration", "width"},
+        .optional_count = 2,
+        .color_count = 2,
+    },
+    { .name = NULL },
+};
+
+/* Mirrors FILTER_METADATA in lib/lighting/metadata.py exactly. */
+const filter_metadata_t filter_metadata_table[] = {
+    {
+        .name = "null",
+        .description = "No filter",
+        .optional = {0},
+        .optional_count = 0,
+    },
+    {
+        .name = "sizzle",
+        .description = "Sizzle filter",
+        .optional = {"frequency", "variation_percent", "heat"},
+        .optional_count = 3,
+    },
+    {
+        .name = "scintillate",
+        .description = "Scintillate filter",
+        .optional = {"frequency", "variation_percent", "heat"},
+        .optional_count = 3,
+    },
+    {
+        .name = "brightness",
+        .description = "Brightness filter",
+        .optional = {"brightness"},
+        .optional_count = 1,
+    },
+    {
+        .name = "spike",
+        .description = "Spike filter",
+        .optional = {"color", "duration", "period", "variation", "heat", "scope"},
+        .optional_count = 6,
+    },
+    {
+        .name = "dropout",
+        .description = "Dropout filter (black spike)",
+        .optional = {"duration", "period", "variation", "heat", "scope"},
+        .optional_count = 5,
+    },
+    { .name = NULL },
+};
+
+const pattern_metadata_t *metadata_get_pattern(const char *name)
+{
+    if (!name) return NULL;
+
+    for (int i = 0; pattern_metadata_table[i].name != NULL; i++) {
+        if (strcmp(name, pattern_metadata_table[i].name) == 0) {
+            return &pattern_metadata_table[i];
+        }
+    }
+
+    return NULL;
+}
+
+const filter_metadata_t *metadata_get_filter(const char *name)
+{
+    if (!name) return NULL;
+
+    for (int i = 0; filter_metadata_table[i].name != NULL; i++) {
+        if (strcmp(name, filter_metadata_table[i].name) == 0) {
+            return &filter_metadata_table[i];
+        }
+    }
+
+    return NULL;
+}

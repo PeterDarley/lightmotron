@@ -41,6 +41,10 @@ struct http_request {
     char path[256];
     char query_string[512];
     char raw_path[768];
+    bool is_http_1_1;          /* true if the request line said "HTTP/1.1"; the
+                                 * webserver.py port defaults to HTTP/1.0 when
+                                 * the version token is absent, which changes
+                                 * the keep-alive default (see client_task()). */
     cJSON *headers;
     char *body;
     size_t body_len;

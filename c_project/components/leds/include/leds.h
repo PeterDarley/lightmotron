@@ -16,14 +16,10 @@ typedef struct {
     uint8_t b;
 } rgb_t;
 
-/**
- * Color order enum for NeoPixel strips.
- */
-typedef enum {
-    COLOR_ORDER_GRB,
-    COLOR_ORDER_RGB,
-    COLOR_ORDER_RGBW,
-} color_order_t;
+/* Longest supported color-order string plus NUL, e.g. "RGBW". Any 3 or 4
+ * character permutation of R/G/B/W is accepted (matches lib/leds.py); an
+ * invalid or wrong-length string falls back to "GRB" at init time. */
+#define LED_COLOR_ORDER_MAXLEN 5
 
 /**
  * NeoPixel strip configuration.
@@ -31,9 +27,13 @@ typedef enum {
 typedef struct {
     int pin;
     int num_leds;
-    color_order_t color_order;
+    char color_order[LED_COLOR_ORDER_MAXLEN];
     bool brightness_curve;
 } strip_config_t;
+
+/* Default GPIO pin for an onboard RGB NeoPixel used by some ESP32 dev
+ * boards (mirrors DEFAULT_ONBOARD_NEOPIXEL_PIN in lib/leds.py). */
+#define DEFAULT_ONBOARD_NEOPIXEL_PIN 48
 
 /**
  * Initialize LEDs from a cJSON config array (from settings).
@@ -61,6 +61,29 @@ void leds_set_pixel_rgb(int index, rgb_t color);
 rgb_t leds_get_pixel(int index);
 
 /**
+ * Fill every pixel (across all strips) with the given color. Does not push
+ * to hardware until leds_show() is called. Mirrors LEDs.fill().
+ */
+void leds_fill(uint8_t r, uint8_t g, uint8_t b);
+
+/**
+ * Set pixels [start, end) (end exclusive, clamped to the valid range) to
+ * the given color. Mirrors LEDs.range().
+ */
+void leds_range(int start, int end, uint8_t r, uint8_t g, uint8_t b);
+
+/**
+ * Turn the given pixel indexes white and all others black, then push to
+ * hardware immediately. Mirrors LEDs.identify().
+ */
+void leds_identify(const int *indexes, int count);
+
+/**
+ * Generate a rainbow color for position 0-255. Mirrors LEDs.wheel().
+ */
+rgb_t leds_wheel(int pos);
+
+/**
  * Push the current buffer to the LED hardware.
  */
 esp_err_t leds_show(void);
@@ -81,8 +104,39 @@ int leds_total_count(void);
 int leds_strip_count(void);
 
 /**
- * Apply gamma correction to a value.
+ * Set the overall brightness scale (0.0-1.0, clamped). Applied on top of
+ * the per-pixel brightness curve in leds_show(). Mirrors the LEDs.brightness
+ * property.
  */
-uint8_t leds_gamma_correct(uint8_t value);
+void leds_set_brightness(float brightness);
+
+/**
+ * Get the current overall brightness scale (0.0-1.0).
+ */
+float leds_get_brightness(void);
+
+/**
+ * Apply the quadratic brightness curve to a single channel value (matches
+ * LEDs._apply_brightness_curve_to_rgb's curve_component helper).
+ */
+uint8_t leds_apply_brightness_curve(uint8_t value);
+
+/**
+ * Initialize a single onboard RGB NeoPixel, bypassing the configured
+ * strips entirely (used e.g. for boot-time IP-address flashing). Pass a
+ * negative pin to use DEFAULT_ONBOARD_NEOPIXEL_PIN. Mirrors OnboardLED.
+ */
+esp_err_t onboard_led_init(int pin);
+
+/**
+ * Set the onboard NeoPixel to the given RGB color (0-255 per channel). No
+ * brightness/gamma scaling is applied, matching OnboardLED.set().
+ */
+void onboard_led_set(uint8_t r, uint8_t g, uint8_t b);
+
+/**
+ * Turn the onboard NeoPixel off. Mirrors OnboardLED.off().
+ */
+void onboard_led_off(void);
 
 #endif /* LEDS_H */

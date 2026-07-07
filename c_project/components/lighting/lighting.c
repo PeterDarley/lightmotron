@@ -5,6 +5,7 @@
 #include "colors.h"
 #include "named_ranges.h"
 #include "metadata.h"
+#include "animation.h"
 #include "persistent_dict.h"
 #include "json_helpers.h"
 #include "sound_manager.h"
@@ -42,7 +43,70 @@ esp_err_t lighting_init(void)
 }
 
 /**
- * Load a scene from storage and activate it.
+ * Open the lighting settings store and return the currently-active model
+ * object. Returns NULL if the store, models map, or current model is
+ * missing.
+ */
+static cJSON *get_current_model_object(void)
+{
+    persistent_dict_t *lighting_store = persistent_dict_open("/spiffs/data/lighting_settings.json");
+    if (!lighting_store) return NULL;
+
+    cJSON *models = persistent_dict_get(lighting_store, "models");
+    cJSON *current_name = persistent_dict_get(lighting_store, "current_model");
+    if (!models || !current_name || !current_name->valuestring) return NULL;
+
+    return cJSON_GetObjectItem(models, current_name->valuestring);
+}
+
+/**
+ * Return true if every effect in the scene has an explicit cycle limit and
+ * all of them have finished (mirrors Lighting._is_scene_finished()). A scene
+ * with no cycle-limited effects at all (or none yet resolved) is never
+ * considered finished.
+ */
+static bool scene_is_finished(const active_scene_t *scene)
+{
+    bool has_cycle_limited = false;
+
+    for (int j = 0; j < scene->job_count; j++) {
+        const active_job_t *job = &scene->jobs[j];
+        if (job->target_count == 0) continue;
+
+        if (job->cycles <= 0) {
+            /* Infinite effect: scene is ongoing by design. */
+            return false;
+        }
+
+        has_cycle_limited = true;
+        if (!job->finished) return false;
+    }
+
+    return has_cycle_limited;
+}
+
+/**
+ * Resolve scene_name to an actual scene key, falling back to the model's
+ * "default_scene" and then to the first defined scene (mirrors
+ * Lighting.set_scene()'s None-name resolution). Returns NULL if no scene
+ * could be resolved.
+ */
+static const char *resolve_scene_name(const cJSON *model, const char *scene_name, cJSON *scenes)
+{
+    if (scene_name) return scene_name;
+
+    const char *default_scene = json_get_string(model, "default_scene", NULL);
+    if (default_scene && cJSON_GetObjectItem(scenes, default_scene)) {
+        return default_scene;
+    }
+
+    cJSON *first = scenes->child;
+    return first ? first->string : NULL;
+}
+
+/**
+ * Load a scene from storage and activate it. Pass NULL for scene_name to
+ * resolve the model's default (or first) scene.
  */
 static esp_err_t activate_scene(const char *scene_name)
 {
@@ -51,18 +115,17 @@ static esp_err_t activate_scene(const char *scene_name)
         return ESP_ERR_NO_MEM;
     }
 
-    persistent_dict_t *lighting_store = persistent_dict_open("/spiffs/data/lighting_settings.json");
-    if (!lighting_store) return ESP_FAIL;
-
-    cJSON *models = persistent_dict_get(lighting_store, "models");
-    cJSON *current_name = persistent_dict_get(lighting_store, "current_model");
-    if (!models || !current_name || !current_name->valuestring) return ESP_FAIL;
-
-    cJSON *model = cJSON_GetObjectItem(models, current_name->valuestring);
+    cJSON *model = get_current_model_object();
     if (!model) return ESP_FAIL;
 
     cJSON *scenes = cJSON_GetObjectItem(model, "scenes");
     if (!scenes) return ESP_FAIL;
+
+    scene_name = resolve_scene_name(model, scene_name, scenes);
+    if (!scene_name) {
+        ESP_LOGW(TAG, "No scene available to activate");
+        return ESP_ERR_NOT_FOUND;
+    }
 
     cJSON *scene_def = cJSON_GetObjectItem(scenes, scene_name);
     if (!scene_def || !cJSON_IsObject(scene_def)) {
@@ -99,6 +162,7 @@ static esp_err_t activate_scene(const char *scene_name)
     cJSON *effects_dict = cJSON_GetObjectItem(model, "effects");
     cJSON *job_entry = scene_def->child;
     int job_idx = 0;
+    uint32_t current_tick = animation_get_tick();
 
     while (job_entry && job_idx < MAX_JOBS_PER_SCENE) {
         active_job_t *job = &scene->jobs[job_idx];
@@ -125,7 +189,13 @@ static esp_err_t activate_scene(const char *scene_name)
             effect_resolve_inline(job_entry, job);
         }
 
-        job->start_tick = 0;
+        /* Non-"after" jobs start counting from this scene's activation tick,
+         * matching Lighting.set_scene()/add_scene() tracking scene start
+         * ticks in Python. "after"-dependent jobs get their start_tick
+         * reassigned lazily once their dependency finishes (see
+         * lighting_process_tick()). */
+        job->start_tick = current_tick;
+        job->after_pending = (job->after[0] != '\0');
         job->cycles_completed = 0;
         job->finished = false;
         job_idx++;
@@ -170,9 +240,10 @@ void lighting_process_tick(uint32_t tick)
                     all_finished = false;
                     continue;
                 }
-                /* Start this job now */
-                if (job->start_tick == 0 && tick > 0) {
+                /* Start this job now, the first time its dependency finishes */
+                if (job->after_pending) {
                     job->start_tick = tick;
+                    job->after_pending = false;
                 }
             }
 

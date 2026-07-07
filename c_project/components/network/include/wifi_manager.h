@@ -23,7 +23,21 @@ typedef enum {
 esp_err_t wifi_manager_init(void);
 
 /**
+ * Set the DHCP/mDNS hostname advertised by the STA interface.
+ *
+ * Mirrors comms.py's use of MicroPython's network.hostname(), which is set
+ * before connecting so the hostname is used for the whole session. Safe to
+ * call before or after the interface has connected.
+ */
+esp_err_t wifi_manager_set_hostname(const char *hostname);
+
+/**
  * Connect to a WiFi network in STA mode.
+ *
+ * Before connecting, scans for nearby networks and resolves *ssid* to the
+ * exact-case broadcast SSID (case-insensitive match), mirroring
+ * comms.py's WIFIManager._resolve_ssid() so stored credentials with
+ * different capitalisation still connect.
  *
  * Blocks until connected or timeout (10s).
  */

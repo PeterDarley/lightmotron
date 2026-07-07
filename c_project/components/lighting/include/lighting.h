@@ -24,15 +24,27 @@ typedef struct {
     rgb_t color;
 } led_output_t;
 
+/* Max number of independently-timed LED groups a spike/dropout filter can
+ * track (scope "all" = 1 group, "subranges" = contiguous LED runs, anything
+ * else = one group per LED). Groups beyond this cap share the last slot. */
+#define MAX_SPIKE_GROUPS 8
+
+/**
+ * Per-group periodic spike timing state (mirrors the Python "_state" dict
+ * used by lighting.filters._apply_spike_filter).
+ */
+typedef struct {
+    int next_spike;
+    int spike_end;
+    bool initialized;
+} spike_group_state_t;
+
 /**
  * Filter runtime state (per-effect instance).
  */
 typedef struct {
-    uint32_t last_spike_tick;
-    int spike_subrange_index;
-    int spike_led_index;
-    bool spike_active;
-    void *cached_params; /* For filters that need modified params (e.g. dropout) */
+    spike_group_state_t spike_groups[MAX_SPIKE_GROUPS];
+    void *cached_params; /* Reserved for filters that need modified params */
 } filter_state_t;
 
 /**
@@ -55,6 +67,7 @@ typedef struct {
     uint32_t start_tick;
     bool finished;
     char after[64];          /* Job name this depends on */
+    bool after_pending;      /* True until the "after" dependency has been satisfied once */
     /* Filter chain */
     struct {
         char filter_name[32];
@@ -155,5 +168,22 @@ esp_err_t lighting_set_current_model(const char *model_name);
  * Get the current model's settings object.
  */
 cJSON *lighting_get_settings(void);
+
+/**
+ * Create a new model. If copy_from_current is true, the current model's
+ * scenes/effects/filters/named_ranges/custom_colors/scene_settings are
+ * deep-copied into the new model; otherwise it starts empty.
+ */
+esp_err_t lighting_create_model(const char *model_name, bool copy_from_current);
+
+/**
+ * Delete a model. Fails if it is the currently active model.
+ */
+esp_err_t lighting_delete_model(const char *model_name);
+
+/**
+ * Rename a model, updating current_model if it was the active one.
+ */
+esp_err_t lighting_rename_model(const char *old_name, const char *new_name);
 
 #endif /* LIGHTING_H */

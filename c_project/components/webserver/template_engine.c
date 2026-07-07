@@ -266,9 +266,11 @@ bool template_eval_condition(const char *expr, cJSON *context)
     if (or_pos) {
         char left[256], right[256];
         size_t left_len = or_pos - clean;
+        if (left_len > sizeof(left) - 1) left_len = sizeof(left) - 1;
         memcpy(left, clean, left_len);
         left[left_len] = '\0';
         strncpy(right, or_pos + 4, sizeof(right) - 1);
+        right[sizeof(right) - 1] = '\0';
         return template_eval_condition(left, context) ||
                template_eval_condition(right, context);
     }
@@ -278,15 +280,18 @@ bool template_eval_condition(const char *expr, cJSON *context)
     if (and_pos) {
         char left[256], right[256];
         size_t left_len = and_pos - clean;
+        if (left_len > sizeof(left) - 1) left_len = sizeof(left) - 1;
         memcpy(left, clean, left_len);
         left[left_len] = '\0';
         strncpy(right, and_pos + 5, sizeof(right) - 1);
+        right[sizeof(right) - 1] = '\0';
         return template_eval_condition(left, context) &&
                template_eval_condition(right, context);
     }
 
-    /* Handle 'not' prefix */
-    if (strncmp(clean, "not ", 4) == 0) {
+    /* Handle 'not' prefix (but not ' not in ' — that's handled below, matching
+     * Python's `expression.startswith("not ") and " in " not in expression`). */
+    if (strncmp(clean, "not ", 4) == 0 && !strstr(clean, " in ")) {
         return !template_eval_condition(clean + 4, context);
     }
 
@@ -295,9 +300,11 @@ bool template_eval_condition(const char *expr, cJSON *context)
     if (not_in_pos) {
         char left_name[256], right_name[256];
         size_t left_len = not_in_pos - clean;
+        if (left_len > sizeof(left_name) - 1) left_len = sizeof(left_name) - 1;
         memcpy(left_name, clean, left_len);
         left_name[left_len] = '\0';
         strncpy(right_name, not_in_pos + 8, sizeof(right_name) - 1);
+        right_name[sizeof(right_name) - 1] = '\0';
 
         cJSON *left_val = template_resolve_var(left_name, context);
         cJSON *right_val = template_resolve_var(right_name, context);
@@ -312,9 +319,11 @@ bool template_eval_condition(const char *expr, cJSON *context)
     if (in_pos) {
         char left_name[256], right_name[256];
         size_t left_len = in_pos - clean;
+        if (left_len > sizeof(left_name) - 1) left_len = sizeof(left_name) - 1;
         memcpy(left_name, clean, left_len);
         left_name[left_len] = '\0';
         strncpy(right_name, in_pos + 4, sizeof(right_name) - 1);
+        right_name[sizeof(right_name) - 1] = '\0';
 
         cJSON *left_val = template_resolve_var(left_name, context);
         cJSON *right_val = template_resolve_var(right_name, context);
@@ -329,9 +338,11 @@ bool template_eval_condition(const char *expr, cJSON *context)
     if (eq_pos) {
         char left_name[256], right_name[256];
         size_t left_len = eq_pos - clean;
+        if (left_len > sizeof(left_name) - 1) left_len = sizeof(left_name) - 1;
         memcpy(left_name, clean, left_len);
         left_name[left_len] = '\0';
         strncpy(right_name, eq_pos + 4, sizeof(right_name) - 1);
+        right_name[sizeof(right_name) - 1] = '\0';
 
         cJSON *left_val = template_resolve_var(left_name, context);
         cJSON *right_val = template_resolve_var(right_name, context);
@@ -348,9 +359,11 @@ bool template_eval_condition(const char *expr, cJSON *context)
     if (neq_pos) {
         char left_name[256], right_name[256];
         size_t left_len = neq_pos - clean;
+        if (left_len > sizeof(left_name) - 1) left_len = sizeof(left_name) - 1;
         memcpy(left_name, clean, left_len);
         left_name[left_len] = '\0';
         strncpy(right_name, neq_pos + 4, sizeof(right_name) - 1);
+        right_name[sizeof(right_name) - 1] = '\0';
 
         cJSON *left_val = template_resolve_var(left_name, context);
         cJSON *right_val = template_resolve_var(right_name, context);
@@ -392,6 +405,47 @@ static const char *find_end_tag(const char *start, const char *open_tag,
         ptr++;
     }
     return NULL;
+}
+
+/* Forward declarations so for-loop iterations can run the full per-item
+ * pipeline (conditionals/includes/variables) before the outer passes see
+ * the expanded text — mirrors lib/webserver.py's _process_for_loops, which
+ * calls _process_if_blocks / _process_includes / _apply_context on each
+ * loop_context before splicing the rendered chunk back in. Without this,
+ * loop variables would never be resolved because the top-level passes only
+ * have access to the original (non-looped) context. */
+static char *process_conditionals(const char *template_str, cJSON *context);
+static char *process_variables(const char *template_str, cJSON *context);
+static char *process_includes(const char *template_str, cJSON *context);
+
+/**
+ * Fully render one loop iteration's body against its per-iteration context.
+ *
+ * Order matches Python's per-iteration pipeline: nested for-loops, then
+ * if-blocks, then includes, then variable substitution.
+ */
+static char *render_loop_iteration(const char *loop_body, cJSON *loop_ctx)
+{
+    char *step1 = process_for_loops(loop_body, loop_ctx);
+    if (!step1) {
+        return strdup("");
+    }
+
+    char *step2 = process_conditionals(step1, loop_ctx);
+    free(step1);
+    if (!step2) {
+        return strdup("");
+    }
+
+    char *step3 = process_includes(step2, loop_ctx);
+    free(step2);
+    if (!step3) {
+        return strdup("");
+    }
+
+    char *step4 = process_variables(step3, loop_ctx);
+    free(step3);
+    return step4 ? step4 : strdup("");
 }
 
 /**
@@ -441,12 +495,10 @@ static char *process_for_loops(const char *template_str, cJSON *context)
             /* Parse for loop: "for VAR in ITERABLE" or "for K, V in DICT.method()" */
             const char *body_start = tag_end + 2;
 
-            /* Find matching endfor */
+            /* Find matching endfor (nesting-aware). If unmatched (malformed
+             * template), drop just the opening tag and keep scanning, same
+             * as lib/webserver.py's _process_for_loops does on endfor_start == -1. */
             const char *endfor = find_end_tag(body_start, "{% for ", "{% endfor %}");
-            if (!endfor) {
-                /* Try without space variations */
-                endfor = strstr(body_start, "{% endfor %}");
-            }
             if (!endfor) {
                 ptr = tag_end + 2;
                 continue;
@@ -557,12 +609,15 @@ static char *process_for_loops(const char *template_str, cJSON *context)
                 iterable = template_resolve_var(iterable_expr, context);
             }
 
-            /* Execute loop */
+            /* Execute loop. Each iteration must resolve conditionals/includes/
+             * variables against its OWN loop_ctx right away (render_loop_iteration)
+             * — the top-level passes only ever see the original context, so a
+             * loop variable left unresolved here would stay unresolved forever. */
             if (range_mode) {
                 for (int i = 0; i < range_count; i++) {
                     cJSON *loop_ctx = cJSON_Duplicate(context, 1);
                     cJSON_AddNumberToObject(loop_ctx, var1, i);
-                    char *rendered = process_for_loops(loop_body, loop_ctx);
+                    char *rendered = render_loop_iteration(loop_body, loop_ctx);
                     if (rendered) {
                         strbuf_append(&output, rendered, 0);
                         free(rendered);
@@ -575,7 +630,7 @@ static char *process_for_loops(const char *template_str, cJSON *context)
                     cJSON *loop_ctx = cJSON_Duplicate(context, 1);
                     cJSON_AddStringToObject(loop_ctx, var1, child->string);
                     cJSON_AddItemToObject(loop_ctx, var2, cJSON_Duplicate(child, 1));
-                    char *rendered = process_for_loops(loop_body, loop_ctx);
+                    char *rendered = render_loop_iteration(loop_body, loop_ctx);
                     if (rendered) {
                         strbuf_append(&output, rendered, 0);
                         free(rendered);
@@ -588,7 +643,7 @@ static char *process_for_loops(const char *template_str, cJSON *context)
                 while (child) {
                     cJSON *loop_ctx = cJSON_Duplicate(context, 1);
                     cJSON_AddStringToObject(loop_ctx, var1, child->string);
-                    char *rendered = process_for_loops(loop_body, loop_ctx);
+                    char *rendered = render_loop_iteration(loop_body, loop_ctx);
                     if (rendered) {
                         strbuf_append(&output, rendered, 0);
                         free(rendered);
@@ -601,7 +656,7 @@ static char *process_for_loops(const char *template_str, cJSON *context)
                 while (child) {
                     cJSON *loop_ctx = cJSON_Duplicate(context, 1);
                     cJSON_AddItemToObject(loop_ctx, var1, cJSON_Duplicate(child, 1));
-                    char *rendered = process_for_loops(loop_body, loop_ctx);
+                    char *rendered = render_loop_iteration(loop_body, loop_ctx);
                     if (rendered) {
                         strbuf_append(&output, rendered, 0);
                         free(rendered);
@@ -609,7 +664,12 @@ static char *process_for_loops(const char *template_str, cJSON *context)
                     cJSON_Delete(loop_ctx);
                     child = child->next;
                 }
-            } else if (iterable && cJSON_IsArray(iterable)) {
+            } else if (iterable && cJSON_IsArray(iterable) && !items_mode &&
+                       !keys_mode && !values_mode) {
+                /* Plain list iteration. Excluded from items_mode/keys_mode/
+                 * values_mode: Python's _resolve_iterable only returns a value
+                 * for those suffixes when the base resolves to an actual dict;
+                 * otherwise it returns None and the loop is skipped entirely. */
                 int size = cJSON_GetArraySize(iterable);
                 for (int i = 0; i < size; i++) {
                     cJSON *item = cJSON_GetArrayItem(iterable, i);
@@ -624,29 +684,36 @@ static char *process_for_loops(const char *template_str, cJSON *context)
                         cJSON_AddItemToObject(loop_ctx, var1, cJSON_Duplicate(item, 1));
                     }
 
-                    char *rendered = process_for_loops(loop_body, loop_ctx);
+                    char *rendered = render_loop_iteration(loop_body, loop_ctx);
                     if (rendered) {
                         strbuf_append(&output, rendered, 0);
                         free(rendered);
                     }
                     cJSON_Delete(loop_ctx);
                 }
-            } else if (iterable && cJSON_IsObject(iterable) && !items_mode &&
-                       !keys_mode && !values_mode) {
-                /* Iterate object keys */
-                cJSON *child = iterable->child;
-                while (child) {
-                    cJSON *loop_ctx = cJSON_Duplicate(context, 1);
-                    cJSON_AddStringToObject(loop_ctx, var1, child->string);
-                    char *rendered = process_for_loops(loop_body, loop_ctx);
-                    if (rendered) {
-                        strbuf_append(&output, rendered, 0);
-                        free(rendered);
-                    }
-                    cJSON_Delete(loop_ctx);
-                    child = child->next;
+            } else if (iterable && !items_mode && !keys_mode && !values_mode) {
+                /* Iterable resolved to something that isn't a JSON array (e.g. a
+                 * plain object/dict, string, number, or bool). Python's
+                 * _resolve_iterable returns the raw value in this case and
+                 * _process_for_loops then does `if not isinstance(items, (list,
+                 * tuple)): items = [items]` — i.e. the loop runs exactly ONCE
+                 * with the loop variable bound to the whole value (NOT a
+                 * key-by-key iteration of a dict). Match that quirk exactly. */
+                cJSON *loop_ctx = cJSON_Duplicate(context, 1);
+                cJSON_AddItemToObject(loop_ctx, var1, cJSON_Duplicate(iterable, 1));
+                if (tuple_unpack) {
+                    cJSON_AddStringToObject(loop_ctx, var2, "");
                 }
+                char *rendered = render_loop_iteration(loop_body, loop_ctx);
+                if (rendered) {
+                    strbuf_append(&output, rendered, 0);
+                    free(rendered);
+                }
+                cJSON_Delete(loop_ctx);
             }
+            /* If iterable is NULL (unresolved variable), Python's `if items is
+             * not None` gate skips the loop entirely — same as falling through
+             * here with no branch taken. */
 
             free(loop_body);
             ptr = endfor + strlen("{% endfor %}");

@@ -11,10 +11,15 @@ static const char *TAG = "yx5200";
 #define YX5200_END_BYTE   0xEF
 #define YX5200_VERSION    0xFF
 #define YX5200_LENGTH     0x06
-#define YX5200_FEEDBACK   0x00
+
+/* Feedback byte for frames we send: request an ACK/response from the module.
+ * Response frames sent back BY the module always carry feedback=0x00, which
+ * is how find_response_frame() tells a genuine response apart from an echo. */
+#define YX5200_FEEDBACK_REQUEST  0x01
+#define YX5200_FEEDBACK_RESPONSE 0x00
 
 /* Commands */
-#define CMD_PLAY_FILE     0x03
+#define CMD_PLAY_FILE     0x12  /* Play <n>.mp3 from the /MP3/ folder (0001-9999) */
 #define CMD_SET_VOLUME    0x06
 #define CMD_STOP          0x16
 #define CMD_PAUSE         0x0E
@@ -22,8 +27,19 @@ static const char *TAG = "yx5200";
 #define CMD_RESET         0x0C
 #define CMD_QUERY_STATUS  0x42
 
+#define STATUS_PLAYING    0x01
+
 #define UART_BUF_SIZE 256
-#define RESPONSE_TIMEOUT_MS 200
+#define RESPONSE_BUF_SIZE 32
+#define QUERY_WAIT_MS 100
+#define POST_COMMAND_DRAIN_MS 50
+#define RESET_SETTLE_MS 700
+
+/* Some modules briefly report a non-playing state while a track is still
+ * audible. Require several consecutive stopped observations before clearing
+ * cached playback state. Mirrors YX5200Player._required_stop_confirmations
+ * in lib/audio.py. */
+#define REQUIRED_STOP_CONFIRMATIONS 6
 
 static void build_frame(uint8_t *frame, uint8_t cmd, uint16_t param)
 {
@@ -31,7 +47,7 @@ static void build_frame(uint8_t *frame, uint8_t cmd, uint16_t param)
     frame[1] = YX5200_VERSION;
     frame[2] = YX5200_LENGTH;
     frame[3] = cmd;
-    frame[4] = YX5200_FEEDBACK;
+    frame[4] = YX5200_FEEDBACK_REQUEST;
     frame[5] = (param >> 8) & 0xFF;
     frame[6] = param & 0xFF;
 
@@ -43,7 +59,9 @@ static void build_frame(uint8_t *frame, uint8_t cmd, uint16_t param)
     frame[9] = YX5200_END_BYTE;
 }
 
-static esp_err_t send_command(yx5200_t *player, uint8_t cmd, uint16_t param)
+/* Write a command frame without waiting for/draining any response. Used by
+ * yx5200_query_status(), which manages its own read timing. */
+static esp_err_t send_command_raw(yx5200_t *player, uint8_t cmd, uint16_t param)
 {
     uint8_t frame[10];
     build_frame(frame, cmd, param);
@@ -53,13 +71,45 @@ static esp_err_t send_command(yx5200_t *player, uint8_t cmd, uint16_t param)
         ESP_LOGE(TAG, "UART write failed");
         return ESP_FAIL;
     }
-
-    /* Small delay between commands */
-    vTaskDelay(pdMS_TO_TICKS(30));
     return ESP_OK;
 }
 
-esp_err_t yx5200_init(yx5200_t *player, uart_port_t uart_num, int tx_pin, int rx_pin)
+/* Write a command frame and drain whatever trickles back shortly after, just
+ * to keep the RX buffer tidy (mirrors YX5200Player.send_command in
+ * lib/audio.py, which does a short best-effort read after every command). */
+static esp_err_t send_command(yx5200_t *player, uint8_t cmd, uint16_t param)
+{
+    esp_err_t ret = send_command_raw(player, cmd, param);
+    if (ret != ESP_OK) return ret;
+
+    vTaskDelay(pdMS_TO_TICKS(POST_COMMAND_DRAIN_MS));
+    uint8_t scratch[RESPONSE_BUF_SIZE];
+    uart_read_bytes(player->uart_num, scratch, sizeof(scratch), 0);
+    return ESP_OK;
+}
+
+/* Search raw UART bytes for a valid 10-byte DFPlayer response frame matching
+ * expected_cmd. A response frame is distinguished from an echoed command by
+ * its feedback byte, which the module always sets to 0x00. Mirrors
+ * YX5200Player._find_response_frame in lib/audio.py. */
+static bool find_response_frame(const uint8_t *data, int len, uint8_t expected_cmd,
+                                 uint8_t *status_high, uint8_t *status_low)
+{
+    for (int i = 0; i + 9 < len; i++) {
+        if (data[i] != YX5200_START_BYTE) continue;
+        if (data[i + 9] != YX5200_END_BYTE) continue;
+        if (data[i + 1] != YX5200_VERSION || data[i + 2] != YX5200_LENGTH) continue;
+        if (data[i + 3] != expected_cmd) continue;
+        if (data[i + 4] != YX5200_FEEDBACK_RESPONSE) continue;
+
+        *status_high = data[i + 5];
+        *status_low = data[i + 6];
+        return true;
+    }
+    return false;
+}
+
+esp_err_t yx5200_init(yx5200_t *player, uart_port_t uart_num, int tx_pin, int rx_pin, bool high_quality)
 {
     if (!player) return ESP_ERR_INVALID_ARG;
 
@@ -70,6 +120,8 @@ esp_err_t yx5200_init(yx5200_t *player, uart_port_t uart_num, int tx_pin, int rx
     player->current_file = 0;
     player->volume = 15;
     player->initialized = false;
+    player->high_quality = high_quality;
+    player->pending_stop_confirmations = 0;
 
     uart_config_t uart_config = {
         .baud_rate = 9600,
@@ -99,7 +151,7 @@ esp_err_t yx5200_init(yx5200_t *player, uart_port_t uart_num, int tx_pin, int rx
     }
 
     player->initialized = true;
-    ESP_LOGI(TAG, "YX5200 initialized on UART%d (TX=%d, RX=%d)", uart_num, tx_pin, rx_pin);
+    ESP_LOGI(TAG, "YX5200 initialized on UART%d (TX=%d, RX=%d, hq=%d)", uart_num, tx_pin, rx_pin, high_quality);
     return ESP_OK;
 }
 
@@ -111,6 +163,7 @@ esp_err_t yx5200_play_file(yx5200_t *player, int file_number)
     if (ret == ESP_OK) {
         player->is_playing = true;
         player->current_file = file_number;
+        player->pending_stop_confirmations = 0;
     }
     return ret;
 }
@@ -122,6 +175,8 @@ esp_err_t yx5200_stop(yx5200_t *player)
     esp_err_t ret = send_command(player, CMD_STOP, 0);
     if (ret == ESP_OK) {
         player->is_playing = false;
+        player->current_file = 0;
+        player->pending_stop_confirmations = 0;
     }
     return ret;
 }
@@ -155,24 +210,48 @@ esp_err_t yx5200_query_status(yx5200_t *player)
 {
     if (!player || !player->initialized) return ESP_ERR_INVALID_STATE;
 
-    /* Flush RX buffer */
+    /* Drain any stale bytes left over from a previous command before asking
+     * for status, mirroring the drain in YX5200Player.query_status(). */
     uart_flush_input(player->uart_num);
 
-    esp_err_t ret = send_command(player, CMD_QUERY_STATUS, 0);
+    esp_err_t ret = send_command_raw(player, CMD_QUERY_STATUS, 0);
     if (ret != ESP_OK) return ret;
 
-    /* Read response */
-    uint8_t response[10];
-    int len = uart_read_bytes(player->uart_num, response, 10,
-                              pdMS_TO_TICKS(RESPONSE_TIMEOUT_MS));
+    /* Wait for the module to reply, then read whatever is available. The
+     * buffer may contain an echoed command frame followed by the real
+     * response, so we search rather than assume offset 0. */
+    vTaskDelay(pdMS_TO_TICKS(QUERY_WAIT_MS));
+    uint8_t response[RESPONSE_BUF_SIZE];
+    int len = uart_read_bytes(player->uart_num, response, sizeof(response), 0);
 
-    if (len >= 10 && response[0] == YX5200_START_BYTE) {
-        /* Response to query_status: param indicates state */
-        uint16_t status = (response[5] << 8) | response[6];
-        player->is_playing = (status != 0);
+    if (len < 10) {
+        /* Inconclusive read - keep cached state, same as the Python driver. */
+        ESP_LOGD(TAG, "status inconclusive uart=%d keep_cached=%d", player->uart_num, player->is_playing);
+        return ESP_OK;
+    }
+
+    uint8_t status_high = 0, status_low = 0;
+    if (!find_response_frame(response, len, CMD_QUERY_STATUS, &status_high, &status_low)) {
+        ESP_LOGD(TAG, "status no valid frame uart=%d keep_cached=%d", player->uart_num, player->is_playing);
+        return ESP_OK;
+    }
+
+    bool hw_playing = (status_low == STATUS_PLAYING) || (status_high == STATUS_PLAYING);
+
+    if (!hw_playing && player->is_playing) {
+        player->pending_stop_confirmations++;
+        if (player->pending_stop_confirmations < REQUIRED_STOP_CONFIRMATIONS) {
+            /* Not enough consecutive "stopped" readings yet - keep reporting
+             * playing so a momentary false-stop doesn't get acted on. */
+            return ESP_OK;
+        }
     } else {
-        /* No response or invalid — assume not playing */
-        ESP_LOGD(TAG, "No status response from UART%d", player->uart_num);
+        player->pending_stop_confirmations = 0;
+    }
+
+    player->is_playing = hw_playing;
+    if (!hw_playing) {
+        player->current_file = 0;
     }
 
     return ESP_OK;
@@ -186,8 +265,9 @@ esp_err_t yx5200_reset(yx5200_t *player)
     if (ret == ESP_OK) {
         player->is_playing = false;
         player->current_file = 0;
-        /* Module needs time to reset */
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        player->pending_stop_confirmations = 0;
+        /* Module firmware needs a short settle period after reset. */
+        vTaskDelay(pdMS_TO_TICKS(RESET_SETTLE_MS));
     }
     return ret;
 }

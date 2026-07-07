@@ -5,19 +5,26 @@
 #include "cJSON.h"
 
 /**
- * Resolve a color name to RGB.
+ * Resolve a built-in color name to RGB.
  *
- * Checks custom colors first, then built-in named colors.
+ * Exact, case-sensitive match against the built-in name table only (mirrors
+ * a Python dict lookup) - custom colors are not consulted here. Unknown
+ * names default to white (255, 255, 255), matching Lighting.get_color().
  */
 rgb_t color_resolve_name(const char *name);
 
 /**
  * Parse a hex color string (#RRGGBB or RRGGBB) to RGB.
+ *
+ * Not used when resolving pattern/filter/effect color specs at runtime -
+ * hex strings are only converted to RGB once, when a custom color is saved
+ * via the web UI (see lights.settings["custom_colors"]).
  */
 rgb_t color_parse_hex(const char *hex);
 
 /**
- * Resolve any color specification (name, hex, or JSON array).
+ * Resolve any color specification (a "custom:name" reference, a built-in
+ * name, or a JSON array) to RGB. Mirrors Lighting.get_color().
  */
 rgb_t color_resolve(const char *spec);
 

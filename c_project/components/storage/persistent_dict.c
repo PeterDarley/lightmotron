@@ -27,9 +27,15 @@ static void ensure_loaded(persistent_dict_t *pd)
     }
 
     cJSON *file_data = json_read_file(pd->filepath);
-    if (file_data) {
+    if (file_data && cJSON_IsObject(file_data)) {
         pd->data = file_data;
     } else {
+        /* File missing, unreadable, invalid JSON, or valid JSON that isn't an
+         * object (e.g. an array or scalar) — fall back to an empty dict, same
+         * as PersistentDict._ensure_loaded() in lib/storage.py. */
+        if (file_data) {
+            cJSON_Delete(file_data);
+        }
         pd->data = cJSON_CreateObject();
     }
     pd->loaded = true;

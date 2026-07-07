@@ -130,3 +130,36 @@ bool billboard_is_scrolling(void)
 {
     return scrolling;
 }
+
+void billboard_set_pixel(int x, int y, int val)
+{
+    if (!initialized) return;
+    max7219_set_pixel(&display, x, y, val);
+    max7219_show(&display);
+}
+
+esp_err_t billboard_fill_pattern(const uint8_t *pattern, int len)
+{
+    if (!initialized || !pattern) return ESP_ERR_INVALID_STATE;
+
+    int expected_len = 8 * display.num_modules;
+    if (len != expected_len) return ESP_ERR_INVALID_ARG;
+
+    memset(display.framebuffer, 0, expected_len);
+    for (int m = 0; m < display.num_modules; m++) {
+        for (int row = 0; row < 8; row++) {
+            uint8_t byte_val = pattern[m * 8 + row];
+            for (int bit = 0; bit < 8; bit++) {
+                if (byte_val & (1 << (7 - bit))) {
+                    max7219_set_pixel(&display, m * 8 + bit, row, 1);
+                }
+            }
+        }
+    }
+    return max7219_show(&display);
+}
+
+int billboard_get_width(void)
+{
+    return initialized ? display.num_modules * 8 : 0;
+}

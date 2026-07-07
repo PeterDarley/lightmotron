@@ -57,8 +57,18 @@ esp_err_t animation_start(void)
     paused = false;
     tick_counter = 0;
 
-    xTaskCreatePinnedToCore(animation_task, "animation", 4096, NULL, 6,
-                            &animation_task_handle, 0);
+    BaseType_t created = xTaskCreatePinnedToCore(animation_task, "animation", 4096, NULL, 6,
+                                                  &animation_task_handle, 0);
+
+    if (created != pdPASS) {
+        /* Roll back so a stuck `running` flag doesn't permanently block
+         * future animation_start() calls if the task never actually started. */
+        running = false;
+        paused = false;
+        animation_task_handle = NULL;
+        ESP_LOGE(TAG, "Failed to create animation task");
+        return ESP_ERR_NO_MEM;
+    }
 
     return ESP_OK;
 }
@@ -89,12 +99,11 @@ void animation_resume(void)
 
 void animation_reset(void)
 {
-    paused = true;
+    /* Mirrors lib/animation.py Animation.reset(): only resets the tick
+     * counter. Scene/LED clearing is the caller's responsibility (see
+     * lib/lighting/lighting.py set_scene(), which clears LEDs itself before
+     * calling animation.reset()). */
     tick_counter = 0;
-    lighting_clear_scenes();
-    leds_clear();
-    leds_show();
-    paused = false;
 }
 
 bool animation_is_running(void)

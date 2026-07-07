@@ -12,13 +12,18 @@ static const char *TAG = "request_parser";
 #define RECV_BUF_SIZE 4096
 #define MAX_BODY_SIZE (512 * 1024)
 
+static bool is_hex_digit(char c)
+{
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
 void url_decode(char *str)
 {
     char *src = str;
     char *dst = str;
 
     while (*src) {
-        if (*src == '%' && src[1] && src[2]) {
+        if (*src == '%' && src[1] && src[2] && is_hex_digit(src[1]) && is_hex_digit(src[2])) {
             char hex[3] = {src[1], src[2], '\0'};
             *dst = (char)strtol(hex, NULL, 16);
             src += 3;
@@ -131,7 +136,8 @@ void parse_multipart(const char *body, size_t body_len, const char *boundary,
         /* Parse part headers */
         char field_name[64] = "";
         char filename[128] = "";
-        char content_type[64] = "text/plain";
+        char content_type[64] = ""; /* lib/webserver.py leaves this "" unless a
+                                      * Content-Type header is present in the part */
 
         while (ptr < end && !(ptr[0] == '\r' && ptr[1] == '\n')) {
             const char *line_end = strstr(ptr, "\r\n");
@@ -209,7 +215,7 @@ void parse_multipart(const char *body, size_t body_len, const char *boundary,
 
         size_t data_len = part_end - ptr;
 
-        if (filename[0] != '\0' && files && file_count) {
+        if (field_name[0] != '\0' && filename[0] != '\0' && files && file_count) {
             /* File upload */
             int idx = *file_count;
             *files = realloc(*files, sizeof(http_file_t) * (idx + 1));
@@ -335,6 +341,24 @@ http_request_t *request_parse(int client_sock)
     } else {
         strncpy(req->path, req->raw_path, sizeof(req->path) - 1);
         req->query_string[0] = '\0';
+    }
+
+    /* Extract HTTP version. lib/webserver.py defaults to "HTTP/1.0" when the
+     * token is missing, and that default changes the keep-alive default
+     * (HTTP/1.1 -> keep-alive unless "Connection: close"; anything else ->
+     * closed unless "Connection: keep-alive"). */
+    req->is_http_1_1 = false;
+    char *version_start = space2 + 1;
+    if (version_start < line_end) {
+        size_t version_len = line_end - version_start;
+        char version_str[16] = "";
+        if (version_len < sizeof(version_str)) {
+            memcpy(version_str, version_start, version_len);
+            version_str[version_len] = '\0';
+            if (strcmp(version_str, "HTTP/1.1") == 0) {
+                req->is_http_1_1 = true;
+            }
+        }
     }
 
     /* Parse headers */

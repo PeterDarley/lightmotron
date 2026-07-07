@@ -185,7 +185,9 @@ esp_err_t max7219_init(max7219_t *dev, int mosi_pin, int sck_pin, int cs_pin, in
 
     spi_device_interface_config_t dev_cfg = {
         .clock_speed_hz = 10 * 1000 * 1000, /* 10 MHz */
-        .mode = 0,
+        /* Mode 2 (CPOL=1, CPHA=0) -- matches MicroPython's
+         * SPI(1, polarity=1, phase=0, ...) in lib/billboard.py. */
+        .mode = 2,
         .spics_io_num = -1, /* Manual CS */
         .queue_size = 1,
     };
@@ -196,15 +198,23 @@ esp_err_t max7219_init(max7219_t *dev, int mosi_pin, int sck_pin, int cs_pin, in
         return ret;
     }
 
-    /* Initialize MAX7219 registers */
-    send_to_all(dev, REG_DISPLAY_TEST, 0x00);
-    send_to_all(dev, REG_SCAN_LIMIT, 0x07);
-    send_to_all(dev, REG_DECODE_MODE, 0x00);
-    send_to_all(dev, REG_SHUTDOWN, 0x01);
-    send_to_all(dev, REG_INTENSITY, 0x05);
+    /* Initialize MAX7219 registers. Order matches Matrix8x8._init_display()
+     * in lib/max7219.py: enter shutdown first to configure safely, then
+     * configure the rest, then leave shutdown last. */
+    send_to_all(dev, REG_SHUTDOWN, 0x00);    /* enter shutdown to configure safely */
+    send_to_all(dev, REG_DISPLAY_TEST, 0x00); /* disable test mode */
+    send_to_all(dev, REG_SCAN_LIMIT, 0x07);   /* scan all 8 rows */
+    send_to_all(dev, REG_DECODE_MODE, 0x00);  /* raw LED control (no BCD decode) */
+    send_to_all(dev, REG_INTENSITY, 0x05);    /* medium brightness */
+    send_to_all(dev, REG_SHUTDOWN, 0x01);     /* normal operation */
 
-    max7219_clear(dev);
+    /* Mark initialized before clearing: max7219_show() (called by
+     * max7219_clear()) no-ops on an uninitialized device, which would
+     * otherwise leave the display showing power-on garbage until the
+     * first real draw. Matches Matrix8x8.__init__ unconditionally calling
+     * self.fill(0); self.show() in lib/max7219.py. */
     dev->initialized = true;
+    max7219_clear(dev);
 
     ESP_LOGI(TAG, "MAX7219 initialized: %d modules", num_modules);
     return ESP_OK;
@@ -259,10 +269,14 @@ esp_err_t max7219_show(max7219_t *dev)
         memset(tx_buf, 0, buf_len);
 
         for (int mod = 0; mod < dev->num_modules; mod++) {
-            /* Modules are daisy-chained: last in chain is first sent */
-            int chain_pos = dev->num_modules - 1 - mod;
+            /* Send module 0's data first, like Matrix8x8.show() in
+             * lib/max7219.py. In a daisy chain, data sent first shifts
+             * furthest down the chain, so module 0 ends up in the
+             * far/left-most physical chip and module (num-1) in the
+             * near/right-most chip nearest the MCU -- getting this order
+             * backwards mirrors the display across modules. */
             tx_buf[mod * 2] = REG_DIGIT0 + row;
-            tx_buf[mod * 2 + 1] = dev->framebuffer[chain_pos * 8 + row];
+            tx_buf[mod * 2 + 1] = dev->framebuffer[mod * 8 + row];
         }
 
         spi_transaction_t trans = {

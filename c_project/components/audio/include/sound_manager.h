@@ -42,4 +42,18 @@ bool sound_manager_is_playing(const char *title);
  */
 cJSON *sound_manager_get_playing(void);
 
+/**
+ * Play a soundscape by name - an ambient layer of one or more sounds
+ * sequenced via "after" dependencies and independent repeat counts. Stops
+ * any currently playing sounds/soundscape first.
+ */
+esp_err_t sound_manager_play_soundscape(const char *name);
+
+/**
+ * Get the name of the currently active soundscape, or "" if none is playing.
+ * Self-heals stale state: if nothing is currently playing on any module,
+ * advances (or completes) the soundscape before returning.
+ */
+const char *sound_manager_get_active_soundscape(void);
+
 #endif /* SOUND_MANAGER_H */
