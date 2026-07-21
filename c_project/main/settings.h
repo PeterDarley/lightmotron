@@ -8,6 +8,7 @@
 
 #define DEFAULT_HOSTNAME "lightmotron"
 #define DEFAULT_THEME ""
+#define DEFAULT_STORED_IP_ADDRESS ""
 
 /* WiFi defaults */
 #define DEFAULT_WIFI_SSID ""
@@ -51,9 +52,9 @@
 
 /* Storage paths */
 #define STORAGE_MOUNT_POINT "/spiffs"
-#define STORAGE_SYSTEM_SETTINGS_FILE "/spiffs/data/system_settings.json"
-#define STORAGE_LIGHTING_SETTINGS_FILE "/spiffs/data/lighting_settings.json"
-#define STORAGE_SOUNDS_FILE "/spiffs/data/sounds.json"
+/* STORAGE_SYSTEM_SETTINGS_FILE / STORAGE_LIGHTING_SETTINGS_FILE / STORAGE_SOUNDS_FILE
+ * live in components/storage/include/persistent_dict.h (the canonical source of
+ * truth reachable by every component that depends on storage, not just main). */
 #define TEMPLATES_DIR "/spiffs/templates"
 #define WWW_DIR "/spiffs/www"
 

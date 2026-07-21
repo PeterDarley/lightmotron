@@ -68,6 +68,15 @@ typedef struct {
     bool finished;
     char after[64];          /* Job name this depends on */
     bool after_pending;      /* True until the "after" dependency has been satisfied once */
+    bool inherit_target;     /* With "after": adopt the finished predecessor's resolved
+                                target instead of this job's own (mirrors Python's
+                                inherit_target/passthrough in effects.py) */
+    /* Retained per-cycle random state used by patterns that need a value to
+     * persist across ticks within the same cycle (mirrors Python's
+     * Lighting.retained_values dict). Currently only pattern_phaser_strip's
+     * random meeting point uses this. */
+    int retained_meet_index;
+    bool retained_meet_set;
     /* Filter chain */
     struct {
         char filter_name[32];

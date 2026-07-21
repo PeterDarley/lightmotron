@@ -14,11 +14,14 @@
 #include "billboard.h"
 #include "comms.h"
 #include "timing.h"
+#include "ip_announcement.h"
 
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "nvs_flash.h"
 #include "cJSON.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -44,6 +47,13 @@ esp_err_t boot_seed_defaults(void)
     if (!persistent_dict_get(sys_settings, "theme")) {
         cJSON *val = cJSON_CreateString(DEFAULT_THEME);
         persistent_dict_set(sys_settings, "theme", val);
+    }
+
+    /* Seed stored_ip_address (tracks the last-announced IP; mirrors
+     * settings.py's _SYSTEM_SETTINGS_DEFAULTS["stored_ip_address"]) */
+    if (!persistent_dict_get(sys_settings, "stored_ip_address")) {
+        cJSON *val = cJSON_CreateString(DEFAULT_STORED_IP_ADDRESS);
+        persistent_dict_set(sys_settings, "stored_ip_address", val);
     }
 
     /* Seed WiFi */
@@ -139,9 +149,100 @@ esp_err_t boot_seed_defaults(void)
     return ESP_OK;
 }
 
+/* Argument passed to ip_flash_task(): a private copy of the IP address
+ * string, since the background task outlives the boot_init() stack frame. */
+typedef struct {
+    char ip[16];
+} ip_flash_task_arg_t;
+
+/**
+ * Background task: flash the onboard LED to report the last octet of the
+ * device's IP address, three times over. Mirrors boot.py's
+ * _flash_ip_last_octet()/_run_ip_flash_sequence(): the last octet is split
+ * into hundreds/tens/ones digits, flashed red/green/blue respectively (1s
+ * on, 1s off per flash, digits with value 0 skipped), with a 2s gap between
+ * each of the 3 repeats.
+ */
+static void ip_flash_task(void *pvParameters)
+{
+    ip_flash_task_arg_t *arg = (ip_flash_task_arg_t *)pvParameters;
+
+    esp_err_t ret = onboard_led_init(-1);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Onboard LED init failed, skipping IP flash sequence");
+        free(arg);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    const char *last_dot = strrchr(arg->ip, '.');
+    int last_octet = last_dot ? atoi(last_dot + 1) : 0;
+    int hundreds = last_octet / 100;
+    int tens = (last_octet % 100) / 10;
+    int ones = last_octet % 10;
+
+    struct {
+        int count;
+        uint8_t r, g, b;
+    } digit_colors[3] = {
+        { hundreds, 255, 0, 0 },
+        { tens, 0, 255, 0 },
+        { ones, 0, 0, 255 },
+    };
+
+    for (int flash_set = 0; flash_set < 3; flash_set++) {
+        for (int i = 0; i < 3; i++) {
+            if (digit_colors[i].count == 0) {
+                continue;
+            }
+            for (int n = 0; n < digit_colors[i].count; n++) {
+                onboard_led_set(digit_colors[i].r, digit_colors[i].g, digit_colors[i].b);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                onboard_led_off();
+                vTaskDelay(pdMS_TO_TICKS(1000));
+            }
+        }
+        if (flash_set < 2) {
+            vTaskDelay(pdMS_TO_TICKS(2000));
+        }
+    }
+
+    free(arg);
+    vTaskDelete(NULL);
+}
+
+/**
+ * Spawn ip_flash_task() as a background FreeRTOS task so it doesn't block
+ * the rest of boot. Mirrors boot.py's _thread.start_new_thread(...) call.
+ */
+static void start_ip_flash_sequence(const char *ip_address)
+{
+    ip_flash_task_arg_t *arg = malloc(sizeof(ip_flash_task_arg_t));
+    if (!arg) {
+        ESP_LOGW(TAG, "Failed to allocate IP flash task argument");
+        return;
+    }
+
+    strncpy(arg->ip, ip_address, sizeof(arg->ip) - 1);
+    arg->ip[sizeof(arg->ip) - 1] = '\0';
+
+    const char *last_dot = strrchr(arg->ip, '.');
+    ESP_LOGI(TAG, "Flashing IP last octet: %s", last_dot ? last_dot + 1 : arg->ip);
+
+    if (xTaskCreate(ip_flash_task, "ip_flash", 2560, arg, tskIDLE_PRIORITY + 1, NULL) != pdPASS) {
+        ESP_LOGW(TAG, "Failed to create IP flash task");
+        free(arg);
+    }
+}
+
 esp_err_t boot_init(void)
 {
     esp_err_t ret;
+
+    /* Log why the MCU restarted — distinguishes a true power-on from
+     * brownout/watchdog/panic/soft resets when diagnosing unexpected
+     * reboots or hangs (mirrors boot.py's reset-cause print). */
+    ESP_LOGI(TAG, "Reset cause: %s", comms_reset_reason_name());
 
     /* Initialize NVS */
     ret = nvs_flash_init();
@@ -191,22 +292,32 @@ esp_err_t boot_init(void)
         }
     }
 
-    /* Attempt WiFi connection */
+    /* Resolve hostname (falls back to "lightmotron" if unset/empty), matching
+     * boot.py's `_stored_hostname if _stored_hostname else "lightmotron"`. */
+    cJSON *hostname_json = persistent_dict_get(sys_settings, "hostname");
+    const char *hostname = DEFAULT_HOSTNAME;
+    if (hostname_json && hostname_json->valuestring && strlen(hostname_json->valuestring) > 0) {
+        hostname = hostname_json->valuestring;
+    }
+
+    /* Attempt WiFi connection. Mirrors boot.py's
+     * `if not _wifi_ssid or not _wifi_password:` gate -- both must be
+     * present or we skip straight to the captive portal below. */
     bool wifi_connected = false;
-    if (strlen(ssid) > 0) {
+    if (strlen(ssid) > 0 && strlen(password) > 0) {
         ret = wifi_manager_init();
         if (ret == ESP_OK) {
+            /* Set the DHCP/mDNS hostname before connecting, mirroring
+             * boot.py's network.hostname() call which happens before
+             * WIFIManager connects so it's used for the whole session. */
+            wifi_manager_set_hostname(hostname);
+
             ret = wifi_manager_connect(ssid, password);
             if (ret == ESP_OK) {
                 wifi_connected = true;
                 ESP_LOGI(TAG, "WiFi connected");
 
                 /* Set up mDNS */
-                cJSON *hostname_json = persistent_dict_get(sys_settings, "hostname");
-                const char *hostname = DEFAULT_HOSTNAME;
-                if (hostname_json && hostname_json->valuestring) {
-                    hostname = hostname_json->valuestring;
-                }
                 mdns_setup_init(hostname);
 
                 /* Blink LED on connect if configured */
@@ -224,6 +335,20 @@ esp_err_t boot_init(void)
         captive_portal_start();
         return ESP_OK; /* Captive portal handles everything from here */
     }
+
+    /* Print hostname/IP info, mirroring boot.py's print() calls */
+    const char *active_ip = wifi_manager_get_ip();
+    ESP_LOGI(TAG, "Hostname: %s", hostname);
+    ESP_LOGI(TAG, "Home URL (mDNS): http://%s.local/", hostname);
+    ESP_LOGI(TAG, "Home URL (IP):   http://%s/", active_ip);
+
+    /* Check if IP needs to be announced (mirrors boot.py's
+     * check_and_announce_ip() call) */
+    ip_announcement_check_and_announce();
+
+    /* Flash the onboard LED with the IP's last octet in the background,
+     * mirroring boot.py's _run_ip_flash_sequence() thread. */
+    start_ip_flash_sequence(active_ip);
 
     /* Register web routes BEFORE starting server */
     routes_register_all();

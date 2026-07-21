@@ -17,6 +17,9 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # SPIFFS
 CONFIG_SPIFFS_MAX_PARTITIONS=2
+# Default (32) is too short for nested web asset paths like
+# "/templates/scenes/select_scene_button_immediate.html" (52 chars).
+CONFIG_SPIFFS_OBJ_NAME_LEN=64
 
 # WiFi
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10

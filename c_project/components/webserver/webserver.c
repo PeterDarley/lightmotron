@@ -6,6 +6,7 @@
 #include "json_helpers.h"
 
 #include "esp_log.h"
+#include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -33,12 +34,6 @@ static SemaphoreHandle_t route_mutex = NULL;
 static int server_socket = -1;
 static bool server_running = false;
 static TaskHandle_t server_task_handle = NULL;
-static context_processor_fn global_context_processor = NULL;
-
-void webserver_set_context_processor(context_processor_fn processor)
-{
-    global_context_processor = processor;
-}
 
 void webserver_add_route(http_method_t method, const char *path, route_handler_t handler)
 {
@@ -234,14 +229,17 @@ static void client_task(void *pvParameters)
         }
 
         http_response_t *resp = NULL;
-        bool keep_alive = true; /* HTTP/1.1 default */
 
-        /* Check Connection header */
-        if (req->headers) {
-            const char *conn = json_get_string(req->headers, "connection", "");
-            if (strcasecmp(conn, "close") == 0) {
-                keep_alive = false;
-            }
+        /* Determine keep-alive default from HTTP version, matching
+         * lib/webserver.py's _read_request: HTTP/1.1 defaults to keep-alive
+         * unless "Connection: close"; anything else (HTTP/1.0) defaults to
+         * close unless "Connection: keep-alive". */
+        const char *conn = req->headers ? json_get_string(req->headers, "connection", "") : "";
+        bool keep_alive;
+        if (req->is_http_1_1) {
+            keep_alive = strcasecmp(conn, "close") != 0;
+        } else {
+            keep_alive = strcasecmp(conn, "keep-alive") == 0;
         }
 
         /* Try to find a route handler */
@@ -260,8 +258,19 @@ static void client_task(void *pvParameters)
             }
             resp = static_file_serve(req->path, if_none_match);
             if (!resp) {
-                resp = response_create(404, "text/html", "<h1>404 Not Found</h1>");
-                keep_alive = false;
+                if (strcmp(req->path, "/") == 0 || strcmp(req->path, "/index.html") == 0) {
+                    /* lib/webserver.py's _load_index() falls back to a
+                     * hardcoded placeholder page (200 OK) instead of 404 when
+                     * www/index.html is missing from the filesystem, and
+                     * sends it with the negotiated keep-alive state — unlike
+                     * the genuine-404 paths below, which always force the
+                     * connection closed. */
+                    resp = response_create(200, "text/html",
+                                            "<html><body><h1>OK</h1></body></html>");
+                } else {
+                    resp = response_create(404, "text/html", "<h1>404 Not Found</h1>");
+                    keep_alive = false;
+                }
             }
         } else {
             resp = response_create(404, "text/html", "<h1>404 Not Found</h1>");
@@ -271,6 +280,17 @@ static void client_task(void *pvParameters)
         if (resp) {
             send_response(client_sock, resp, keep_alive);
             response_free(resp);
+        } else {
+            /* Route handler returned NULL: lib/webserver.py's _send_result
+             * treats a None handler return value as 204 No Content rather
+             * than sending nothing at all — an empty reply would otherwise
+             * leave the client with no response bytes for a request it made. */
+            http_response_t *no_content = response_create(204, "text/plain", NULL);
+            if (no_content) {
+                strncpy(no_content->reason, "No Content", sizeof(no_content->reason) - 1);
+                send_response(client_sock, no_content, keep_alive);
+                response_free(no_content);
+            }
         }
 
         request_free(req);
@@ -500,40 +520,14 @@ void request_free(http_request_t *req)
     free(req);
 }
 
-char *render_template(const char *template_file, cJSON *context)
+http_response_t *webserver_render_response(const char *template_file, cJSON *ctx)
 {
-    /* Merge global context processor */
-    cJSON *merged_context = cJSON_CreateObject();
-
-    if (global_context_processor) {
-        cJSON *global_ctx = global_context_processor();
-        if (global_ctx) {
-            cJSON *item = global_ctx->child;
-            while (item) {
-                cJSON_AddItemToObject(merged_context, item->string,
-                                      cJSON_Duplicate(item, 1));
-                item = item->next;
-            }
-            cJSON_Delete(global_ctx);
-        }
-    }
-
-    /* Overlay caller context (caller wins) */
-    if (context) {
-        cJSON *item = context->child;
-        while (item) {
-            if (cJSON_HasObjectItem(merged_context, item->string)) {
-                cJSON_DeleteItemFromObject(merged_context, item->string);
-            }
-            cJSON_AddItemToObject(merged_context, item->string,
-                                  cJSON_Duplicate(item, 1));
-            item = item->next;
-        }
-    }
-
-    char *result = template_render_file(template_file, merged_context);
-    cJSON_Delete(merged_context);
-    return result;
+    char *html = template_render_file(template_file, ctx);
+    cJSON_Delete(ctx);
+    if (!html) return response_create(500, "text/plain", "Template error");
+    http_response_t *res = response_create(200, "text/html", html);
+    free(html);
+    return res;
 }
 
 const char *request_get_form_field(http_request_t *req, const char *field_name)
@@ -545,6 +539,24 @@ const char *request_get_form_field(http_request_t *req, const char *field_name)
     cJSON *field = cJSON_GetObjectItem(req->form_data, field_name);
     if (field && cJSON_IsString(field)) {
         return field->valuestring;
+    }
+    return NULL;
+}
+
+const char *request_get_form_field_last(http_request_t *req, const char *field_name)
+{
+    /* request_get_form_field() returns NULL when a field arrives as a JSON
+     * array (multi-value submit) — e.g. a color <select> and its paired
+     * <input type=color> share a field name, with the picker's value last. */
+    if (!req || !req->form_data || !field_name) return NULL;
+    cJSON *field = cJSON_GetObjectItem(req->form_data, field_name);
+    if (!field) return NULL;
+    if (cJSON_IsString(field)) return field->valuestring;
+    if (cJSON_IsArray(field)) {
+        int n = cJSON_GetArraySize(field);
+        if (n <= 0) return NULL;
+        cJSON *last = cJSON_GetArrayItem(field, n - 1);
+        return (last && cJSON_IsString(last)) ? last->valuestring : NULL;
     }
     return NULL;
 }

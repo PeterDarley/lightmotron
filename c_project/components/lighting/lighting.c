@@ -18,7 +18,10 @@
 
 static const char *TAG = "lighting";
 
-static active_scene_t active_scenes[MAX_ACTIVE_SCENES];
+/* Heap-allocated (lands in external PSRAM via CONFIG_SPIRAM_USE_MALLOC,
+ * since MAX_ACTIVE_SCENES * MAX_JOBS_PER_SCENE * MAX_LEDS target_indices
+ * arrays are far too large for internal DRAM). */
+static active_scene_t *active_scenes = NULL;
 static int active_scene_count = 0;
 static rgb_t logical_colors[MAX_LEDS];
 static SemaphoreHandle_t lighting_mutex = NULL;
@@ -27,19 +30,36 @@ static bool initialized = false;
 /* Pre-allocated buffers for tick processing (avoids per-frame stack/heap alloc) */
 static led_output_t tick_output_buf[MAX_LEDS];
 static rgb_t tick_filter_buf[MAX_LEDS];
+static rgb_t tick_pattern_current_buf[MAX_LEDS];
 
 esp_err_t lighting_init(void)
 {
     if (initialized) return ESP_OK;
 
+    active_scenes = calloc(MAX_ACTIVE_SCENES, sizeof(active_scene_t));
+    if (!active_scenes) {
+        ESP_LOGE(TAG, "Failed to allocate active_scenes (%u bytes)",
+                 (unsigned)(MAX_ACTIVE_SCENES * sizeof(active_scene_t)));
+        return ESP_ERR_NO_MEM;
+    }
+
     lighting_mutex = xSemaphoreCreateMutex();
     memset(logical_colors, 0, sizeof(logical_colors));
-    memset(active_scenes, 0, sizeof(active_scenes));
     active_scene_count = 0;
     initialized = true;
 
     ESP_LOGI(TAG, "Lighting system initialized");
     return ESP_OK;
+}
+
+/**
+ * Open the lighting-settings persistent store. Thin wrapper around the
+ * shared STORAGE_LIGHTING_SETTINGS_FILE constant so every call site here
+ * doesn't repeat the raw persistent_dict_open() call.
+ */
+static persistent_dict_t *open_lighting_store(void)
+{
+    return persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
 }
 
 /**
@@ -49,7 +69,7 @@ esp_err_t lighting_init(void)
  */
 static cJSON *get_current_model_object(void)
 {
-    persistent_dict_t *lighting_store = persistent_dict_open("/spiffs/data/lighting_settings.json");
+    persistent_dict_t *lighting_store = open_lighting_store();
     if (!lighting_store) return NULL;
 
     cJSON *models = persistent_dict_get(lighting_store, "models");
@@ -83,6 +103,26 @@ static bool scene_is_finished(const active_scene_t *scene)
     }
 
     return has_cycle_limited;
+}
+
+/**
+ * Free a job's per-filter cJSON params/cached_params and null the pointers
+ * out. Shared by every place that tears down a job's filter chain (a scene
+ * finishing naturally, being explicitly removed, or all scenes being
+ * cleared).
+ */
+static void free_job_filters(active_job_t *job)
+{
+    for (int f = 0; f < job->filter_count; f++) {
+        if (job->filters[f].params) {
+            cJSON_Delete(job->filters[f].params);
+            job->filters[f].params = NULL;
+        }
+        if (job->filters[f].state.cached_params) {
+            cJSON_Delete(job->filters[f].state.cached_params);
+            job->filters[f].state.cached_params = NULL;
+        }
+    }
 }
 
 /**
@@ -185,6 +225,7 @@ static esp_err_t activate_scene(const char *scene_name)
 
             const char *after = json_get_string(job_entry, "after", NULL);
             if (after) strncpy(job->after, after, sizeof(job->after) - 1);
+            job->inherit_target = json_get_bool(job_entry, "inherit_target", false);
         } else {
             effect_resolve_inline(job_entry, job);
         }
@@ -213,6 +254,15 @@ void lighting_process_tick(uint32_t tick)
 {
     if (!initialized) return;
 
+    /* Scene names to activate once the mutex is released — completed scenes'
+     * trigger_scenes_on_completion lists (mirrors effects.py's process_tick,
+     * which calls add_scene() for each trigger before remove_scene()).
+     * Deferred because activate_scene() -> lighting_remove_scene() re-takes
+     * the non-recursive lighting mutex. Flat capped list keeps animation-task
+     * stack usage modest. */
+    char pending_triggers[8][64];
+    int pending_trigger_count = 0;
+
     xSemaphoreTake(lighting_mutex, portMAX_DELAY);
 
     for (int s = 0; s < active_scene_count; s++) {
@@ -229,14 +279,14 @@ void lighting_process_tick(uint32_t tick)
 
             /* Check 'after' dependency */
             if (job->after[0] != '\0') {
-                bool dep_finished = false;
+                active_job_t *dep_job = NULL;
                 for (int d = 0; d < scene->job_count; d++) {
                     if (strcmp(scene->jobs[d].name, job->after) == 0) {
-                        dep_finished = scene->jobs[d].finished;
+                        dep_job = &scene->jobs[d];
                         break;
                     }
                 }
-                if (!dep_finished) {
+                if (!dep_job || !dep_job->finished) {
                     all_finished = false;
                     continue;
                 }
@@ -244,6 +294,16 @@ void lighting_process_tick(uint32_t tick)
                 if (job->after_pending) {
                     job->start_tick = tick;
                     job->after_pending = false;
+
+                    /* inherit_target: adopt the finished predecessor's
+                     * resolved target (mirrors Python's passthrough in
+                     * effects.py — the predecessor's target may itself have
+                     * been inherited, so chains A->B->C work). */
+                    if (job->inherit_target && dep_job->target_count > 0) {
+                        memcpy(job->target_indices, dep_job->target_indices,
+                               sizeof(job->target_indices));
+                        job->target_count = dep_job->target_count;
+                    }
                 }
             }
 
@@ -268,11 +328,23 @@ void lighting_process_tick(uint32_t tick)
                 all_finished = false;
             }
 
+            /* Build the current (previous-frame) logical color for each of
+             * this job's targets, in target order. Needed by patterns that
+             * fade from the prior frame (wave/cylon/phaser_strip), mirroring
+             * Lighting.get_logical_color() usage in patterns.py. */
+            for (int i = 0; i < job->target_count && i < MAX_LEDS; i++) {
+                int idx = job->target_indices[i];
+                tick_pattern_current_buf[i] = (idx >= 0 && idx < MAX_LEDS) ? logical_colors[idx] : (rgb_t){0, 0, 0};
+            }
+
             /* Execute pattern */
             pattern_fn_t pattern_fn = pattern_get(job->pattern_name);
-            int output_count = pattern_fn(job, local_tick, tick_output_buf, MAX_LEDS);
+            int output_count = pattern_fn(job, local_tick, tick_pattern_current_buf, tick_output_buf, MAX_LEDS);
 
-            /* Apply filters */
+            /* Apply filters. Filters key their timing off the effect's own
+             * local_tick (ticks since this job/effect started), matching
+             * Python's effects.py process_tick() which calls filter_func(...,
+             * tick_number=local_tick) - not the global animation tick. */
             for (int f = 0; f < job->filter_count; f++) {
                 filter_fn_t filter_fn = filter_get(job->filters[f].filter_name);
 
@@ -287,7 +359,7 @@ void lighting_process_tick(uint32_t tick)
                 }
 
                 filter_fn(job->filters[f].params, tick_output_buf, tick_filter_buf,
-                          output_count, &job->filters[f].state, tick);
+                          output_count, &job->filters[f].state, local_tick);
             }
 
             /* Update logical colors */
@@ -310,18 +382,20 @@ void lighting_process_tick(uint32_t tick)
                 sound_manager_stop(meta.stop_sounds_on_end[ss]);
             }
 
+            /* Queue trigger_scenes_on_completion for activation after the
+             * mutex is released. */
+            for (int t = 0; t < meta.trigger_scenes_on_completion_count &&
+                            pending_trigger_count < 8; t++) {
+                strncpy(pending_triggers[pending_trigger_count],
+                        meta.trigger_scenes_on_completion[t],
+                        sizeof(pending_triggers[0]) - 1);
+                pending_triggers[pending_trigger_count][sizeof(pending_triggers[0]) - 1] = '\0';
+                pending_trigger_count++;
+            }
+
             /* Free filter resources */
             for (int j = 0; j < scene->job_count; j++) {
-                for (int f = 0; f < scene->jobs[j].filter_count; f++) {
-                    if (scene->jobs[j].filters[f].params) {
-                        cJSON_Delete(scene->jobs[j].filters[f].params);
-                        scene->jobs[j].filters[f].params = NULL;
-                    }
-                    if (scene->jobs[j].filters[f].state.cached_params) {
-                        cJSON_Delete(scene->jobs[j].filters[f].state.cached_params);
-                        scene->jobs[j].filters[f].state.cached_params = NULL;
-                    }
-                }
+                free_job_filters(&scene->jobs[j]);
             }
 
             scene->active = false;
@@ -347,6 +421,17 @@ void lighting_process_tick(uint32_t tick)
     active_scene_count = write_idx;
 
     xSemaphoreGive(lighting_mutex);
+
+    /* Fire completion triggers now that the mutex is free. activate_scene()
+     * validates the name against the model's scenes itself, matching Python's
+     * `if trigger_scene_name in self.settings.get("scenes", {})` guard. */
+    for (int t = 0; t < pending_trigger_count; t++) {
+        esp_err_t trigger_err = lighting_add_scene(pending_triggers[t]);
+        if (trigger_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to trigger scene '%s' on completion (err=%d)",
+                     pending_triggers[t], (int)trigger_err);
+        }
+    }
 }
 
 esp_err_t lighting_set_scene(const char *scene_name)
@@ -370,14 +455,7 @@ esp_err_t lighting_remove_scene(const char *scene_name)
         if (strcmp(active_scenes[i].name, scene_name) == 0) {
             /* Free filter params and cached state */
             for (int j = 0; j < active_scenes[i].job_count; j++) {
-                for (int f = 0; f < active_scenes[i].jobs[j].filter_count; f++) {
-                    if (active_scenes[i].jobs[j].filters[f].params) {
-                        cJSON_Delete(active_scenes[i].jobs[j].filters[f].params);
-                    }
-                    if (active_scenes[i].jobs[j].filters[f].state.cached_params) {
-                        cJSON_Delete(active_scenes[i].jobs[j].filters[f].state.cached_params);
-                    }
-                }
+                free_job_filters(&active_scenes[i].jobs[j]);
             }
             active_scenes[i].active = false;
             break;
@@ -407,14 +485,7 @@ void lighting_clear_scenes(void)
     xSemaphoreTake(lighting_mutex, portMAX_DELAY);
     for (int i = 0; i < active_scene_count; i++) {
         for (int j = 0; j < active_scenes[i].job_count; j++) {
-            for (int f = 0; f < active_scenes[i].jobs[j].filter_count; f++) {
-                if (active_scenes[i].jobs[j].filters[f].params) {
-                    cJSON_Delete(active_scenes[i].jobs[j].filters[f].params);
-                }
-                if (active_scenes[i].jobs[j].filters[f].state.cached_params) {
-                    cJSON_Delete(active_scenes[i].jobs[j].filters[f].state.cached_params);
-                }
-            }
+            free_job_filters(&active_scenes[i].jobs[j]);
         }
     }
     active_scene_count = 0;
@@ -444,7 +515,7 @@ rgb_t lighting_get_color_json(const cJSON *color_spec)
 
 cJSON *lighting_get_model_names(void)
 {
-    persistent_dict_t *lighting_store = persistent_dict_open("/spiffs/data/lighting_settings.json");
+    persistent_dict_t *lighting_store = open_lighting_store();
     if (!lighting_store) return cJSON_CreateArray();
 
     cJSON *models = persistent_dict_get(lighting_store, "models");
@@ -461,7 +532,7 @@ cJSON *lighting_get_model_names(void)
 
 const char *lighting_get_current_model(void)
 {
-    persistent_dict_t *lighting_store = persistent_dict_open("/spiffs/data/lighting_settings.json");
+    persistent_dict_t *lighting_store = open_lighting_store();
     if (!lighting_store) return "Model";
 
     cJSON *current = persistent_dict_get(lighting_store, "current_model");
@@ -471,7 +542,7 @@ const char *lighting_get_current_model(void)
 
 esp_err_t lighting_set_current_model(const char *model_name)
 {
-    persistent_dict_t *lighting_store = persistent_dict_open("/spiffs/data/lighting_settings.json");
+    persistent_dict_t *lighting_store = open_lighting_store();
     if (!lighting_store) return ESP_FAIL;
 
     cJSON *val = cJSON_CreateString(model_name);
@@ -482,7 +553,7 @@ esp_err_t lighting_set_current_model(const char *model_name)
 
 cJSON *lighting_get_settings(void)
 {
-    persistent_dict_t *lighting_store = persistent_dict_open("/spiffs/data/lighting_settings.json");
+    persistent_dict_t *lighting_store = open_lighting_store();
     if (!lighting_store) return NULL;
 
     cJSON *models = persistent_dict_get(lighting_store, "models");
@@ -490,4 +561,106 @@ cJSON *lighting_get_settings(void)
     if (!models || !current) return NULL;
 
     return cJSON_GetObjectItem(models, current);
+}
+
+esp_err_t lighting_create_model(const char *model_name, bool copy_from_current)
+{
+    /* Mirrors Lighting.create_model(): a new model either starts as a
+     * minimal empty scaffold, or deep-copies the allowed keys from the
+     * currently active model. */
+    if (!model_name || model_name[0] == '\0') return ESP_ERR_INVALID_ARG;
+
+    persistent_dict_t *lighting_store = open_lighting_store();
+    if (!lighting_store) return ESP_FAIL;
+
+    cJSON *models = persistent_dict_get(lighting_store, "models");
+    if (!models || !cJSON_IsObject(models)) return ESP_FAIL;
+
+    if (cJSON_GetObjectItem(models, model_name)) {
+        ESP_LOGW(TAG, "Model already exists: %s", model_name);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    cJSON *new_model = cJSON_CreateObject();
+
+    if (copy_from_current) {
+        cJSON *current_name = persistent_dict_get(lighting_store, "current_model");
+        cJSON *current_model = (current_name && current_name->valuestring)
+            ? cJSON_GetObjectItem(models, current_name->valuestring) : NULL;
+
+        static const char *allowed_keys[] = {
+            "default_scene", "scenes", "named_ranges", "effects",
+            "filters", "custom_colors", "scene_settings",
+        };
+        for (size_t i = 0; i < sizeof(allowed_keys) / sizeof(allowed_keys[0]); i++) {
+            cJSON *src = current_model ? cJSON_GetObjectItem(current_model, allowed_keys[i]) : NULL;
+            if (src) {
+                cJSON_AddItemToObject(new_model, allowed_keys[i], cJSON_Duplicate(src, 1));
+            } else if (strcmp(allowed_keys[i], "default_scene") == 0) {
+                cJSON_AddItemToObject(new_model, allowed_keys[i], cJSON_CreateNull());
+            } else {
+                cJSON_AddItemToObject(new_model, allowed_keys[i], cJSON_CreateObject());
+            }
+        }
+    } else {
+        cJSON_AddItemToObject(new_model, "default_scene", cJSON_CreateNull());
+        cJSON_AddItemToObject(new_model, "scenes", cJSON_CreateObject());
+        cJSON_AddItemToObject(new_model, "named_ranges", cJSON_CreateObject());
+        cJSON_AddItemToObject(new_model, "effects", cJSON_CreateObject());
+        cJSON_AddItemToObject(new_model, "filters", cJSON_CreateObject());
+        cJSON_AddItemToObject(new_model, "custom_colors", cJSON_CreateObject());
+        cJSON_AddItemToObject(new_model, "scene_settings", cJSON_CreateObject());
+    }
+
+    cJSON_AddItemToObject(models, model_name, new_model);
+    return persistent_dict_save(lighting_store);
+}
+
+esp_err_t lighting_delete_model(const char *model_name)
+{
+    /* Mirrors Lighting.delete_model(): refuses to delete the active model. */
+    if (!model_name) return ESP_ERR_INVALID_ARG;
+
+    persistent_dict_t *lighting_store = open_lighting_store();
+    if (!lighting_store) return ESP_FAIL;
+
+    cJSON *current_name = persistent_dict_get(lighting_store, "current_model");
+    if (current_name && current_name->valuestring && strcmp(current_name->valuestring, model_name) == 0) {
+        ESP_LOGW(TAG, "Cannot delete the currently active model: %s", model_name);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    cJSON *models = persistent_dict_get(lighting_store, "models");
+    if (!models || !cJSON_GetObjectItem(models, model_name)) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    cJSON_DeleteItemFromObject(models, model_name);
+    return persistent_dict_save(lighting_store);
+}
+
+esp_err_t lighting_rename_model(const char *old_name, const char *new_name)
+{
+    /* Mirrors Lighting.rename_model(): updates current_model too if the
+     * renamed model was the active one. */
+    if (!old_name || !new_name || new_name[0] == '\0') return ESP_ERR_INVALID_ARG;
+
+    persistent_dict_t *lighting_store = open_lighting_store();
+    if (!lighting_store) return ESP_FAIL;
+
+    cJSON *models = persistent_dict_get(lighting_store, "models");
+    if (!models) return ESP_FAIL;
+
+    if (!cJSON_GetObjectItem(models, old_name)) return ESP_ERR_NOT_FOUND;
+    if (cJSON_GetObjectItem(models, new_name)) return ESP_ERR_INVALID_STATE;
+
+    cJSON *detached = cJSON_DetachItemFromObject(models, old_name);
+    cJSON_AddItemToObject(models, new_name, detached);
+
+    cJSON *current_name = persistent_dict_get(lighting_store, "current_model");
+    if (current_name && current_name->valuestring && strcmp(current_name->valuestring, old_name) == 0) {
+        persistent_dict_set(lighting_store, "current_model", cJSON_CreateString(new_name));
+    }
+
+    return persistent_dict_save(lighting_store);
 }

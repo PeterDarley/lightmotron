@@ -11,7 +11,7 @@ void metadata_get_scene(const char *scene_name, scene_metadata_t *meta)
 
     if (!scene_name) return;
 
-    persistent_dict_t *lighting = persistent_dict_open("/spiffs/data/lighting_settings.json");
+    persistent_dict_t *lighting = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
     if (!lighting) return;
 
     cJSON *models = persistent_dict_get(lighting, "models");
@@ -71,6 +71,20 @@ void metadata_get_scene(const char *scene_name, scene_metadata_t *meta)
             if (item && item->valuestring) {
                 strncpy(meta->stop_sounds_on_end[i], item->valuestring, 63);
                 meta->stop_sounds_on_end_count++;
+            }
+        }
+    }
+
+    /* Parse trigger_scenes_on_completion */
+    cJSON *triggers = cJSON_GetObjectItem(settings, "trigger_scenes_on_completion");
+    if (triggers && cJSON_IsArray(triggers)) {
+        int size = cJSON_GetArraySize(triggers);
+        if (size > 8) size = 8;
+        for (int i = 0; i < size; i++) {
+            cJSON *item = cJSON_GetArrayItem(triggers, i);
+            if (item && item->valuestring) {
+                strncpy(meta->trigger_scenes_on_completion[i], item->valuestring, 63);
+                meta->trigger_scenes_on_completion_count++;
             }
         }
     }

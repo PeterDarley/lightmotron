@@ -53,9 +53,4 @@ cJSON *audio_player_check_health(void);
  */
 bool audio_player_is_module_playing(int module_index);
 
-/**
- * Get number of initialized modules.
- */
-int audio_player_get_module_count(void);
-
 #endif /* AUDIO_PLAYER_H */

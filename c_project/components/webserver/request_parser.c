@@ -54,28 +54,40 @@ cJSON *parse_query_string(const char *query)
     char *token = strtok(copy, "&");
     while (token) {
         char *eq = strchr(token, '=');
+        char *key;
+        char *value;
         if (eq) {
             *eq = '\0';
-            char *key = token;
-            char *value = eq + 1;
+            key = token;
+            value = eq + 1;
             url_decode(key);
             url_decode(value);
+        } else {
+            /* Bare key with no "=" (e.g. a checkbox/flag param). Python's
+             * _parse_form_data does `key = _url_decode(pair); value = ""` in
+             * this case rather than dropping the pair — match that instead of
+             * silently discarding the key. */
+            key = token;
+            url_decode(key);
+            value = "";
+        }
 
-            /* Handle multi-value */
-            cJSON *existing = cJSON_GetObjectItem(result, key);
-            if (existing) {
-                if (cJSON_IsArray(existing)) {
-                    cJSON_AddItemToArray(existing, cJSON_CreateString(value));
-                } else {
-                    cJSON *arr = cJSON_CreateArray();
-                    cJSON_AddItemToArray(arr, cJSON_Duplicate(existing, 1));
-                    cJSON_AddItemToArray(arr, cJSON_CreateString(value));
-                    cJSON_DeleteItemFromObject(result, key);
-                    cJSON_AddItemToObject(result, key, arr);
-                }
+        /* Handle multi-value (strtok never yields an empty token here, since
+         * consecutive '&' delimiters collapse — matching Python's explicit
+         * `else: continue` for an empty pair). */
+        cJSON *existing = cJSON_GetObjectItem(result, key);
+        if (existing) {
+            if (cJSON_IsArray(existing)) {
+                cJSON_AddItemToArray(existing, cJSON_CreateString(value));
             } else {
-                cJSON_AddStringToObject(result, key, value);
+                cJSON *arr = cJSON_CreateArray();
+                cJSON_AddItemToArray(arr, cJSON_Duplicate(existing, 1));
+                cJSON_AddItemToArray(arr, cJSON_CreateString(value));
+                cJSON_DeleteItemFromObject(result, key);
+                cJSON_AddItemToObject(result, key, arr);
             }
+        } else {
+            cJSON_AddStringToObject(result, key, value);
         }
         token = strtok(NULL, "&");
     }
@@ -406,7 +418,15 @@ http_request_t *request_parse(int client_sock)
     if (content_length_str) {
         size_t content_length = atoi(content_length_str);
         if (content_length > MAX_BODY_SIZE) {
-            content_length = MAX_BODY_SIZE;
+            /* lib/webserver.py's _read_request aborts the request entirely
+             * (`return None`) when Content-Length exceeds _MAX_REQUEST_BODY —
+             * the caller just closes the connection with no response. Match
+             * that instead of silently clamping/truncating: a truncated body
+             * would be parsed as if it were the complete (and often corrupt)
+             * payload, which is worse than dropping the connection. */
+            free(recv_buf);
+            request_free(req);
+            return NULL;
         }
 
         if (content_length > 0) {

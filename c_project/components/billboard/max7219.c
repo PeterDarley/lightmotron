@@ -294,16 +294,6 @@ esp_err_t max7219_show(max7219_t *dev)
     return ESP_OK;
 }
 
-void max7219_fill(max7219_t *dev, const uint8_t *data, int len)
-{
-    if (!dev || !data) return;
-
-    int max_len = dev->num_modules * 8;
-    if (len > max_len) len = max_len;
-
-    memcpy(dev->framebuffer, data, len);
-}
-
 void max7219_draw_char(max7219_t *dev, char c, int x, int y)
 {
     if (!dev) return;

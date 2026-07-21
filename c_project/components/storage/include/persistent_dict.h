@@ -9,6 +9,15 @@
 #include <stdbool.h>
 
 /**
+ * Canonical storage file paths. Every component that opens a persistent_dict
+ * should use these rather than redefining the path locally, so there is a
+ * single source of truth for where each settings file lives on SPIFFS.
+ */
+#define STORAGE_SYSTEM_SETTINGS_FILE "/spiffs/data/system_settings.json"
+#define STORAGE_LIGHTING_SETTINGS_FILE "/spiffs/data/lighting_settings.json"
+#define STORAGE_SOUNDS_FILE "/spiffs/data/sounds.json"
+
+/**
  * Lazy-loaded persistent dictionary backed by a JSON file on SPIFFS.
  *
  * Data is only loaded from disk on first access, not during initialization.

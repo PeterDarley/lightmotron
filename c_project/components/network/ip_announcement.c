@@ -23,7 +23,6 @@
 
 static const char *TAG = "ip_announcement";
 
-#define SYSTEM_SETTINGS_FILE "/spiffs/data/system_settings.json"
 #define IP_ANNOUNCE_TASK_STACK 4096
 #define IP_ANNOUNCE_TASK_PRIORITY 2
 
@@ -34,7 +33,7 @@ typedef struct {
 
 static void store_ip_address(const char *ip_address)
 {
-    persistent_dict_t *sys = persistent_dict_open(SYSTEM_SETTINGS_FILE);
+    persistent_dict_t *sys = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     cJSON *val = cJSON_CreateString(ip_address);
     persistent_dict_set(sys, "stored_ip_address", val);
     persistent_dict_save(sys);
@@ -46,7 +45,7 @@ static const char *get_stored_ip_address(void)
     static char stored[16];
     stored[0] = '\0';
 
-    persistent_dict_t *sys = persistent_dict_open(SYSTEM_SETTINGS_FILE);
+    persistent_dict_t *sys = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     cJSON *val = persistent_dict_get(sys, "stored_ip_address");
     if (val && cJSON_IsString(val)) {
         strncpy(stored, val->valuestring, sizeof(stored) - 1);
@@ -147,7 +146,7 @@ static void ip_announce_task(void *pvParameters)
 
 esp_err_t ip_announcement_check_and_announce(void)
 {
-    persistent_dict_t *sys = persistent_dict_open(SYSTEM_SETTINGS_FILE);
+    persistent_dict_t *sys = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     cJSON *audio_players = persistent_dict_get(sys, "audio_players");
 
     if (!audio_players || !cJSON_IsArray(audio_players) || cJSON_GetArraySize(audio_players) == 0) {

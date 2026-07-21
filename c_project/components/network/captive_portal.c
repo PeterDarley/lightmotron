@@ -23,7 +23,6 @@ static const char *TAG = "captive_portal";
 #define HTTP_PORT 80
 #define AP_IP "192.168.4.1"
 #define DEFAULT_HOSTNAME_FALLBACK "lightmotron"
-#define SYSTEM_SETTINGS_FILE "/spiffs/data/system_settings.json"
 
 static TaskHandle_t dns_task_handle = NULL;
 static TaskHandle_t http_task_handle = NULL;
@@ -114,7 +113,7 @@ static const char *get_configured_hostname(void)
 {
     static char hostname[64];
 
-    persistent_dict_t *sys = persistent_dict_open(SYSTEM_SETTINGS_FILE);
+    persistent_dict_t *sys = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     cJSON *hostname_json = persistent_dict_get(sys, "hostname");
 
     if (hostname_json && cJSON_IsString(hostname_json) && hostname_json->valuestring[0] != '\0') {
@@ -457,7 +456,7 @@ static void parse_form_data(const char *body, char *ssid, size_t ssid_len,
  */
 static void save_wifi_credentials(const char *ssid, const char *password)
 {
-    persistent_dict_t *sys = persistent_dict_open(SYSTEM_SETTINGS_FILE);
+    persistent_dict_t *sys = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     cJSON *wifi = persistent_dict_get_dup(sys, "wifi");
     if (!wifi) {
         wifi = cJSON_CreateObject();

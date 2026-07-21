@@ -17,9 +17,25 @@ static const char *pattern_names[] = {
 };
 static const int pattern_count = 8;
 
-int pattern_solid(const active_job_t *job, uint32_t local_tick,
+/* Max number of simultaneous wave "heads" pattern_wave will render (mirrors
+ * the effect's "number" param). Extra heads beyond this are silently
+ * dropped rather than overflowing a stack array. */
+#define MAX_WAVE_HEADS 8
+
+/* Scratch buffers for phaser_strip's converging left/right wave renders.
+ * Static (not stack-allocated) to avoid a large per-tick stack footprint,
+ * matching the "pre-allocated buffers" convention used by lighting.c's tick
+ * processing. Safe because lighting_process_tick holds a mutex for the
+ * whole tick and patterns are never called re-entrantly. */
+static led_output_t phaser_left_buf[MAX_LEDS];
+static led_output_t phaser_right_buf[MAX_LEDS];
+
+int pattern_solid(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
                   led_output_t *output, int max_output)
 {
+    (void)local_tick;
+    (void)current_colors;
+
     rgb_t color = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 255, 255};
     int count = 0;
 
@@ -32,10 +48,17 @@ int pattern_solid(const active_job_t *job, uint32_t local_tick,
     return count;
 }
 
-int pattern_blink(const active_job_t *job, uint32_t local_tick,
+int pattern_blink(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
                   led_output_t *output, int max_output)
 {
-    int duration = job->duration > 0 ? job->duration : 20;
+    (void)current_colors;
+
+    /* job->duration holds the blink "half period" (on-ticks == off-ticks),
+     * matching Python's pattern_blink() which reads effect["duration"]
+     * directly as half_period (with a default of 40, not a generic
+     * pattern-duration default). Legacy "frequency" overrides are folded
+     * into job->duration once at effect_resolve() time. */
+    int duration = job->duration > 0 ? job->duration : 40;
     bool on = ((local_tick / duration) % 2) == 0;
 
     rgb_t color;
@@ -55,11 +78,15 @@ int pattern_blink(const active_job_t *job, uint32_t local_tick,
     return count;
 }
 
-int pattern_pulse(const active_job_t *job, uint32_t local_tick,
+int pattern_pulse(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
                   led_output_t *output, int max_output)
 {
+    (void)current_colors;
+
+    /* Matches Python pattern_pulse(): on_ticks defaults to 10, period
+     * defaults flatly to 40 (not derived from on_ticks). */
     int duration = job->duration > 0 ? job->duration : 10;
-    int period = job->period > 0 ? job->period : duration * 4;
+    int period = job->period > 0 ? job->period : 40;
     int phase = local_tick % period;
     bool on = phase < duration;
 
@@ -80,9 +107,11 @@ int pattern_pulse(const active_job_t *job, uint32_t local_tick,
     return count;
 }
 
-int pattern_fade_in(const active_job_t *job, uint32_t local_tick,
+int pattern_fade_in(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
                     led_output_t *output, int max_output)
 {
+    (void)current_colors;
+
     int duration = job->duration > 0 ? job->duration : 40;
     rgb_t color_a = job->color_count > 0 ? job->colors[0] : (rgb_t){0, 0, 0};
     rgb_t color_b = job->color_count > 1 ? job->colors[1] : (rgb_t){255, 255, 255};
@@ -102,16 +131,19 @@ int pattern_fade_in(const active_job_t *job, uint32_t local_tick,
     return count;
 }
 
-int pattern_breathe(const active_job_t *job, uint32_t local_tick,
+int pattern_breathe(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
                     led_output_t *output, int max_output)
 {
-    int duration = job->duration > 0 ? job->duration : 60;
+    (void)current_colors;
+
+    int duration = job->duration > 0 ? job->duration : 40;
     rgb_t color_a = job->color_count > 0 ? job->colors[0] : (rgb_t){0, 0, 0};
     rgb_t color_b = job->color_count > 1 ? job->colors[1] : (rgb_t){255, 255, 255};
 
-    /* Sine wave oscillation */
+    /* Sine wave oscillation - matches Python: (sin(2*pi*tick/duration)+1)/2,
+     * no phase shift (breathe starts at the midpoint, rising). */
     float phase = (float)(local_tick % duration) / (float)duration;
-    float factor = (sinf(phase * 2.0f * M_PI - M_PI / 2.0f) + 1.0f) / 2.0f;
+    float factor = (sinf(2.0f * (float)M_PI * phase) + 1.0f) / 2.0f;
 
     rgb_t color = color_interpolate(color_a, color_b, factor);
 
@@ -125,126 +157,254 @@ int pattern_breathe(const active_job_t *job, uint32_t local_tick,
     return count;
 }
 
-int pattern_wave(const active_job_t *job, uint32_t local_tick,
-                 led_output_t *output, int max_output)
+/**
+ * Return the head LED position (as a float) for a wave at the given phase,
+ * mirroring PatternMixin._wave_head_position().
+ */
+static float wave_head_position(int num_leds, int cycle_ticks, int phase, bool reverse)
 {
-    int num_waves = job->number > 0 ? job->number : 1;
-    int width = job->width > 0 ? job->width : 5;
-    int duration = job->duration > 0 ? job->duration : 40;
-    bool reverse = job->reverse;
-
-    rgb_t wave_color = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 255, 255};
-    rgb_t bg_color = job->color_count > 1 ? job->colors[1] : (rgb_t){0, 0, 0};
-
-    int target_count = job->target_count;
-    float speed = (float)target_count / (float)duration;
-    float position = (float)local_tick * speed;
-
-    /* Wrap position */
-    int total_travel = target_count + width;
-    int pos = (int)position % total_travel;
-    if (reverse) {
-        pos = total_travel - 1 - pos;
+    float position;
+    if (cycle_ticks > 1) {
+        position = (float)phase * (float)(num_leds - 1) / (float)(cycle_ticks - 1);
+    } else {
+        position = (float)(num_leds - 1);
     }
 
-    int count = 0;
-    for (int i = 0; i < target_count && count < max_output; i++) {
-        rgb_t pixel_color = bg_color;
+    if (reverse) position = (float)(num_leds - 1) - position;
+    return position;
+}
 
-        /* Check each wave */
-        for (int w = 0; w < num_waves; w++) {
-            int wave_offset = (w * target_count) / num_waves;
-            int wave_pos = (pos + wave_offset) % total_travel;
-            int distance = i - (wave_pos - width);
+/**
+ * Render one or more wave comets with sub-pixel smoothing, mirroring
+ * PatternMixin._render_wave(). Every target LED is written: LEDs not under a
+ * head fade the previous frame's color (from current_colors) toward
+ * color1/color2 by one step; LEDs under a head (or its sub-pixel neighbor)
+ * are brightened toward color2.
+ */
+static int render_wave(const active_job_t *job, const rgb_t *current_colors,
+                        const float *head_positions, int head_count,
+                        int width, float ticks_per_led,
+                        rgb_t color1, rgb_t color2, bool reverse,
+                        led_output_t *output, int max_output)
+{
+    int target_count = job->target_count;
+    if (target_count > max_output) target_count = max_output;
 
-            if (distance >= 0 && distance < width) {
-                float intensity = 1.0f - ((float)distance / (float)width);
-                pixel_color = color_interpolate(bg_color, wave_color, intensity);
+    float fade_ticks = width * ticks_per_led;
+    if (fade_ticks < 1.0f) fade_ticks = 1.0f;
+    float step_r = ((float)color2.r - (float)color1.r) / fade_ticks;
+    float step_g = ((float)color2.g - (float)color1.g) / fade_ticks;
+    float step_b = ((float)color2.b - (float)color1.b) / fade_ticks;
+
+    int lo_r = color1.r < color2.r ? color1.r : color2.r;
+    int hi_r = color1.r > color2.r ? color1.r : color2.r;
+    int lo_g = color1.g < color2.g ? color1.g : color2.g;
+    int hi_g = color1.g > color2.g ? color1.g : color2.g;
+    int lo_b = color1.b < color2.b ? color1.b : color2.b;
+    int hi_b = color1.b > color2.b ? color1.b : color2.b;
+
+    for (int i = 0; i < target_count; i++) {
+        float r = (float)current_colors[i].r - step_r;
+        float g = (float)current_colors[i].g - step_g;
+        float b = (float)current_colors[i].b - step_b;
+        if (r < lo_r) r = (float)lo_r;
+        if (r > hi_r) r = (float)hi_r;
+        if (g < lo_g) g = (float)lo_g;
+        if (g > hi_g) g = (float)hi_g;
+        if (b < lo_b) b = (float)lo_b;
+        if (b > hi_b) b = (float)hi_b;
+
+        output[i].led_index = job->target_indices[i];
+        output[i].color = (rgb_t){ (uint8_t)r, (uint8_t)g, (uint8_t)b };
+    }
+
+    int fill_count = 1;
+    if (ticks_per_led > 0.0f) {
+        int fc = (int)ceilf(1.0f / ticks_per_led);
+        if (fc > fill_count) fill_count = fc;
+    }
+
+    for (int h = 0; h < head_count; h++) {
+        float head_position = head_positions[h];
+        int head_index;
+        float sub_position;
+
+        if (!reverse) {
+            head_index = (int)floorf(head_position);
+            sub_position = head_position - (float)head_index;
+        } else {
+            head_index = (int)ceilf(head_position);
+            sub_position = (float)head_index - head_position;
+        }
+
+        if (head_index < 0 || head_index >= target_count) continue;
+
+        for (int offset = 0; offset < fill_count; offset++) {
+            int fill_idx = !reverse ? head_index - offset : head_index + offset;
+            if (fill_idx >= 0 && fill_idx < target_count) {
+                output[fill_idx].led_index = job->target_indices[fill_idx];
+                output[fill_idx].color = color2;
             }
         }
 
-        output[count].led_index = job->target_indices[i];
-        output[count].color = pixel_color;
-        count++;
+        if (!reverse) {
+            if (head_index + 1 < target_count && sub_position > 0.0f) {
+                output[head_index + 1].led_index = job->target_indices[head_index + 1];
+                output[head_index + 1].color = color_interpolate(color1, color2, sub_position);
+            }
+        } else {
+            if (head_index - 1 >= 0 && sub_position > 0.0f) {
+                output[head_index - 1].led_index = job->target_indices[head_index - 1];
+                output[head_index - 1].color = color_interpolate(color1, color2, sub_position);
+            }
+        }
     }
 
-    return count;
+    return target_count;
 }
 
-int pattern_cylon(const active_job_t *job, uint32_t local_tick,
+/**
+ * Compute Python's `(tick_number - 1) % modulus`, which is always
+ * non-negative even when tick_number is 0 (Python's % never returns
+ * negative for a positive modulus). local_tick is unsigned, so the
+ * subtraction is done in a signed 64-bit domain to avoid wraparound.
+ */
+static int phase_from_tick_minus_one(uint32_t local_tick, int modulus)
+{
+    if (modulus <= 0) return 0;
+    int64_t signed_tick = (int64_t)local_tick - 1;
+    int64_t phase = signed_tick % modulus;
+    if (phase < 0) phase += modulus;
+    return (int)phase;
+}
+
+int pattern_wave(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
+                 led_output_t *output, int max_output)
+{
+    int number = job->number > 0 ? job->number : 1;
+    int width = job->width > 0 ? job->width : 5;
+    bool reverse = job->reverse;
+    rgb_t color1 = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 255, 255};
+    rgb_t color2 = job->color_count > 1 ? job->colors[1] : (rgb_t){0, 0, 0};
+
+    int num_leds = job->target_count;
+    int cycle_ticks = job->duration > 0 ? job->duration : 40;
+    int phase = phase_from_tick_minus_one(local_tick, cycle_ticks);
+    float ticks_per_led = (float)cycle_ticks / (float)(num_leds > 1 ? num_leds - 1 : 1);
+
+    /* Note: cycle-completion bookkeeping (job->cycles/cycles_completed) is
+     * handled centrally in lighting_process_tick() rather than per-pattern
+     * like Python's self._count_cycle() call at phase==0. */
+
+    int spacing = number > 0 ? cycle_ticks / number : cycle_ticks;
+    if (spacing < 1) spacing = 1;
+
+    int head_count = number > MAX_WAVE_HEADS ? MAX_WAVE_HEADS : number;
+    float head_positions[MAX_WAVE_HEADS];
+    for (int p = 0; p < head_count; p++) {
+        int peak_phase = (phase + p * spacing) % cycle_ticks;
+        head_positions[p] = wave_head_position(num_leds, cycle_ticks, peak_phase, reverse);
+    }
+
+    return render_wave(job, current_colors, head_positions, head_count, width, ticks_per_led,
+                        color1, color2, reverse, output, max_output);
+}
+
+int pattern_cylon(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
                   led_output_t *output, int max_output)
 {
     int width = job->width > 0 ? job->width : 5;
-    int duration = job->duration > 0 ? job->duration : 40;
+    rgb_t color1 = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 255, 255};
+    rgb_t color2 = job->color_count > 1 ? job->colors[1] : (rgb_t){0, 0, 0};
 
-    rgb_t wave_color = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 0, 0};
-    rgb_t bg_color = job->color_count > 1 ? job->colors[1] : (rgb_t){0, 0, 0};
+    int num_leds = job->target_count;
+    int one_way_ticks = job->duration > 0 ? job->duration : 40;
+    int cycle_ticks = one_way_ticks * 2;
+    int phase = phase_from_tick_minus_one(local_tick, cycle_ticks);
+    float ticks_per_led = (float)one_way_ticks / (float)(num_leds > 1 ? num_leds - 1 : 1);
 
-    int target_count = job->target_count;
-    int travel = target_count - width;
-    if (travel < 1) travel = 1;
-
-    /* Bounce: position goes 0 → travel → 0 */
-    int cycle_len = travel * 2;
-    float speed = (float)cycle_len / (float)duration;
-    int raw_pos = (int)((float)local_tick * speed) % cycle_len;
-    int pos = raw_pos <= travel ? raw_pos : cycle_len - raw_pos;
-
-    int count = 0;
-    for (int i = 0; i < target_count && count < max_output; i++) {
-        rgb_t pixel_color = bg_color;
-        int distance = i - pos;
-        if (distance >= 0 && distance < width) {
-            float intensity = 1.0f - ((float)distance / (float)width);
-            pixel_color = color_interpolate(bg_color, wave_color, intensity);
-        }
-
-        output[count].led_index = job->target_indices[i];
-        output[count].color = pixel_color;
-        count++;
+    bool reverse;
+    float head_position;
+    if (phase < one_way_ticks) {
+        reverse = false;
+        head_position = wave_head_position(num_leds, one_way_ticks, phase, false);
+    } else {
+        reverse = true;
+        head_position = wave_head_position(num_leds, one_way_ticks, phase - one_way_ticks, true);
     }
 
-    return count;
+    return render_wave(job, current_colors, &head_position, 1, width, ticks_per_led,
+                        color1, color2, reverse, output, max_output);
 }
 
-int pattern_phaser_strip(const active_job_t *job, uint32_t local_tick,
+int pattern_phaser_strip(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
                          led_output_t *output, int max_output)
 {
     int width = job->width > 0 ? job->width : 5;
-    int duration = job->duration > 0 ? job->duration : 40;
+    rgb_t color1 = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 255, 255};
+    rgb_t color2 = job->color_count > 1 ? job->colors[1] : (rgb_t){0, 0, 0};
 
-    rgb_t wave_color = job->color_count > 0 ? job->colors[0] : (rgb_t){0, 0, 255};
-    rgb_t bg_color = job->color_count > 1 ? job->colors[1] : (rgb_t){0, 0, 0};
+    int num_leds = job->target_count;
+    if (num_leds < 3) return 0;
 
-    int target_count = job->target_count;
-    int half = target_count / 2;
-    float speed = (float)half / (float)duration;
-    int pos = (int)((float)local_tick * speed) % (half + width);
+    int cycle_ticks = job->duration > 0 ? job->duration : 40;
+    float ticks_per_led = (float)cycle_ticks / (float)(num_leds - 1);
+    int fade_ticks = (int)(width * ticks_per_led);
+    if (fade_ticks < 1) fade_ticks = 1;
+    int total_ticks = cycle_ticks + fade_ticks;
 
-    int count = 0;
-    for (int i = 0; i < target_count && count < max_output; i++) {
-        rgb_t pixel_color = bg_color;
+    int phase = phase_from_tick_minus_one(local_tick, total_ticks);
 
-        /* Wave from left */
-        int dist_left = i - (pos - width);
-        if (i < half && dist_left >= 0 && dist_left < width) {
-            float intensity = 1.0f - ((float)dist_left / (float)width);
-            pixel_color = color_interpolate(bg_color, wave_color, intensity);
+    /* Known gap vs Python: when this effect finishes (job->cycles reached),
+     * Python records a "passthrough" target (the meeting point) so a
+     * downstream after/inherit_target effect can continue from it. That
+     * scene-entry chaining lives in lighting.c/effects.c and is not
+     * implemented here (see report). */
+    if (!job->retained_meet_set || phase == 0) {
+        int range = num_leds - 2; /* random(1, num_leds - 2) inclusive */
+        job->retained_meet_index = 1 + (range > 0 ? (rand() % range) : 0);
+        job->retained_meet_set = true;
+    }
+    int meet_index = job->retained_meet_index;
+
+    if (phase < cycle_ticks) {
+        float left_pos, right_pos;
+        if (cycle_ticks > 1) {
+            left_pos = (float)phase * (float)meet_index / (float)(cycle_ticks - 1);
+            right_pos = (float)(num_leds - 1) -
+                        (float)phase * (float)(num_leds - 1 - meet_index) / (float)(cycle_ticks - 1);
+        } else {
+            left_pos = (float)meet_index;
+            right_pos = (float)meet_index;
         }
 
-        /* Wave from right */
-        int right_pos = target_count - 1 - pos;
-        int dist_right = right_pos - i;
-        if (i >= half && dist_right >= 0 && dist_right < width) {
-            float intensity = 1.0f - ((float)dist_right / (float)width);
-            pixel_color = color_interpolate(bg_color, wave_color, intensity);
-        }
+        int n = render_wave(job, current_colors, &left_pos, 1, width, ticks_per_led,
+                             color1, color2, false, phaser_left_buf, MAX_LEDS);
+        render_wave(job, current_colors, &right_pos, 1, width, ticks_per_led,
+                    color1, color2, true, phaser_right_buf, MAX_LEDS);
 
-        output[count].led_index = job->target_indices[i];
-        output[count].color = pixel_color;
-        count++;
+        if (n > max_output) n = max_output;
+        for (int i = 0; i < n; i++) {
+            int sum_left = phaser_left_buf[i].color.r + phaser_left_buf[i].color.g + phaser_left_buf[i].color.b;
+            int sum_right = phaser_right_buf[i].color.r + phaser_right_buf[i].color.g + phaser_right_buf[i].color.b;
+            output[i] = (sum_right > sum_left) ? phaser_right_buf[i] : phaser_left_buf[i];
+        }
+        return n;
     }
 
+    int fade_phase = phase - cycle_ticks;
+    if (fade_phase < fade_ticks - 1) {
+        float pos = (float)meet_index;
+        return render_wave(job, current_colors, &pos, 1, width, ticks_per_led,
+                            color1, color2, false, output, max_output);
+    }
+
+    int count = 0;
+    for (int i = 0; i < num_leds && count < max_output; i++) {
+        output[count].led_index = job->target_indices[i];
+        output[count].color = color1;
+        count++;
+    }
     return count;
 }
 

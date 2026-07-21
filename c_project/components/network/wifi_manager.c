@@ -15,7 +15,8 @@ static const char *TAG = "wifi_manager";
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
-#define WIFI_CONNECT_TIMEOUT_MS 10000
+/* Matches boot.py's WIFIManager(block=True, timeout=20). */
+#define WIFI_CONNECT_TIMEOUT_MS 20000
 
 static EventGroupHandle_t wifi_event_group = NULL;
 static wifi_state_t current_state = WIFI_STATE_DISCONNECTED;
@@ -24,6 +25,7 @@ static bool initialized = false;
 static bool wifi_started = false;
 static esp_netif_t *sta_netif = NULL;
 static int retry_count = 0;
+static bool manual_disconnect = false;
 #define MAX_RETRY 5
 
 /**
@@ -74,7 +76,12 @@ static void event_handler(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (retry_count < MAX_RETRY) {
+        if (manual_disconnect) {
+            /* Caller explicitly requested this disconnect (e.g. before
+             * reconfiguring/reconnecting for a hostname change) — don't
+             * fight it with an automatic reconnect. */
+            ESP_LOGI(TAG, "Disconnected (manual), not retrying");
+        } else if (retry_count < MAX_RETRY) {
             esp_wifi_connect();
             retry_count++;
             ESP_LOGI(TAG, "Retry connection (%d/%d)", retry_count, MAX_RETRY);
@@ -163,6 +170,7 @@ esp_err_t wifi_manager_connect(const char *ssid, const char *password)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
     retry_count = 0;
+    manual_disconnect = false;
     current_state = WIFI_STATE_CONNECTING;
     xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
 
@@ -191,6 +199,7 @@ esp_err_t wifi_manager_connect(const char *ssid, const char *password)
 
 esp_err_t wifi_manager_disconnect(void)
 {
+    manual_disconnect = true;
     esp_wifi_disconnect();
     current_state = WIFI_STATE_DISCONNECTED;
     ip_address[0] = '\0';

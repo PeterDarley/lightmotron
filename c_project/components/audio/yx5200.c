@@ -181,18 +181,6 @@ esp_err_t yx5200_stop(yx5200_t *player)
     return ret;
 }
 
-esp_err_t yx5200_pause(yx5200_t *player)
-{
-    if (!player || !player->initialized) return ESP_ERR_INVALID_STATE;
-    return send_command(player, CMD_PAUSE, 0);
-}
-
-esp_err_t yx5200_resume(yx5200_t *player)
-{
-    if (!player || !player->initialized) return ESP_ERR_INVALID_STATE;
-    return send_command(player, CMD_RESUME, 0);
-}
-
 esp_err_t yx5200_set_volume(yx5200_t *player, int volume)
 {
     if (!player || !player->initialized) return ESP_ERR_INVALID_STATE;

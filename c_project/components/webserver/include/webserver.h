@@ -120,22 +120,26 @@ void response_free(http_response_t *resp);
 void request_free(http_request_t *req);
 
 /**
- * Render a template file with the given context.
+ * Render a template to a complete HTTP response, freeing ctx afterward.
  *
- * Returns a newly allocated string (caller must free).
+ * Returns a 500 response if rendering fails. This is the byte-identical
+ * `render()` helper that used to be duplicated locally in every
+ * components/web/views_*.c file. Global context (theme etc.) is the
+ * caller's responsibility: views start their ctx from
+ * build_global_context() in components/web/context_processors.c.
  */
-char *render_template(const char *template_file, cJSON *context);
-
-/**
- * Set the global context processor function.
- */
-typedef cJSON *(*context_processor_fn)(void);
-void webserver_set_context_processor(context_processor_fn processor);
+http_response_t *webserver_render_response(const char *template_file, cJSON *ctx);
 
 /**
  * Get a form field value from the request.
  */
 const char *request_get_form_field(http_request_t *req, const char *field_name);
+
+/**
+ * Get a form field value, resolving a repeated-key field (submitted as a
+ * JSON array) to its last value instead of returning NULL.
+ */
+const char *request_get_form_field_last(http_request_t *req, const char *field_name);
 
 /**
  * Get a query parameter value.

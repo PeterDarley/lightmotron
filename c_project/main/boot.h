@@ -6,8 +6,10 @@
 /**
  * Initialize all system components in the correct order.
  *
- * Sequence: NVS → SPIFFS → Storage defaults → WiFi → mDNS → Web server →
- * Audio → LEDs → Billboard → Animation
+ * Sequence: NVS → SPIFFS → Storage defaults → WiFi (hostname set, then
+ * connect; captive portal on missing/failed credentials) → mDNS →
+ * IP announcement → onboard-LED IP flash (background task) → Web routes/
+ * server → LEDs → Billboard → Audio → Lighting → Animation
  */
 esp_err_t boot_init(void);
 

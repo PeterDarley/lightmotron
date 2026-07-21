@@ -12,7 +12,6 @@
 static const char *TAG = "audio_player";
 
 #define MAX_MODULES 3
-#define SYSTEM_SETTINGS_FILE "/spiffs/data/system_settings.json"
 #define HEALTH_CHECK_SETTLE_MS 50
 
 static yx5200_t modules[MAX_MODULES];
@@ -24,7 +23,7 @@ esp_err_t audio_player_init_from_config(const cJSON *audio_players_config)
     /* Load master volume / debug-logging from persistent system settings,
      * mirroring AudioPlayer.__init__ in lib/audio.py. Note: audio_reset_on_boot
      * is read and applied by the caller via audio_player_reset_all(). */
-    persistent_dict_t *sys_settings = persistent_dict_open(SYSTEM_SETTINGS_FILE);
+    persistent_dict_t *sys_settings = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     if (sys_settings) {
         cJSON *all = persistent_dict_get_all(sys_settings);
         current_volume = json_get_int(all, "master_volume", 20);
@@ -203,9 +202,4 @@ bool audio_player_is_module_playing(int module_index)
     if (module_index < 0 || module_index >= module_count) return false;
     yx5200_query_status(&modules[module_index]);
     return modules[module_index].is_playing;
-}
-
-int audio_player_get_module_count(void)
-{
-    return module_count;
 }

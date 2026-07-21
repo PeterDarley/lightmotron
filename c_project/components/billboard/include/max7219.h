@@ -44,11 +44,6 @@ void max7219_set_pixel(max7219_t *dev, int x, int y, int val);
 esp_err_t max7219_show(max7219_t *dev);
 
 /**
- * Fill framebuffer with raw data.
- */
-void max7219_fill(max7219_t *dev, const uint8_t *data, int len);
-
-/**
  * Draw a character at pixel position (x, y) using built-in 8x8 font.
  */
 void max7219_draw_char(max7219_t *dev, char c, int x, int y);

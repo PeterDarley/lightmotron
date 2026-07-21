@@ -29,4 +29,10 @@ const char *comms_get_wifi_status(void);
  */
 const char *comms_get_ip_address(void);
 
+/**
+ * Human-readable name for the chip's last reset reason (power-on, brownout,
+ * watchdog, panic, ...). Mirrors reset_cause_name() in lib/utils.py.
+ */
+const char *comms_reset_reason_name(void);
+
 #endif /* COMMS_H */

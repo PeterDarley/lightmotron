@@ -39,16 +39,6 @@ esp_err_t yx5200_play_file(yx5200_t *player, int file_number);
 esp_err_t yx5200_stop(yx5200_t *player);
 
 /**
- * Pause playback.
- */
-esp_err_t yx5200_pause(yx5200_t *player);
-
-/**
- * Resume playback.
- */
-esp_err_t yx5200_resume(yx5200_t *player);
-
-/**
  * Set volume (0-30).
  */
 esp_err_t yx5200_set_volume(yx5200_t *player, int volume);

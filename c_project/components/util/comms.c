@@ -1,5 +1,6 @@
 #include "comms.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "driver/gpio.h"
@@ -77,4 +78,23 @@ const char *comms_get_ip_address(void)
     }
 
     return "0.0.0.0";
+}
+
+const char *comms_reset_reason_name(void)
+{
+    /* Mirrors reset_cause_name() in lib/utils.py, with ESP-IDF's richer
+     * reason set (e.g. brownout, panic) where MicroPython can't distinguish. */
+    switch (esp_reset_reason()) {
+        case ESP_RST_POWERON:   return "power-on";
+        case ESP_RST_EXT:       return "hard reset";
+        case ESP_RST_SW:        return "soft reset";
+        case ESP_RST_PANIC:     return "panic";
+        case ESP_RST_INT_WDT:   return "interrupt watchdog";
+        case ESP_RST_TASK_WDT:  return "task watchdog";
+        case ESP_RST_WDT:       return "watchdog";
+        case ESP_RST_DEEPSLEEP: return "deep-sleep wake";
+        case ESP_RST_BROWNOUT:  return "brownout";
+        case ESP_RST_SDIO:      return "SDIO reset";
+        default:                return "unknown";
+    }
 }

@@ -14,7 +14,6 @@ static const char *TAG = "ota_update";
 
 #define GITHUB_API_URL_FMT "https://api.github.com/repos/%s/%s/releases/latest"
 #define OTA_HTTP_RESPONSE_CAPACITY 8192
-#define SYSTEM_SETTINGS_FILE "/spiffs/data/system_settings.json"
 
 /* Defaults mirror web/views.py's _ota_repo_settings() fallback values */
 #define DEFAULT_OTA_REPO_OWNER "PeterDarley"
@@ -36,7 +35,7 @@ static void load_repo_settings(char *repo_owner, size_t owner_len, char *repo_na
     strncpy(repo_name, DEFAULT_OTA_REPO_NAME, name_len - 1);
     repo_name[name_len - 1] = '\0';
 
-    persistent_dict_t *sys = persistent_dict_open(SYSTEM_SETTINGS_FILE);
+    persistent_dict_t *sys = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     cJSON *ota_settings = persistent_dict_get(sys, "ota");
     if (!ota_settings) {
         return;

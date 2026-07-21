@@ -45,7 +45,7 @@ static void resolve_recursive(const char *range_name, int *indices, int *count, 
         return;
     }
 
-    persistent_dict_t *lighting = persistent_dict_open("/spiffs/data/lighting_settings.json");
+    persistent_dict_t *lighting = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
     if (!lighting) return;
 
     cJSON *models = persistent_dict_get(lighting, "models");

@@ -60,7 +60,13 @@ void effect_resolve(const cJSON *effect_def, active_job_t *job)
             json_get_string(effect_def, "pattern", "solid"),
             sizeof(job->pattern_name) - 1);
 
-    job->duration = json_get_int(effect_def, "duration", 40);
+    /* Leave duration/period at the "unset" sentinel of 0 rather than a
+     * blanket default: each pattern_*() function in patterns.c applies its
+     * own pattern-specific default (e.g. pulse's on-duration defaults to 10,
+     * not 40), mirroring the per-call effect.get("duration", X) defaults
+     * used throughout lib/lighting/patterns.py. Forcing a single default
+     * here would shadow those per-pattern defaults. */
+    job->duration = json_get_int(effect_def, "duration", 0);
     job->cycles = json_get_int(effect_def, "cycles", 0);
     job->period = json_get_int(effect_def, "period", 0);
     job->width = json_get_int(effect_def, "width", 5);
@@ -79,6 +85,18 @@ void effect_resolve(const cJSON *effect_def, active_job_t *job)
     const char *after = json_get_string(effect_def, "after", NULL);
     if (after) {
         strncpy(job->after, after, sizeof(job->after) - 1);
+    }
+
+    /* Legacy "frequency" support for the blink pattern (mirrors
+     * pattern_blink()'s runtime fallback in patterns.py, kept for configs
+     * that predate Lighting.convert_frequencies_to_durations()). Resolved
+     * once here since frequency is static for the life of the job. */
+    cJSON *freq_item = cJSON_GetObjectItem(effect_def, "frequency");
+    if (freq_item && cJSON_IsNumber(freq_item) && freq_item->valuedouble > 0 &&
+        strcmp(job->pattern_name, "blink") == 0) {
+        int half_period = (int)(20.0 / freq_item->valuedouble + 0.5);
+        if (half_period < 1) half_period = 1;
+        job->duration = half_period;
     }
 }
 

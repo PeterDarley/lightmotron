@@ -23,18 +23,6 @@
 #include <ctype.h>
 #include <stdbool.h>
 
-static const char *LIGHTING_STORE_PATH = "/spiffs/data/lighting_settings.json";
-
-static http_response_t *render(const char *tpl, cJSON *ctx)
-{
-    char *html = template_render_file(tpl, ctx);
-    cJSON_Delete(ctx);
-    if (!html) return response_create(500, "text/plain", "Template error");
-    http_response_t *res = response_create(200, "text/html", html);
-    free(html);
-    return res;
-}
-
 /* ---------------------------------------------------------------------
  * Filter metadata — mirrors lib/lighting/metadata.py's FILTER_METADATA.
  * ------------------------------------------------------------------- */
@@ -130,27 +118,6 @@ static bool is_hex6(const char *s)
         if (!isxdigit((unsigned char)s[i])) return false;
     }
     return s[6] == '\0';
-}
-
-/* request_get_form_field() returns NULL when a field arrives as a JSON
- * array (multi-value submit). filter_param_color can arrive that way
- * because the <select> and its paired <input type=color> share the same
- * field name; the picker's value is submitted last and reflects the
- * actual choice — mirrors FilterEditView.post()'s
- * `raw_value[-1] if raw_value else ""` handling. */
-static const char *form_field_last(http_request_t *req, const char *field_name)
-{
-    if (!req || !req->form_data || !field_name) return NULL;
-    cJSON *field = cJSON_GetObjectItem(req->form_data, field_name);
-    if (!field) return NULL;
-    if (cJSON_IsString(field)) return field->valuestring;
-    if (cJSON_IsArray(field)) {
-        int n = cJSON_GetArraySize(field);
-        if (n <= 0) return NULL;
-        cJSON *last = cJSON_GetArrayItem(field, n - 1);
-        return (last && cJSON_IsString(last)) ? last->valuestring : NULL;
-    }
-    return NULL;
 }
 
 static int cmp_str(const void *a, const void *b)
@@ -367,13 +334,13 @@ http_response_t *view_filters(http_request_t *req)
     (void)req;
     cJSON *model = lighting_get_settings();
     cJSON *filters_dict = model ? cJSON_GetObjectItem(model, "filters") : NULL;
-    return render("setup/filters.html", render_filters_list_ctx(filters_dict));
+    return webserver_render_response("setup/filters.html", render_filters_list_ctx(filters_dict));
 }
 
 /* POST /filters — create_filter / delete_filter, mirrors FiltersView.post(). */
 http_response_t *view_filters_post(http_request_t *req)
 {
-    persistent_dict_t *store = persistent_dict_open(LIGHTING_STORE_PATH);
+    persistent_dict_t *store = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
     cJSON *model = lighting_get_settings();
     if (!model) return response_create(500, "text/plain", "Error");
 
@@ -392,7 +359,7 @@ http_response_t *view_filters_post(http_request_t *req)
         persistent_dict_save(store);
         cJSON *ctx = build_global_context();
         fill_filter_edit_context(ctx, model, filter_name);
-        return render("setup/filter_edit.html", ctx);
+        return webserver_render_response("setup/filter_edit.html", ctx);
     }
 
     if (action && strcmp(action, "delete_filter") == 0 && filter_name && filter_name[0] &&
@@ -402,7 +369,7 @@ http_response_t *view_filters_post(http_request_t *req)
         persistent_dict_save(store);
     }
 
-    return render("setup/filters.html", render_filters_list_ctx(filters_dict));
+    return webserver_render_response("setup/filters.html", render_filters_list_ctx(filters_dict));
 }
 
 /* GET/POST /filters/edit — mirrors FilterEditView.get()/post(). */
@@ -420,11 +387,11 @@ http_response_t *view_filter_edit(http_request_t *req)
         }
         cJSON *ctx = build_global_context();
         fill_filter_edit_context(ctx, model, filter_name);
-        return render("setup/filter_edit.html", ctx);
+        return webserver_render_response("setup/filter_edit.html", ctx);
     }
 
     /* POST */
-    persistent_dict_t *store = persistent_dict_open(LIGHTING_STORE_PATH);
+    persistent_dict_t *store = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
     if (!filters_dict) { filters_dict = cJSON_CreateObject(); cJSON_AddItemToObject(model, "filters", filters_dict); }
 
     const char *action = request_get_form_field(req, "action");
@@ -443,7 +410,7 @@ http_response_t *view_filter_edit(http_request_t *req)
                 const char *param_name = meta->optional[i];
                 char field[64];
                 snprintf(field, sizeof(field), "filter_param_%s", param_name);
-                const char *raw_value = form_field_last(req, field);
+                const char *raw_value = request_get_form_field_last(req, field);
                 if (!raw_value) continue;
 
                 char trimmed[128];
@@ -479,7 +446,7 @@ http_response_t *view_filter_edit(http_request_t *req)
         }
 
         if (strcmp(filter_type, "sizzle") == 0 || strcmp(filter_type, "scintillate") == 0) {
-            const char *vp_raw = form_field_last(req, "filter_param_variation_percent");
+            const char *vp_raw = request_get_form_field_last(req, "filter_param_variation_percent");
             double variation_percent = 20.0;
             if (vp_raw && vp_raw[0]) {
                 char *endptr = NULL;
@@ -507,10 +474,10 @@ http_response_t *view_filter_edit(http_request_t *req)
             cJSON_DeleteItemFromObject(filters_dict, filter_name);
             persistent_dict_save(store);
         }
-        return render("setup/filters.html", render_filters_list_ctx(filters_dict));
+        return webserver_render_response("setup/filters.html", render_filters_list_ctx(filters_dict));
     }
 
-    return render("setup/filters.html", render_filters_list_ctx(filters_dict));
+    return webserver_render_response("setup/filters.html", render_filters_list_ctx(filters_dict));
 }
 
 /* POST /filters/color_select — mirrors ColorSelectView.post(). Generic
@@ -526,7 +493,7 @@ http_response_t *view_filter_color_select(http_request_t *req)
         field_name = field_name_buf;
     }
 
-    const char *color_value = form_field_last(req, field_name);
+    const char *color_value = request_get_form_field_last(req, field_name);
     if (!color_value) color_value = "";
 
     cJSON *model = lighting_get_settings();
@@ -559,7 +526,7 @@ http_response_t *view_filter_color_select(http_request_t *req)
     cJSON_AddBoolToObject(ctx, "is_named", is_named);
     cJSON_AddBoolToObject(ctx, "is_picker", is_picker);
 
-    return render("setup/color_select.html", ctx);
+    return webserver_render_response("setup/color_select.html", ctx);
 }
 
 /* GET /filters/summary — mirrors FiltersSummaryView.get(). */
@@ -583,5 +550,5 @@ http_response_t *view_filters_summary(http_request_t *req)
         }
     }
     cJSON_AddItemToObject(ctx, "filter_names", names);
-    return render("setup/filters_summary.html", ctx);
+    return webserver_render_response("setup/filters_summary.html", ctx);
 }

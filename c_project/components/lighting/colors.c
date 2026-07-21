@@ -130,7 +130,7 @@ static rgb_t color_resolve_custom(const char *name)
     rgb_t white = {255, 255, 255};
     if (!name) return white;
 
-    persistent_dict_t *lighting = persistent_dict_open("/spiffs/data/lighting_settings.json");
+    persistent_dict_t *lighting = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
     if (!lighting) return white;
 
     cJSON *models = persistent_dict_get(lighting, "models");

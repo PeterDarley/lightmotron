@@ -41,9 +41,12 @@ static char active_soundscape[MAX_TITLE_LEN] = "";
  * Mirrors SoundManager._soundscape_state in lib/sounds.py. */
 static cJSON *soundscape_state = NULL;
 
-static cJSON *get_sounds_dict(void)
+/* Shared by get_sounds_dict()/get_soundscapes_dict(): both walk the same
+ * store -> models -> current_model path and only differ in which child key
+ * of the current model they return. */
+static cJSON *get_current_model_child(const char *key)
 {
-    persistent_dict_t *store = persistent_dict_open("/spiffs/data/lighting_settings.json");
+    persistent_dict_t *store = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
     if (!store) return NULL;
 
     cJSON *models = persistent_dict_get(store, "models");
@@ -53,7 +56,12 @@ static cJSON *get_sounds_dict(void)
     cJSON *model = cJSON_GetObjectItem(models, current->valuestring);
     if (!model) return NULL;
 
-    return cJSON_GetObjectItem(model, "sounds");
+    return cJSON_GetObjectItem(model, key);
+}
+
+static cJSON *get_sounds_dict(void)
+{
+    return get_current_model_child("sounds");
 }
 
 static cJSON *get_sound_by_title(const char *title)
@@ -65,17 +73,7 @@ static cJSON *get_sound_by_title(const char *title)
 
 static cJSON *get_soundscapes_dict(void)
 {
-    persistent_dict_t *store = persistent_dict_open("/spiffs/data/lighting_settings.json");
-    if (!store) return NULL;
-
-    cJSON *models = persistent_dict_get(store, "models");
-    cJSON *current = persistent_dict_get(store, "current_model");
-    if (!models || !current || !current->valuestring) return NULL;
-
-    cJSON *model = cJSON_GetObjectItem(models, current->valuestring);
-    if (!model) return NULL;
-
-    return cJSON_GetObjectItem(model, "soundscapes");
+    return get_current_model_child("soundscapes");
 }
 
 static cJSON *get_soundscape_by_name(const char *name)
@@ -197,6 +195,72 @@ esp_err_t sound_manager_stop(const char *title)
     return ESP_OK;
 }
 
+bool sound_manager_stop_verified(const char *title)
+{
+    if (!title || !initialized) return false;
+
+    /* Collect candidate modules under the mutex, but do the slow hardware
+     * retry loop outside it so a stubborn module (up to 5 x ~150ms) doesn't
+     * stall the poll task or other callers — mirrors SoundManager.stop_sound
+     * in lib/sounds.py, which also only flips state on hardware confirmation. */
+    int candidates[MAX_PLAYING_SOUNDS];
+    int candidate_count = 0;
+
+    xSemaphoreTake(sound_mutex, portMAX_DELAY);
+    for (int i = 0; i < MAX_PLAYING_SOUNDS; i++) {
+        if (playing_sounds[i].active && strcmp(playing_sounds[i].title, title) == 0) {
+            candidates[candidate_count++] = playing_sounds[i].module_index;
+        }
+    }
+    xSemaphoreGive(sound_mutex);
+
+    if (candidate_count == 0) return false;
+
+    bool stopped_any = false;
+    for (int c = 0; c < candidate_count; c++) {
+        int module_idx = candidates[c];
+        bool module_stopped = false;
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            audio_player_stop_module(module_idx);
+            vTaskDelay(pdMS_TO_TICKS(150));
+
+            /* audio_player_is_module_playing re-queries hardware status. */
+            if (!audio_player_is_module_playing(module_idx)) {
+                module_stopped = true;
+                break;
+            }
+            ESP_LOGW(TAG, "stop verify module=%d attempt=%d still playing", module_idx, attempt + 1);
+        }
+
+        if (module_stopped) {
+            stopped_any = true;
+            xSemaphoreTake(sound_mutex, portMAX_DELAY);
+            for (int i = 0; i < MAX_PLAYING_SOUNDS; i++) {
+                if (playing_sounds[i].active && playing_sounds[i].module_index == module_idx &&
+                    strcmp(playing_sounds[i].title, title) == 0) {
+                    playing_sounds[i].active = false;
+                }
+            }
+            /* Stopping a soundscape-driven sound ends the soundscape too. */
+            if (active_soundscape[0] != '\0') {
+                active_soundscape[0] = '\0';
+                if (soundscape_state) {
+                    cJSON_Delete(soundscape_state);
+                    soundscape_state = NULL;
+                }
+            }
+            xSemaphoreGive(sound_mutex);
+            ESP_LOGI(TAG, "Verified stop of '%s' on module %d", title, module_idx);
+        } else {
+            ESP_LOGE(TAG, "Verified stop FAILED for '%s' on module %d (hardware still playing)",
+                     title, module_idx);
+        }
+    }
+
+    return stopped_any;
+}
+
 void sound_manager_stop_all(void)
 {
     if (!initialized) return;
@@ -241,6 +305,22 @@ cJSON *sound_manager_get_playing(void)
     }
     xSemaphoreGive(sound_mutex);
     return arr;
+}
+
+int sound_manager_get_playing_module(const char *title)
+{
+    if (!title || !initialized) return -1;
+
+    xSemaphoreTake(sound_mutex, portMAX_DELAY);
+    int module_index = -1;
+    for (int i = 0; i < MAX_PLAYING_SOUNDS; i++) {
+        if (playing_sounds[i].active && strcmp(playing_sounds[i].title, title) == 0) {
+            module_index = playing_sounds[i].module_index;
+            break;
+        }
+    }
+    xSemaphoreGive(sound_mutex);
+    return module_index;
 }
 
 /* Replace (or create) the state object tracked for a soundscape entry. */

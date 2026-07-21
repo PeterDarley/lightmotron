@@ -14,6 +14,8 @@ typedef struct {
     int stop_sounds_on_start_count;
     char stop_sounds_on_end[8][64];
     int stop_sounds_on_end_count;
+    char trigger_scenes_on_completion[8][64];
+    int trigger_scenes_on_completion_count;
 } scene_metadata_t;
 
 /**

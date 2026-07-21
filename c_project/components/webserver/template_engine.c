@@ -81,9 +81,13 @@ cJSON *template_resolve_var(const char *var_name, cJSON *context)
         clean[--len] = '\0';
     }
 
-    /* Check for string literal */
-    if ((clean[0] == '"' && clean[len - 1] == '"') ||
-        (clean[0] == '\'' && clean[len - 1] == '\'')) {
+    /* Check for string literal. Guard len >= 2 (matching Python's
+     * `len(expression) >= 2` check) so a 0- or 1-char expression never reads
+     * clean[len - 1] out of bounds and never mis-treats a single quote
+     * character as an (empty) literal. */
+    if (len >= 2 &&
+        ((clean[0] == '"' && clean[len - 1] == '"') ||
+         (clean[0] == '\'' && clean[len - 1] == '\''))) {
         /* Strip quotes and add as temporary item in context.
          * Using the literal content as key under a prefix avoids collisions
          * and ensures proper lifetime (context owns the cJSON node). */
@@ -186,8 +190,11 @@ static bool is_truthy(cJSON *val)
     if (cJSON_IsString(val)) {
         const char *s = val->valuestring;
         if (!s || *s == '\0') return false;
-        if (strcmp(s, "0") == 0 || strcasecmp(s, "false") == 0 ||
-            strcasecmp(s, "none") == 0) {
+        /* Python: `str(raw) not in ("", "0", "False", "None")` — exact,
+         * case-sensitive match. A lowercase "false"/"none" string value is
+         * truthy in Python, so this must not use a case-insensitive compare. */
+        if (strcmp(s, "0") == 0 || strcmp(s, "False") == 0 ||
+            strcmp(s, "None") == 0) {
             return false;
         }
         return true;
@@ -333,36 +340,20 @@ bool template_eval_condition(const char *expr, cJSON *context)
         return result;
     }
 
-    /* Handle '==' */
-    char *eq_pos = strstr(clean, " == ");
-    if (eq_pos) {
-        char left_name[256], right_name[256];
-        size_t left_len = eq_pos - clean;
-        if (left_len > sizeof(left_name) - 1) left_len = sizeof(left_name) - 1;
-        memcpy(left_name, clean, left_len);
-        left_name[left_len] = '\0';
-        strncpy(right_name, eq_pos + 4, sizeof(right_name) - 1);
-        right_name[sizeof(right_name) - 1] = '\0';
-
-        cJSON *left_val = template_resolve_var(left_name, context);
-        cJSON *right_val = template_resolve_var(right_name, context);
-        char *left_str = value_to_string(left_val);
-        char *right_str = value_to_string(right_val);
-        bool result = values_equal(left_str, right_str);
-        free(left_str);
-        free(right_str);
-        return result;
-    }
-
-    /* Handle '!=' */
-    char *neq_pos = strstr(clean, " != ");
+    /* Handle '!=' (checked before '==', matching Python's explicit ordering —
+     * "must check before == to avoid false split on !==" — and matched as a
+     * bare 2-char token rather than " != " with mandatory spaces: Python does
+     * `"!=" in expression` / `expression.split("!=", 1)` with no space
+     * requirement, so `a!=b` must work same as `a != b`. Surrounding
+     * whitespace on each side is stripped by template_resolve_var itself. */
+    char *neq_pos = strstr(clean, "!=");
     if (neq_pos) {
         char left_name[256], right_name[256];
         size_t left_len = neq_pos - clean;
         if (left_len > sizeof(left_name) - 1) left_len = sizeof(left_name) - 1;
         memcpy(left_name, clean, left_len);
         left_name[left_len] = '\0';
-        strncpy(right_name, neq_pos + 4, sizeof(right_name) - 1);
+        strncpy(right_name, neq_pos + 2, sizeof(right_name) - 1);
         right_name[sizeof(right_name) - 1] = '\0';
 
         cJSON *left_val = template_resolve_var(left_name, context);
@@ -370,6 +361,27 @@ bool template_eval_condition(const char *expr, cJSON *context)
         char *left_str = value_to_string(left_val);
         char *right_str = value_to_string(right_val);
         bool result = !values_equal(left_str, right_str);
+        free(left_str);
+        free(right_str);
+        return result;
+    }
+
+    /* Handle '==' — likewise a bare 2-char token, no surrounding spaces required. */
+    char *eq_pos = strstr(clean, "==");
+    if (eq_pos) {
+        char left_name[256], right_name[256];
+        size_t left_len = eq_pos - clean;
+        if (left_len > sizeof(left_name) - 1) left_len = sizeof(left_name) - 1;
+        memcpy(left_name, clean, left_len);
+        left_name[left_len] = '\0';
+        strncpy(right_name, eq_pos + 2, sizeof(right_name) - 1);
+        right_name[sizeof(right_name) - 1] = '\0';
+
+        cJSON *left_val = template_resolve_var(left_name, context);
+        cJSON *right_val = template_resolve_var(right_name, context);
+        char *left_str = value_to_string(left_val);
+        char *right_str = value_to_string(right_val);
+        bool result = values_equal(left_str, right_str);
         free(left_str);
         free(right_str);
         return result;
@@ -417,6 +429,7 @@ static const char *find_end_tag(const char *start, const char *open_tag,
 static char *process_conditionals(const char *template_str, cJSON *context);
 static char *process_variables(const char *template_str, cJSON *context);
 static char *process_includes(const char *template_str, cJSON *context);
+static char *process_for_loops(const char *template_str, cJSON *context);
 
 /**
  * Fully render one loop iteration's body against its per-iteration context.
