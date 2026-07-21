@@ -4,7 +4,7 @@ This document provides detailed technical specifications for patterns and filter
 
 ## Web UI View Modules
 
-Web request handlers are being split by logical feature area rather than by file length. For example, named-range handlers now live in `web/views_named_ranges.py`, while `web/views.py` remains the compatibility export module used by route registration.
+Web request handlers are split by logical feature area into per-feature modules: `web/views_home.py` (home page, scene panel, animation), `web/views_models.py`, `web/views_scenes.py`, `web/views_effects.py`, `web/views_filters.py`, `web/views_colors.py` (custom colors and the shared color-select fragment), `web/views_sounds.py`, `web/views_soundscapes.py`, `web/views_storage.py` (storage viewer, backup/restore), `web/views_system.py` (setup, status, theme, hostname, system settings, reboot, OTA updates), and `web/views_named_ranges.py`. Shared helpers and the `lights` singleton live in `web/views_common.py`, while `web/views.py` is a thin aggregator that wires up the named-range views and re-exports every view class for route registration (`web/routes.py` resolves handlers as `views.ClassName`).
 
 Static assets served by the built-in web server use content-type-based cache policy. JavaScript and CSS responses are sent with `Cache-Control: no-cache, max-age=0, must-revalidate` so browser UI updates are picked up immediately after deployment, while non-code assets keep a longer cache lifetime.
 Static response writes use a send-all loop so larger CSS/JS payloads are not truncated by partial socket writes.

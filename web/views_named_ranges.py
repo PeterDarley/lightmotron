@@ -43,6 +43,22 @@ def _parse_selected_tokens(selected_leds_str: str) -> list:
     return tokens
 
 
+def _resolve_selected_leds(tokens: list) -> list:
+    """Resolve a list of selection tokens (ints, "named:x" refs) to a deduplicated flat LED index list."""
+
+    resolved = []
+    for item in tokens:
+        try:
+            targets = _lights.get_targets(item)
+        except Exception:
+            targets = []
+        for target in targets:
+            if target not in resolved:
+                resolved.append(target)
+
+    return resolved
+
+
 def _named_ranges_has_cycle(named_ranges: dict) -> bool:
     """Detect cycles in the named_ranges graph."""
 
@@ -159,15 +175,7 @@ def _named_range_context(sort_by: str = "name") -> dict:
             seen_direct_leds.add(item)
             direct_selected_leds.append(item)
 
-    resolved = []
-    for item in _selected_leds:
-        try:
-            targets = _lights.get_targets(item)
-        except Exception:
-            targets = []
-        for target in targets:
-            if target not in resolved:
-                resolved.append(target)
+    resolved = _resolve_selected_leds(_selected_leds)
 
     selected_set = set(direct_selected_leds)
     led_list = [
@@ -272,15 +280,7 @@ class NamedRangeView(View):
 
         _lights.leds.clear()
         if _selected_leds:
-            resolved = []
-            for item in _selected_leds:
-                try:
-                    targets = _lights.get_targets(item)
-                except Exception:
-                    targets = []
-                for target in targets:
-                    if target not in resolved:
-                        resolved.append(target)
+            resolved = _resolve_selected_leds(_selected_leds)
             _lights.leds.identify(resolved)
         _lights.leds.show()
 
@@ -343,15 +343,7 @@ class NamedRangeSetView(View):
                 seen_direct_leds.add(item)
                 direct_selected_leds.append(item)
 
-        resolved = []
-        for item in tokens:
-            try:
-                targets = _lights.get_targets(item)
-            except Exception:
-                targets = []
-            for target in targets:
-                if target not in resolved:
-                    resolved.append(target)
+        resolved = _resolve_selected_leds(tokens)
 
         if resolved:
             _lights.leds.identify(resolved)
@@ -384,15 +376,7 @@ class NamedRangeRemoveSubrangeView(View):
         if token and token.startswith("named:"):
             _selected_leds = [item for item in _selected_leds if not (isinstance(item, str) and item == token)]
 
-        resolved = []
-        for item in _selected_leds:
-            try:
-                targets = _lights.get_targets(item)
-            except Exception:
-                targets = []
-            for target in targets:
-                if target not in resolved:
-                    resolved.append(target)
+        resolved = _resolve_selected_leds(_selected_leds)
 
         if resolved:
             _lights.leds.identify(resolved)

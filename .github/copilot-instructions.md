@@ -10,7 +10,7 @@ Guideline:
 ### Johnny is the name of the AI agent.
 
 ### C project
-The `c_project/` directory exists but does not need to be kept in sync with the Python implementation. Do not update `c_project/` when making changes to the Python code.
+The `c_project/` directory (an ESP-IDF/C port of the Python implementation, see `c_project/c_plan.md`) must be kept in sync with the Python implementation. Whenever changes are made to the Python code, update the corresponding C code in the same session so `c_project/` reflects current behavior. See `c_project/SYNC_NOTES.md` for the file-by-file Python-to-C mapping and audit history.
 
 ### Documentation must be kept in sync
 Whenever code changes are made, update the relevant documentation (README.md, docs/*.md, docs/settings_template.py) in the same session. Do not leave documentation stale after a code change.
@@ -22,7 +22,7 @@ Do not use `upload.ps1` or `repl.ps1`. These are for manual use by the user only
 Put any temporary files needed during work (screenshots, logs, test outputs, etc.) into the `copilot_working` directory, which is excluded from the repo.
 
 ### Shared lib directory
-The `lib/` directory is a shared submodule used across multiple projects. Do not remove modules from it just because they are unused in this project.
+The `lib/` directory is a shared submodule used across multiple projects. Do not remove modules, classes, or functions from it just because they appear unused/dead in this project (e.g. `lib/control.py`'s `ThinkTank`/`Orientation`, or anything else in `lib/` with no callers found here) — another project using this submodule may depend on them. "Unused in lightmotron" is not the same as "safe to delete."
 
 ### Type hints
 All function and method parameters should be typed. Return types should also be specified for anything that returns a non-None value.

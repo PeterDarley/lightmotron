@@ -170,7 +170,7 @@ Workflow:
 GitHub is the canonical source — any file on the device that differs from the repo will be overwritten. Files on the device that are not in the repo are left untouched.
 
 ### Status Page
-Monitor system health and performance. View memory usage, storage space, networking details (hostname, IP, connection state, SSID), animation state, and configured audio modules with current responsiveness. Download/restore all configuration as JSON.
+Monitor system health and performance. View memory usage, storage space, networking details (hostname, IP, connection state, SSID), animation state, the reason for the last reboot (power-on, watchdog, soft reset, etc. — useful for diagnosing unexpected restarts; also printed to the serial log at boot), and configured audio modules with current responsiveness. Download/restore all configuration as JSON.
 Status cards use the same responsive card grid as Setup (up to four cards per row on wide screens), and status tables are rendered with theme-friendly styling so they blend with the active CSS theme.
 Restore now uses a `.json` file upload flow (select file -> review -> confirm) instead of pasting raw JSON into a textarea.
 

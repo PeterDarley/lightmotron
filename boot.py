@@ -22,6 +22,12 @@ except Exception:
 
 print("\nBooting...")
 
+from utils import reset_cause_name  # type: ignore
+
+# Log why the MCU restarted — distinguishes a true power-on from watchdog,
+# soft, or hard resets when diagnosing unexpected reboots or hangs.
+print("Reset cause:", reset_cause_name())
+
 from storage import PersistentDict  # type: ignore
 
 # Seed all default settings into persistent storage for any missing keys.
