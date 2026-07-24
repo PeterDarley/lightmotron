@@ -207,8 +207,8 @@ from C until audited above:
 - **Known gaps, deliberately left (need a small follow-up, low priority):**
   - `main.py`'s debug-only `add_colors({"test color": (123,45,67)})` has no C equivalent
     (no runtime "add named color" API exists in `lighting.h`/`colors.h`) — debug-only, low value.
-  - `wifi_manager.c` hardcodes a 10s connect timeout vs. Python's `timeout=20` — a real
-    behavior difference (C times out twice as fast), worth a quick fix later.
+  - ~~`wifi_manager.c` hardcodes a 10s connect timeout vs. Python's `timeout=20`~~ — fixed
+    since this audit, now 20000ms.
   - `boot_seed_defaults()` seeds a `"billboard"` settings block with a `"clk"` key that
     Python's real defaults don't include (only a legacy `"sck"`-named fallback) — numeric pin
     values match exactly, so no hardware risk, just a schema-naming quirk.
@@ -417,7 +417,8 @@ from C until audited above:
 
 ## Consolidated follow-up list (small, deliberately deferred items — not a fresh audit needed)
 
-1. `wifi_manager.c` hardcodes a 10s WiFi connect timeout vs. Python's 20s (real behavior diff).
+1. ~~`wifi_manager.c` hardcodes a 10s WiFi connect timeout vs. Python's 20s (real behavior diff).~~
+   Fixed since this audit: `WIFI_CONNECT_TIMEOUT_MS` is now 20000, matching Python.
 2. `lighting.c`: `trigger_scenes_on_completion` scene-metadata field not read (needs a
    `metadata.h/.c` addition); `inherit_target`/passthrough chaining between `after`-dependent
    scene entries not implemented; `convert_frequencies_to_durations()` migration utility not
@@ -436,4 +437,6 @@ from C until audited above:
    values match exactly, so no hardware risk, just a schema-naming quirk.
 7. `main.py`'s debug-only `add_colors({"test color": (123,45,67)})` has no C equivalent (no
    runtime "add named color" API) — debug-only, low value.
-8. `status.html`'s "MicroPython version"/"Platform" fields are blank in the C status page.
+8. ~~`status.html`'s "MicroPython version"/"Platform" fields are blank in the C status page.~~
+   Fixed since this audit: `views_system.c` now reuses those context keys to report
+   `"ESP-IDF " IDF_VER` / `CONFIG_IDF_TARGET` instead of leaving them blank.

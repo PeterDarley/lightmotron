@@ -34,7 +34,11 @@ c_project/
 │   │   ├── request_parser.c / .h   # Request line, headers, body, form parsing
 │   │   ├── response.c / .h         # Response construction & sending
 │   │   ├── static_files.c / .h     # Static file serving with ETag/caching
-│   │   └── mime_types.c / .h       # MIME type lookup
+│   │   ├── mime_types.c / .h       # MIME type lookup
+│   │   └── asset_cache.c / .h      # Boot-time RAM cache of all webassets
+│   │                                # (templates/www) so requests never read
+│   │                                # flash mid-request -- see
+│   │                                # ../AUDIO_UART_CRASH_NOTES.md
 │   ├── storage/
 │   │   ├── CMakeLists.txt
 │   │   ├── persistent_dict.c / .h  # JSON-backed persistent key-value store
@@ -71,14 +75,17 @@ c_project/
 │   ├── web/
 │   │   ├── CMakeLists.txt
 │   │   ├── routes.c / .h           # Route registration table
-│   │   ├── views.c / .h            # All view handlers (GET/POST dispatch)
+│   │   ├── views_home.c            # Home page, scene panel, animation
 │   │   ├── views_named_ranges.c/.h # Named range views
 │   │   ├── views_scenes.c / .h     # Scene CRUD views
 │   │   ├── views_effects.c / .h    # Effect CRUD views
 │   │   ├── views_filters.c / .h    # Filter CRUD views
+│   │   ├── views_models.c         # Model CRUD views
 │   │   ├── views_sounds.c / .h     # Sound views
 │   │   ├── views_soundscapes.c / .h # Soundscape views
-│   │   ├── views_system.c / .h     # System settings, status, reboot
+│   │   ├── views_system.c / .h     # Setup/status/theme/hostname/settings/
+│   │   │                          # reboot/OTA/custom colors (mirrors
+│   │   │                          # Python's views_system.py + views_colors.py)
 │   │   ├── views_storage.c / .h    # Backup/restore views
 │   │   └── context_processors.c/.h # Global context injection (theme)
 │   └── util/
@@ -86,7 +93,15 @@ c_project/
 │       ├── timing.c / .h           # FreeRTOS timer wrappers
 │       ├── comms.c / .h            # Onboard LED blink, WiFi status
 │       └── utils.c / .h            # General utilities
-├── data/                           # SPIFFS filesystem image (www/, templates/)
+├── data/                           # SPIFFS staging (www/, templates/) --
+│   │                                # staged here at CMake configure time,
+│   │                                # then imaged into its own `webassets`
+│   │                                # partition (see partitions.csv below);
+│   │                                # runtime settings JSON lives in a
+│   │                                # SEPARATE `data` partition mounted at
+│   │                                # /data, not under this SPIFFS image, so
+│   │                                # an ordinary code/asset deploy never
+│   │                                # touches user settings
 │   ├── www/                        # Static web assets (copied from parent project)
 │   └── templates/                  # HTML templates (copied from parent project)
 └── c_plan.md                       # This file
@@ -147,8 +162,8 @@ c_project/
 
 #### 3.1 HTTP Server (`components/webserver/`)
 - **Socket layer:** BSD sockets (LWIP), SO_REUSEADDR, listen(1)
-- **Thread model:** FreeRTOS task per client (configurable stack 8KB)
-- **Keep-alive:** 5s idle timeout, HTTP/1.1 default keep-alive
+- **Thread model:** FreeRTOS task per client (12KB stack, capped at 6 concurrent)
+- **Keep-alive:** 3s idle timeout, HTTP/1.1 default keep-alive
 - **Request parsing:**
   - Read line-by-line from socket (4KB initial buffer)
   - Parse method + path + version
@@ -252,7 +267,10 @@ c_project/
   ```c
   typedef void (*pattern_fn)(const effect_t* effect, int tick, led_output_t* output, int* output_count);
   ```
-- Patterns: solid, blink, pulse, fade_in, breathe, wave, cylon, phaser_strip
+- Patterns (15): solid, blink, pulse, fade_in, breathe, wave, cylon,
+  phaser_strip, rainbow, color_wipe, fire, gradient, warp_pulse,
+  theater_chase, heartbeat. Full parameter reference for every pattern is in
+  [../docs/internals.md](../docs/internals.md).
 - Each writes to output array: `[(led_index, r, g, b), ...]`
 
 #### 5.3 Filters (`components/lighting/filters.c`)
@@ -261,7 +279,9 @@ c_project/
   typedef void (*filter_fn)(const filter_config_t* config, led_output_t* target_colors,
                             const rgb_t* current_colors, int count, filter_state_t* state);
   ```
-- Filters: null, brightness, sizzle, scintillate, spike, dropout
+- Filters (12): null, brightness, sizzle, scintillate, spike, dropout,
+  afterglow, tint, shimmer, hue_shift, saturation, vignette. Full parameter
+  reference for every filter is in [../docs/internals.md](../docs/internals.md).
 - Each receives target + current colors, applies diff to current
 - Per-effect state struct for spike/dropout timing
 
@@ -332,10 +352,16 @@ c_project/
 | Main (app_main) | 0 | 5 | 8KB |
 | WiFi (system) | 0 | 23 | 4KB |
 | HTTP server accept | 1 | 5 | 4KB |
-| HTTP client handler | 1 | 4 | 8KB |
+| HTTP client handler | 1 | 4 | 12KB (internal RAM only; capped at 6 concurrent via a counting semaphore -- see `MAX_CLIENT_TASKS` in `webserver.c` and `AUDIO_UART_CRASH_NOTES.md`'s "stack fragmentation" note for why this needs to stay right-sized rather than generously oversized) |
 | Animation tick | 0 | 6 | 4KB |
 | Audio polling | 0 | 3 | 4KB |
 | Billboard scroll | 0 | 2 | 2KB |
+
+WiFi station power-save is explicitly disabled (`esp_wifi_set_ps(WIFI_PS_NONE)`
+right after `esp_wifi_start()` in `wifi_manager.c`) — the default modem-sleep
+mode only wakes the radio on DTIM beacon intervals, which made mDNS
+(`<hostname>.local`) resolve unreliably since unsolicited multicast queries
+often arrived between wake windows.
 
 ### Data Flow
 ```

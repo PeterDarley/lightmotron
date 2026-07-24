@@ -203,13 +203,10 @@ once.
 
 ## Still to do
 
-- Not yet flashed to real hardware with the current partition layout —
-  build success only confirmed so far. The board currently has data
-  flashed under the *old* single-`storage`-partition scheme; adopting
-  this partition table change requires a full wipe/reflash (back up via
-  Status page's "Download Backup" first, restore after — note the backup
-  doesn't cover WiFi credentials or sounds/soundscapes, so those need
-  re-entering by hand).
+- ~~Not yet flashed to real hardware with the current partition layout~~ —
+  since resolved: the two-partition layout has been running on real
+  hardware across many sessions since, including through the OTA/crash/
+  webserver work documented in `AUDIO_UART_CRASH_NOTES.md`.
 - The modal-close JS refresh list in `templates/setup.html` still doesn't
   include System Settings or Models, so after editing those two
   specifically the card won't visually update until a full page reload

@@ -220,6 +220,13 @@ Once configured, use the **Home** page to:
 | **Wave** | Moving light across LEDs | Scanning beams, comet sweep |
 | **Cylon** | Wave that bounces back and forth | Iconic bouncing scan effect |
 | **Phaser Strip** | Two waves converge from opposite ends | Sci-fi phaser effects |
+| **Rainbow** | Cycling, spatially-spread hue sweep | Party lights, prismatic effects |
+| **Color Wipe** | Progressive fill, then wipe back | Loading/charging sequences, reveals |
+| **Fire** | Flickering flame simulation | Torches, engine fire, forges |
+| **Gradient** | Spatial blend across two or more colors, optionally scrolling | Ambient backdrops, smooth color transitions |
+| **Warp Pulse** | Band expanding outward from the center | Sci-fi warp/energy surges |
+| **Theater Chase** | Evenly spaced dots marching along the strip | Marquee lights, runway effects |
+| **Heartbeat** | Organic double-thump ("lub-dub") then rest | Life-support monitors, tension cues |
 
 Use `Blink` for equal on/off timing. Use `Pulse` when you need a short flash with a longer gap, such as one tick on every second.
 
@@ -232,6 +239,12 @@ Filters add visual flavor to effects after they render:
 | **Scintillate** | Independent sparkling per LED | Twinkling stars, fireworks |
 | **Sizzle** | Synchronized group flicker | Electrical arcing, unified flicker |
 | **Brightness** | Multiplies each RGB channel by a constant, clamped to 0-255 | Global dimming/boost, quick intensity matching |
+| **Afterglow** | Blends each LED toward its own previous frame | Motion trails, phosphor-glow look |
+| **Tint** | Multiplicative color overlay, like a lighting gel | Red-alert washes, mood color grading |
+| **Shimmer** | Smooth brightness wave traveling along the strip | Water/light shimmer, energy fields |
+| **Hue Shift** | Rotates every color around the hue wheel | Animated color cycling on any effect |
+| **Saturation** | Scales color saturation toward gray or full color | "Systems failing" desaturation, color pop |
+| **Vignette** | Dims the ends of the range, brightest in the middle | Spotlight focus, framing an effect |
 
 ### Advanced: Direct Configuration
 

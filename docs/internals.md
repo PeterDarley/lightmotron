@@ -328,6 +328,86 @@ Two waves start at opposite ends of the target range and converge on a randomly 
 
 ---
 
+### `rainbow`
+Cycles hue over time and spreads it spatially across the strip, HSV-based. Ignores `colors` entirely.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `duration` | 80 | Ticks for one full hue cycle |
+| `number` | 1 | Number of rainbow repeats spread across the strip |
+| `saturation` | 1.0 | Color saturation (0.0 = white, 1.0 = fully saturated) |
+
+---
+
+### `color_wipe`
+Progressively fills the target from the first LED to the last with `colors[0]`, then wipes back to `colors[1]` the same way.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `duration` | 40 | Ticks for one fill direction (full cycle is `duration * 2`) |
+| `colors[0]` | — | Fill color |
+| `colors[1]` | — | Background/wipe-back color |
+
+---
+
+### `fire`
+Flickering flame simulation: each tick cools every LED slightly, diffuses heat toward the far end, and randomly sparks new heat near the base. Heat values map to a black→red→orange→yellow→white ramp. Ignores `colors` entirely.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `cooling` | 55 | How fast heat dissipates each tick; higher = shorter, choppier flames |
+| `sparking` | 120 | Chance (out of 255) per tick of a new spark near the base; higher = more active fire |
+| `duration` | 40 | Only used as the cadence for counting `cycles=` (fire itself has no natural cycle) |
+
+---
+
+### `gradient`
+A spatial blend across two or more `colors`, evenly spread over the target. With `duration` set, the gradient scrolls along the strip over time instead of staying static.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `duration` | 0 | `0` = static gradient; `>0` = ticks for one full scroll cycle |
+| `colors` | — | Two or more colors; the gradient blends through them in order, wrapping back to the first |
+
+---
+
+### `warp_pulse`
+A band of color expands outward from the center to both ends, then resets and repeats.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `width` | 4 | Half-width (in LEDs) of the expanding band's soft edge |
+| `period` | 40 | Ticks for one full expansion cycle |
+| `colors[0]` | — | Peak/band color |
+| `colors[1]` | — | Background color |
+
+---
+
+### `theater_chase`
+Evenly spaced dots march along the strip, marquee-style.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `spacing` | 3 | LED spacing between dots (minimum 2) |
+| `width` | 1 | Dot width in LEDs |
+| `duration` | 6 | Ticks per step; lower = faster movement |
+| `reverse` | `false` | If true, dots march in the opposite direction |
+| `colors[0]` | — | Dot color |
+| `colors[1]` | — | Background color |
+
+---
+
+### `heartbeat`
+An organic double-thump ("lub-dub") followed by a rest, looping.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `period` | 50 | Ticks per full heartbeat cycle (minimum 8) |
+| `colors[0]` | — | Thump/peak color |
+| `colors[1]` | — | Rest/background color |
+
+---
+
 ## Filters
 
 Filters are applied after the pattern has computed its LED list for the tick. Multiple filters can be chained in the `filters` list.
@@ -424,3 +504,62 @@ state across those effect boundaries.
 | `variation` | 0 | Random ± tick offset applied to each period |
 | `heat` | 0 | Random ± tick offset applied to each dropout duration |
 | `scope` | `all` | Grouping mode: `all`, `subranges`, or `leds` |
+
+---
+
+### `afterglow`
+Leaves fading trails by blending each LED toward its own previous frame instead of switching instantly — each channel takes the brighter of the new target value and the decayed previous value, so trails only fade, they never dim something that just got brighter.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `decay` | 0.85 | Fraction (0.0-0.99) of the previous frame retained each tick; higher = longer trails |
+
+---
+
+### `tint`
+Overlays a color like a lighting gel, via a multiplicative blend. Good for a droppable "red alert" wash over an existing effect.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `color` | `red` | Gel color (name or RGB tuple) |
+| `strength` | 0.5 | Blend amount (0.0 = no effect, 1.0 = fully gelled) |
+
+---
+
+### `shimmer`
+A smooth brightness wave travels along the strip, dimming and brightening LEDs as it passes.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `wavelength` | 8 | LEDs per wave crest |
+| `speed` | 1.0 | Wave travel speed |
+| `depth` | 0.5 | Dimming amount at the troughs (0.0 = no dimming, 1.0 = fully dark at troughs) |
+
+---
+
+### `hue_shift`
+Rotates every LED's color around the hue wheel, in HSV space.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `offset` | 0.0 | Fixed hue rotation (0.0-1.0, wraps around) |
+| `speed` | 0.0 | Additional rotation per tick; `0` leaves the shift static at `offset` |
+
+---
+
+### `saturation`
+Scales color saturation in HSV space, leaving hue and brightness alone.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `amount` | 1.0 | Saturation multiplier (0.0-2.0); `<1` drains toward gray (e.g. a "systems failing" cue), `>1` boosts, `1.0` is unchanged |
+
+---
+
+### `vignette`
+Dims the ends of the target range so the middle is brightest, like a camera vignette (or the reverse, with `invert`).
+
+| Parameter | Default | Description |
+|---|---|---|
+| `falloff` | 0.5 | Dimming strength at the edges (0.0 = no dimming, 1.0 = edges fully dark) |
+| `invert` | `false` | If true, dims the middle and brightens the edges instead |
