@@ -44,18 +44,42 @@ state, then flash fresh. `flash_c.ps1 -Erase` now does this
 boot). One-off command equivalent:
 `idf.py -p COMx erase-flash` then a normal `-Full` flash.
 
-## Latent risk still present (not a regression, pre-existing)
+## Is the deadlock actually still a risk with the default config? No.
 
-The underlying deadlock -- audio UART TX interrupts vs. SPIFFS flash-cache
-windows -- is still *possible* on ANY board once `audio_players` is
-configured (e.g. via the web UI), because audio and the SPIFFS-backed web
-server run concurrently. It just isn't triggered on a board with no audio
-configured. If it resurfaces once someone configures real audio hardware,
-the fix must NOT be the UART-IRAM route (see "Dead end" below) -- more
-likely it needs the audio driver to avoid UART activity during the narrow
-window the webserver is doing SPIFFS reads, or to serialize the two against
-a shared lock. Left as future work; not worth chasing until real audio
-hardware is in play.
+Re-analyzed 2026-07-24: the UART-vs-SPIFFS deadlock **cannot occur with the
+current (default, non-IRAM) UART interrupt config**, and this is verifiable
+from the mechanism, not just observation:
+
+- Every SPIFFS read goes through
+  `spi_flash_disable_interrupts_caches_and_other_cpu()`, which calls
+  `esp_intr_noniram_disable()`.
+- `esp_intr_noniram_disable()` disables every interrupt NOT flagged
+  `ESP_INTR_FLAG_IRAM` for the duration of the flash op.
+- The YX5200 UART interrupt is installed with `flags = 0`
+  (`components/audio/yx5200.c` `uart_driver_install(..., 0)`) -> non-IRAM
+  -> masked during every flash window. It literally cannot run concurrently
+  with the SPIFFS read; it runs microseconds later, after the read
+  completes. No concurrency -> no cross-core spinlock contention -> no
+  deadlock.
+
+The deadlock traces we captured all *required* the UART ISR to run during
+the flash window, which is only possible when the ISR is IRAM-exempt from
+that mask -- i.e. exactly what the (now-reverted) `ESP_INTR_FLAG_IRAM` +
+`CONFIG_UART_ISR_IN_IRAM` changes did. With those gone, the trace is
+impossible to produce.
+
+Verified there is no `ESP_INTR_FLAG_IRAM` anywhere in `components/`/`main/`
+and no `UART_ISR_IN_IRAM` enabled (the only `*_ISR_IN_IRAM` flags on are
+`SPI_MASTER`/`SPI_SLAVE`, ESP-IDF defaults, correctly IRAM-safe and not
+implicated).
+
+**Empirical confirmation that would fully close it** (not yet done, since
+it needs a board): erase a board, configure a bogus audio module via the
+web UI (System Settings -> add an audio player; no real hardware needed to
+generate the UART traffic), then hammer page loads. If it doesn't reset,
+the deadlock is confirmed dead on a board that actually has the audio UART
+active. Until then, the mechanism argument above is the basis for
+considering it resolved.
 
 ## Dead end: do NOT make the UART ISR IRAM-resident
 
