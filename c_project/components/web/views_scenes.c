@@ -768,13 +768,18 @@ http_response_t *view_scenes_color_select(http_request_t *req)
     return webserver_render_response("setup/color_select.html", ctx);
 }
 
+void add_scenes_summary_context(cJSON *ctx)
+{
+    cJSON *model = lighting_get_settings();
+    cJSON *scenes_dict = model ? cJSON_GetObjectItem(model, "scenes") : NULL;
+    cJSON_AddItemToObject(ctx, "scenes", build_scenes_list(scenes_dict));
+}
+
 /* GET /scenes/summary — mirrors ScenesSummaryView.get(). */
 http_response_t *view_scenes_summary(http_request_t *req)
 {
     (void)req;
     cJSON *ctx = build_global_context();
-    cJSON *model = lighting_get_settings();
-    cJSON *scenes_dict = model ? cJSON_GetObjectItem(model, "scenes") : NULL;
-    cJSON_AddItemToObject(ctx, "scenes", build_scenes_list(scenes_dict));
+    add_scenes_summary_context(ctx);
     return webserver_render_response("setup/scenes_summary.html", ctx);
 }

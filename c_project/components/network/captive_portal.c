@@ -1,6 +1,7 @@
 #include "captive_portal.h"
 #include "persistent_dict.h"
 #include "wifi_manager.h"
+#include "leds.h"
 
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -605,6 +606,7 @@ static void http_task(void *pvParameters)
 
         if (credentials_saved) {
             ESP_LOGI(TAG, "Credentials saved, rebooting...");
+            onboard_led_off();
             vTaskDelay(pdMS_TO_TICKS(1000));
             esp_restart();
         }
@@ -657,6 +659,11 @@ esp_err_t captive_portal_start(void)
 
     ESP_LOGI(TAG, "AP started: %s", AP_SSID);
     ESP_LOGI(TAG, "Portal at http://" AP_IP "/");
+
+    /* Indicate captive-portal mode with a purple onboard LED, mirroring
+     * captive_portal.py's start(). */
+    onboard_led_init(-1);
+    onboard_led_set(80, 0, 80);
 
     portal_running = true;
 

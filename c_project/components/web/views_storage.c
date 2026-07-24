@@ -4,8 +4,8 @@
  * The Python side keeps everything in a single flat "storage.json" (with
  * "system_settings" and "lighting_settings" as two of its top-level keys),
  * so a backup there is just a dump of the whole file. This C port instead
- * splits persistent state across two files - /spiffs/data/system_settings.json
- * and /spiffs/data/lighting_settings.json - so a backup here combines both
+ * splits persistent state across two files - /data/system_settings.json
+ * and /data/lighting_settings.json - so a backup here combines both
  * into one JSON document shaped like {"system_settings": {...},
  * "lighting_settings": {...}} to stay a drop-in match for Python's backup
  * shape (and for what RestoreView expects to read back).

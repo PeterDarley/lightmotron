@@ -11,11 +11,16 @@
 /**
  * Canonical storage file paths. Every component that opens a persistent_dict
  * should use these rather than redefining the path locally, so there is a
- * single source of truth for where each settings file lives on SPIFFS.
+ * single source of truth for where each settings file lives.
+ *
+ * These live on the "data" SPIFFS partition (mounted at /data in
+ * main/boot.c), which is deliberately separate from the "webassets"
+ * partition (www/templates, mounted at /spiffs) so that reflashing
+ * app/asset changes via `idf.py flash` never touches this data.
  */
-#define STORAGE_SYSTEM_SETTINGS_FILE "/spiffs/data/system_settings.json"
-#define STORAGE_LIGHTING_SETTINGS_FILE "/spiffs/data/lighting_settings.json"
-#define STORAGE_SOUNDS_FILE "/spiffs/data/sounds.json"
+#define STORAGE_SYSTEM_SETTINGS_FILE "/data/system_settings.json"
+#define STORAGE_LIGHTING_SETTINGS_FILE "/data/lighting_settings.json"
+#define STORAGE_SOUNDS_FILE "/data/sounds.json"
 
 /**
  * Lazy-loaded persistent dictionary backed by a JSON file on SPIFFS.

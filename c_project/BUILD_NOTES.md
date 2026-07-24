@@ -98,25 +98,58 @@ failure path). Capacity (`MAX_ACTIVE_SCENES`, `MAX_JOBS_PER_SCENE`,
 `MAX_LEDS`) is unchanged — this is a storage-location change only, not a
 behavior change.
 
-## SPIFFS web-assets image
+## SPIFFS web-assets image, and the two-partition split
 
-`main/CMakeLists.txt` now stages `../../www` and `../../templates`
+`main/CMakeLists.txt` stages `../../www` and `../../templates`
 (repo-root, shared with the Python build) into
 `${CMAKE_CURRENT_BINARY_DIR}/spiffs_staging` at configure time and calls
-`spiffs_create_partition_image(storage ... FLASH_IN_PROJECT)`, so
-`idf.py flash` now also writes `build/storage.bin` to the `storage`
-partition at `0x610000`. Settings JSON under `/spiffs/data` is *not*
-pre-staged — `persistent_dict_open()` creates those files on first
-write, same as `lib/storage.py` (confirmed by reading
-`ensure_loaded()`/`persistent_dict_open()` in
-`components/storage/persistent_dict.c`, which falls back to an empty
-object when a file is missing/invalid — no seeding gap).
+`spiffs_create_partition_image(webassets ... FLASH_IN_PROJECT)`.
 
-Caveat: the `www/`/`templates/` copy happens at CMake *configure* time,
-not build time. After editing files under those directories, run
-`idf.py reconfigure` (or touch `main/CMakeLists.txt`) before
-`idf.py build` so the staged copy — and therefore `storage.bin` — picks
-up the changes.
+Originally this targeted a single `storage` partition that *also* held
+`/spiffs/data/*.json` (settings/scenes/effects/colors/sounds/WiFi
+credentials). That was a real problem: `FLASH_IN_PROJECT` bundles the
+generated image into the *default* `idf.py flash` target, and flashing a
+partition is a full overwrite, not a merge — every code or asset deploy
+was silently wiping all persistent user data, since the freshly-built
+image only ever contains `www/`+`templates/` (nothing under `data/` is
+pre-staged; see below).
+
+Fixed by splitting into two SPIFFS partitions (`partitions.csv`):
+- `webassets` (2MB, `0x610000`–`0x810000`) — `www/`+`templates/` only,
+  mounted at `/spiffs`, rebuilt and rewritten on every default flash.
+- `data` (~7.9MB, `0x810000`–`0x1000000`) — settings JSON, mounted at
+  `/data` (new `DATA_MOUNT_POINT` in `main/settings.h`), deliberately
+  **not** part of the default flash target. `STORAGE_SYSTEM_SETTINGS_FILE`
+  / `STORAGE_LIGHTING_SETTINGS_FILE` / `STORAGE_SOUNDS_FILE`
+  (`components/storage/include/persistent_dict.h`) moved from
+  `/spiffs/data/*.json` to `/data/*.json` accordingly. `main/boot.c` now
+  calls `esp_vfs_spiffs_register()` twice, once per partition.
+  `esp_spiffs_info()` in the Status page's storage-usage card
+  (`components/web/views_system.c`) was repointed from the now-gone
+  `"storage"` partition label to `"data"` specifically, since that's the
+  one whose free space users actually care about.
+
+`persistent_dict_open()` doesn't need `data/*.json` pre-staged —  it
+creates those files on first write, same as `lib/storage.py` (confirmed
+by reading `ensure_loaded()` in `components/storage/persistent_dict.c`,
+which falls back to an empty object when a file is missing/invalid).
+
+**`flash_c.ps1` now defaults to `idf.py app-flash`** (app binary only —
+touches neither SPIFFS partition) instead of `idf.py flash`. Pass `-Full`
+for bootloader+partition-table+app+webassets, needed when `www/`/
+`templates/` changed, for a first-ever flash of a blank board, or after a
+partition-table change. Note that a *partition-table* change specifically
+(not just an ordinary `-Full` flash) can still invalidate whatever's
+physically sitting in the `data` region, since SPIFFS's internal layout
+isn't a stable byte-for-byte mapping — back up via the Status page's
+"Download Backup" first if the device already has real data on it before
+adopting a partition-table change like this one.
+
+Caveat (both here and before this split): the `www/`/`templates/` copy
+into `spiffs_staging` happens at CMake *configure* time, not build time.
+After editing files under those directories, run `idf.py reconfigure`
+(or touch `main/CMakeLists.txt`) before building so the staged copy
+picks up the changes.
 
 Hit one SPIFFS limitation along the way: classic SPIFFS's default
 `CONFIG_SPIFFS_OBJ_NAME_LEN=32` counts the *full path* as the object
@@ -126,7 +159,59 @@ Bumped it to 64 in both `sdkconfig.defaults` (so a fresh
 `idf.py set-target`/`reconfigure` picks it up) and the already-generated
 `sdkconfig` (so it takes effect without a full reconfigure).
 
+## Setup page: missing summary-card data on initial load
+
+`view_setup()` (`components/web/views_system.c`, GET `/setup`) originally
+built only a minimal context (theme/hostname/current model). Every other
+setup card's data — System Settings, Custom Colors, Filters, Effects,
+Scenes, Sounds, Soundscapes — comes from context keys that only the
+individual `/X/summary` htmx endpoints populated. Those endpoints are
+correct in isolation, but `templates/setup.html`'s summary `<div>`s use
+bare `hx-get` with no `hx-trigger`, so htmx never fires them
+automatically on page load — they only refresh via the explicit
+`htmx.ajax(...)` calls that fire after closing a "Manage X" modal. So on
+first load (and for System Settings/Models specifically, which aren't
+even in that modal-close refresh list, *forever*), every card fell back
+to its empty state.
+
+Python's reference (`web/views_system.py`'s `SetupView.get()`)
+deliberately avoids this: it builds one fully-populated context up front
+— *"Include all summary card data so the browser receives everything in
+one request rather than firing 5+ lazy HTMX loads after page paint."*
+The C port never got that treatment. Fixed by exposing each section's
+existing (already-correct) context-building logic as reusable functions
+— `add_scenes_summary_context`, `add_effects_summary_context`,
+`add_filters_summary_context`, `add_named_ranges_summary_context` (new),
+`add_sounds_context` (un-static'd) — following the pattern
+`add_soundscapes_context` already established (declared in
+`components/web/include/views.h`, already reused by `view_home()`).
+`view_setup()` now calls all of them. Deliberately does *not* trigger a
+live GitHub update check for the Updates card (matching Python's use of
+a cached last-check result rather than hitting the network on every page
+load) — pending-update count just defaults to 0 until explicitly checked.
+
+Also fixed while in there: the `www/styles/app.css` `.dashboard-card-grid`
+/ `.setup-card-grid` layout used fixed `repeat(4, 1fr)` columns at
+`min-width: 1200px`, which — combined with the LCARS theme's fixed
+`~7rem` label-strip overhead per card — left too little room for long
+unbroken values (hostnames, SSIDs) and forced them to wrap
+character-by-character. Replaced with
+`repeat(auto-fit, minmax(min(320px, 100%), 1fr))` on both classes so the
+grid picks its own column count instead of forcing 4 regardless of
+available width. Shared CSS file — fixes both the C and Python builds at
+once.
+
 ## Still to do
 
-- Not yet flashed to real hardware — build success only confirmed so
-  far.
+- Not yet flashed to real hardware with the current partition layout —
+  build success only confirmed so far. The board currently has data
+  flashed under the *old* single-`storage`-partition scheme; adopting
+  this partition table change requires a full wipe/reflash (back up via
+  Status page's "Download Backup" first, restore after — note the backup
+  doesn't cover WiFi credentials or sounds/soundscapes, so those need
+  re-entering by hand).
+- The modal-close JS refresh list in `templates/setup.html` still doesn't
+  include System Settings or Models, so after editing those two
+  specifically the card won't visually update until a full page reload
+  (separate, smaller issue from the initial-load one above — noted but
+  not fixed).

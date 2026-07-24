@@ -677,14 +677,19 @@ http_response_t *view_effects_color_select(http_request_t *req)
     return view_scenes_color_select(req);
 }
 
+void add_effects_summary_context(cJSON *ctx)
+{
+    cJSON *model = lighting_get_settings();
+    cJSON *effects_dict = model ? cJSON_GetObjectItem(model, "effects") : NULL;
+    cJSON_AddItemToObject(ctx, "effect_names", sorted_keys_array(effects_dict));
+}
+
 /* GET /effects/summary — mirrors EffectsSummaryView.get() (plain sorted
  * effect NAME strings, not {name,pattern} objects). */
 http_response_t *view_effects_summary(http_request_t *req)
 {
     (void)req;
     cJSON *ctx = build_global_context();
-    cJSON *model = lighting_get_settings();
-    cJSON *effects_dict = model ? cJSON_GetObjectItem(model, "effects") : NULL;
-    cJSON_AddItemToObject(ctx, "effect_names", sorted_keys_array(effects_dict));
+    add_effects_summary_context(ctx);
     return webserver_render_response("setup/effects_summary.html", ctx);
 }

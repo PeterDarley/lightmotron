@@ -623,15 +623,20 @@ http_response_t *view_named_range_remove_subrange(http_request_t *req)
     return webserver_render_response("setup/led_picker.html", ctx);
 }
 
-http_response_t *view_named_range_summary(http_request_t *req)
+void add_named_ranges_summary_context(cJSON *ctx)
 {
-    cJSON *ctx = build_global_context();
     cJSON *entries = build_named_range_entries("name");
     /* get_named_range_summary_entries() strips "min_led" before rendering. */
     for (cJSON *entry = entries->child; entry; entry = entry->next) {
         cJSON_DeleteItemFromObject(entry, "min_led");
     }
     cJSON_AddItemToObject(ctx, "named_ranges", entries);
+}
+
+http_response_t *view_named_range_summary(http_request_t *req)
+{
+    cJSON *ctx = build_global_context();
+    add_named_ranges_summary_context(ctx);
     return webserver_render_response("setup/named_ranges_summary.html", ctx);
 }
 

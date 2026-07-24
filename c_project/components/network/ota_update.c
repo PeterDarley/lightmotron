@@ -4,6 +4,7 @@
 #include "esp_http_client.h"
 #include "esp_ota_ops.h"
 #include "esp_https_ota.h"
+#include "esp_crt_bundle.h"
 #include "cJSON.h"
 
 #include <string.h>
@@ -132,7 +133,14 @@ esp_err_t ota_check_for_update(ota_update_info_t *info)
     }
 
     memset(info, 0, sizeof(ota_update_info_t));
-    strncpy(info->current_version, FIRMWARE_VERSION, sizeof(info->current_version) - 1);
+    /* Strip a leading v/V the same way the release tag is stripped below,
+     * so a build made exactly at tag "v1.2.0" compares equal to a GitHub
+     * release also tagged "v1.2.0" rather than always looking "different". */
+    const char *build_version = FIRMWARE_VERSION;
+    if (build_version[0] == 'v' || build_version[0] == 'V') {
+        build_version++;
+    }
+    strncpy(info->current_version, build_version, sizeof(info->current_version) - 1);
 
     char repo_owner[64];
     char repo_name[64];
@@ -155,6 +163,7 @@ esp_err_t ota_check_for_update(ota_update_info_t *info)
         .event_handler = http_event_handler,
         .user_data = &resp,
         .timeout_ms = 10000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -218,6 +227,7 @@ esp_err_t ota_apply_update(const char *url)
     esp_http_client_config_t config = {
         .url = url,
         .timeout_ms = 30000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
 
     esp_https_ota_config_t ota_config = {

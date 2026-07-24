@@ -256,19 +256,36 @@ esp_err_t boot_init(void)
     /* Seed random number generator */
     srand((unsigned int)esp_log_timestamp());
 
-    /* Initialize SPIFFS */
-    esp_vfs_spiffs_conf_t spiffs_conf = {
+    /* Initialize SPIFFS - two separate partitions (see partitions.csv):
+     * "webassets" (www/templates, rebuilt and rewritten on every
+     * `idf.py flash`) and "data" (user settings, never touched by
+     * flashing). Keeping them separate means a normal code/asset deploy
+     * can never wipe scenes/effects/colors/WiFi credentials/etc. */
+    esp_vfs_spiffs_conf_t webassets_conf = {
         .base_path = STORAGE_MOUNT_POINT,
-        .partition_label = "storage",
+        .partition_label = "webassets",
         .max_files = 10,
         .format_if_mount_failed = true,
     };
-    ret = esp_vfs_spiffs_register(&spiffs_conf);
+    ret = esp_vfs_spiffs_register(&webassets_conf);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to mount SPIFFS (%s)", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to mount webassets SPIFFS (%s)", esp_err_to_name(ret));
         return ret;
     }
-    ESP_LOGI(TAG, "SPIFFS mounted");
+    ESP_LOGI(TAG, "webassets SPIFFS mounted");
+
+    esp_vfs_spiffs_conf_t data_conf = {
+        .base_path = DATA_MOUNT_POINT,
+        .partition_label = "data",
+        .max_files = 10,
+        .format_if_mount_failed = true,
+    };
+    ret = esp_vfs_spiffs_register(&data_conf);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to mount data SPIFFS (%s)", esp_err_to_name(ret));
+        return ret;
+    }
+    ESP_LOGI(TAG, "data SPIFFS mounted");
 
     /* Seed defaults */
     ret = boot_seed_defaults();

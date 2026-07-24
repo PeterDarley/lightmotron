@@ -529,11 +529,8 @@ http_response_t *view_filter_color_select(http_request_t *req)
     return webserver_render_response("setup/color_select.html", ctx);
 }
 
-/* GET /filters/summary — mirrors FiltersSummaryView.get(). */
-http_response_t *view_filters_summary(http_request_t *req)
+void add_filters_summary_context(cJSON *ctx)
 {
-    (void)req;
-    cJSON *ctx = build_global_context();
     cJSON *model = lighting_get_settings();
     cJSON *filters_dict = model ? cJSON_GetObjectItem(model, "filters") : NULL;
 
@@ -550,5 +547,13 @@ http_response_t *view_filters_summary(http_request_t *req)
         }
     }
     cJSON_AddItemToObject(ctx, "filter_names", names);
+}
+
+/* GET /filters/summary — mirrors FiltersSummaryView.get(). */
+http_response_t *view_filters_summary(http_request_t *req)
+{
+    (void)req;
+    cJSON *ctx = build_global_context();
+    add_filters_summary_context(ctx);
     return webserver_render_response("setup/filters_summary.html", ctx);
 }

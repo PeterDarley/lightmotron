@@ -19,8 +19,8 @@
         {% else %}
         <input type="hidden" name="action" value="add">
         <div class="input-group mb-2" style="max-width: 400px;">
-            <input type="text" class="form-control" name="color_name" placeholder="Color name (e.g. my_red)" required>
-            <input type="color" class="form-control form-control-color" name="color_value" value="#FF0000" required style="max-width: 80px;">
+            <input type="text" class="form-control" name="color_name" placeholder="Color name (e.g. my_red)" value="{{ copy_name }}" required>
+            <input type="color" class="form-control form-control-color" name="color_value" value="{{ copy_hex }}" required style="max-width: 80px;">
             <button type="submit" class="btn btn-primary">Add</button>
         </div>
         {% endif %}
@@ -43,6 +43,23 @@
                             title="Edit {{ color_name }}"></button>
                     <small class="text-muted">{{ color_name }}</small>
                     <button type="button"
+                            class="btn btn-sm btn-outline-secondary copy-hex-btn"
+                            data-r="{{ color_value.0 }}" data-g="{{ color_value.1 }}" data-b="{{ color_value.2 }}"
+                            style="width: 100%; margin-top: 4px;"
+                            title="Copy color code">
+                        Copy Code
+                    </button>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            hx-post="/custom_colors"
+                            hx-target="#custom-colors-picker"
+                            hx-swap="outerHTML"
+                            hx-vals='{"action": "copy_form", "color_name": "{{ color_name }}"}'
+                            style="width: 100%; margin-top: 4px;"
+                            title="Copy '{{ color_name }}' under a new name">
+                        Copy as New
+                    </button>
+                    <button type="button"
                             class="btn btn-sm btn-outline-danger"
                             hx-post="/custom_colors"
                             hx-target="#custom-colors-picker"
@@ -63,3 +80,20 @@
     </div>
     {% endif %}
 </div>
+<script>
+    // Copy a color's hex code to the clipboard. Re-bound after every htmx
+    // swap of #custom-colors-picker since this whole fragment (including
+    // this script) gets replaced on outerHTML swap.
+    document.querySelectorAll('.copy-hex-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var hex = '#' + [btn.dataset.r, btn.dataset.g, btn.dataset.b].map(function (v) {
+                return parseInt(v, 10).toString(16).padStart(2, '0').toUpperCase();
+            }).join('');
+            navigator.clipboard.writeText(hex).then(function () {
+                var original = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(function () { btn.textContent = original; }, 1200);
+            });
+        });
+    });
+</script>

@@ -36,6 +36,13 @@ http_response_t *view_named_range_set(http_request_t *req);
 http_response_t *view_named_range_remove_subrange(http_request_t *req);
 http_response_t *view_named_range_summary(http_request_t *req);
 
+/**
+ * Build the {named_ranges} context (sorted by name, mirrors
+ * get_named_range_summary_entries("name")). Exposed so view_setup() can
+ * merge it into the setup page's initial render, matching SetupView.get().
+ */
+void add_named_ranges_summary_context(cJSON *ctx);
+
 /* Custom colors */
 http_response_t *view_custom_colors(http_request_t *req);
 http_response_t *view_custom_colors_summary(http_request_t *req);
@@ -48,11 +55,25 @@ http_response_t *view_scene_edit_remove_trigger(http_request_t *req);
 http_response_t *view_scenes_color_select(http_request_t *req);
 http_response_t *view_scenes_summary(http_request_t *req);
 
+/**
+ * Build the {scenes} context ({name, effect_count} list, mirrors
+ * ScenesSummaryView.get()). Exposed so view_setup() can merge it into the
+ * setup page's initial render, matching SetupView.get().
+ */
+void add_scenes_summary_context(cJSON *ctx);
+
 /* Effects */
 http_response_t *view_effects(http_request_t *req);
 http_response_t *view_effect_edit(http_request_t *req);
 http_response_t *view_effects_color_select(http_request_t *req);
 http_response_t *view_effects_summary(http_request_t *req);
+
+/**
+ * Build the {effect_names} context (sorted names, mirrors
+ * EffectsSummaryView.get()). Exposed so view_setup() can merge it into the
+ * setup page's initial render, matching SetupView.get().
+ */
+void add_effects_summary_context(cJSON *ctx);
 
 /* Filters */
 http_response_t *view_filters(http_request_t *req);
@@ -60,6 +81,13 @@ http_response_t *view_filters_post(http_request_t *req);
 http_response_t *view_filter_edit(http_request_t *req);
 http_response_t *view_filter_color_select(http_request_t *req);
 http_response_t *view_filters_summary(http_request_t *req);
+
+/**
+ * Build the {filter_names} context (sorted names, mirrors
+ * FiltersSummaryView.get()). Exposed so view_setup() can merge it into the
+ * setup page's initial render, matching SetupView.get().
+ */
+void add_filters_summary_context(cJSON *ctx);
 
 /* Sounds */
 http_response_t *view_sounds(http_request_t *req);
@@ -70,6 +98,13 @@ http_response_t *view_play_sound(http_request_t *req);
 http_response_t *view_stop_sound(http_request_t *req);
 http_response_t *view_stop_all_sounds(http_request_t *req);
 http_response_t *view_audio_volume(http_request_t *req);
+
+/**
+ * Build the {sounds, ...} context (mirrors _sounds_context()). Exposed so
+ * view_setup() can merge it into the setup page's initial render, matching
+ * SetupView.get().
+ */
+void add_sounds_context(cJSON *ctx, bool include_playing, bool home_only);
 
 /* Soundscapes */
 http_response_t *view_soundscapes(http_request_t *req);

@@ -50,8 +50,13 @@
 #define KEEPALIVE_TIMEOUT_S 5
 #define MAX_CONCURRENT_CLIENTS 4
 
-/* Storage paths */
+/* Storage paths.
+ * Two separate SPIFFS partitions (see partitions.csv): "webassets" mounted
+ * at STORAGE_MOUNT_POINT holds www/templates and is rebuilt/reflashed on
+ * every `idf.py flash`; "data" mounted at DATA_MOUNT_POINT holds user
+ * settings and is never touched by flashing. */
 #define STORAGE_MOUNT_POINT "/spiffs"
+#define DATA_MOUNT_POINT "/data"
 /* STORAGE_SYSTEM_SETTINGS_FILE / STORAGE_LIGHTING_SETTINGS_FILE / STORAGE_SOUNDS_FILE
  * live in components/storage/include/persistent_dict.h (the canonical source of
  * truth reachable by every component that depends on storage, not just main). */

@@ -16,49 +16,34 @@
     & .card-body { padding: 1.25rem; }
 }
 
-/* Setup page responsive card grid (Bootstrap-independent fallback) */
+/* Setup page responsive card grid (Bootstrap-independent fallback).
+ * auto-fit + minmax instead of fixed breakpoint column counts -- see the
+ * matching note on .dashboard-card-grid below; same LCARS label-strip
+ * overhead problem applies here. */
 .setup-card-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
     gap: 1.5rem;
-}
-
-@media (min-width: 768px) {
-    .setup-card-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (min-width: 1200px) {
-    .setup-card-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
 }
 
 .setup-card-grid > .dashboard-card-col {
     min-width: 0;
 }
 
-/* Setup/Status dashboard card layout */
+/* Setup/Status dashboard card layout.
+ * auto-fit + minmax instead of fixed breakpoint column counts: the LCARS
+ * card chrome spends a fixed ~7rem (--lcars-label-w) on the label strip
+ * regardless of card width, so forcing 4 columns at 1200px left too little
+ * room for the content column and caused long unbroken values (hostnames,
+ * SSIDs) to wrap character-by-character. Letting the grid pick its own
+ * column count keeps every card at least ~320px wide. */
 .dashboard-card-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
     gap: 1.5rem;
 
     & > .dashboard-card-col {
         min-width: 0;
-    }
-}
-
-@media (min-width: 768px) {
-    .dashboard-card-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (min-width: 1200px) {
-    .dashboard-card-grid {
-        grid-template-columns: repeat(4, 1fr);
     }
 }
 

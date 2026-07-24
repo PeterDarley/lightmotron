@@ -4,10 +4,14 @@ from webserver import View, render_template
 from web.views_common import lights, _color_name_to_hex, _rename_color_refs
 
 
-def _custom_colors_response(edit_name: str = "", edit_hex: str = "") -> str:
+def _custom_colors_response(
+    edit_name: str = "", edit_hex: str = "", copy_name: str = "", copy_hex: str = "#FF0000"
+) -> str:
     """Build and render the custom colors template with current settings.
 
-    Pass edit_name and edit_hex to pre-fill the form for editing an existing color.
+    Pass edit_name and edit_hex to pre-fill the form for editing an existing
+    color. Pass copy_name and copy_hex to pre-fill the "add" form for
+    duplicating an existing color under a new name.
     """
 
     custom_colors_list = sorted(
@@ -24,6 +28,8 @@ def _custom_colors_response(edit_name: str = "", edit_hex: str = "") -> str:
             "page_title": "Custom Colors",
             "edit_name": edit_name,
             "edit_hex": edit_hex,
+            "copy_name": copy_name,
+            "copy_hex": copy_hex,
         },
     )
 
@@ -85,6 +91,10 @@ class CustomColorsView(View):
             rgb = lights.settings["custom_colors"][color_name]
             edit_hex = "#{:02X}{:02X}{:02X}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
             return _custom_colors_response(edit_name=color_name, edit_hex=edit_hex)
+        elif action == "copy_form" and color_name and color_name in lights.settings["custom_colors"]:
+            rgb = lights.settings["custom_colors"][color_name]
+            copy_hex = "#{:02X}{:02X}{:02X}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+            return _custom_colors_response(copy_name="{}_copy".format(color_name), copy_hex=copy_hex)
         elif action == "cancel":
             return _custom_colors_response()
 

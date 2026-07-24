@@ -101,8 +101,9 @@ static cJSON *build_sounds_list(cJSON *sounds_dict, bool include_playing, bool h
 }
 
 /* Builds the {sounds, current_volume, sounds_poll_interval_seconds} context
- * shared by several views. Mirrors _sounds_context(). */
-static void add_sounds_context(cJSON *ctx, bool include_playing, bool home_only)
+ * shared by several views. Mirrors _sounds_context(). Non-static: also
+ * called by view_setup() for the setup page's initial render. */
+void add_sounds_context(cJSON *ctx, bool include_playing, bool home_only)
 {
     cJSON *sounds_dict = get_sounds_dict(false);
     cJSON *sounds_list = build_sounds_list(sounds_dict, include_playing, home_only);

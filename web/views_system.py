@@ -867,13 +867,14 @@ class SystemSettingsView(View):
         error: str = ""
 
         # --- WiFi ---
-        ssid: str = fd.get("wifi_ssid", "").strip()
+        submitted_ssid: str = fd.get("wifi_ssid", "").strip()
         submitted_password: str = fd.get("wifi_password", "").strip()
-        # Preserve the existing password when the field is left blank
-        if submitted_password:
-            password: str = submitted_password
-        else:
-            password: str = PersistentDict().get("system_settings", {}).get("wifi", {}).get("password", "")
+        # Preserve the existing SSID/password when a field is left blank -
+        # otherwise saving unrelated settings (e.g. just the hostname) with
+        # WiFi fields left empty would silently wipe stored credentials.
+        existing_wifi: dict = PersistentDict().get("system_settings", {}).get("wifi", {})
+        ssid: str = submitted_ssid if submitted_ssid else existing_wifi.get("ssid", "")
+        password: str = submitted_password if submitted_password else existing_wifi.get("password", "")
 
         # --- Hostname ---
         raw_hostname: str = fd.get("hostname", "").strip().lower()

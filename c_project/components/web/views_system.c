@@ -477,19 +477,25 @@ http_response_t *view_system_settings(http_request_t *req)
         return webserver_render_response("setup/system_settings.html", ctx);
     }
 
-    /* --- WiFi --- */
+    /* --- WiFi ---
+     * Preserve the existing SSID/password when a field is left blank -
+     * otherwise saving unrelated settings (e.g. just the hostname) with
+     * WiFi fields left empty would silently wipe stored credentials. */
     const char *ssid_in = request_get_form_field(req, "wifi_ssid");
-    char ssid[65];
-    snprintf(ssid, sizeof(ssid), "%s", ssid_in ? ssid_in : "");
-
     const char *password_in = request_get_form_field(req, "wifi_password");
+    char ssid[65] = "";
     char password[128] = "";
-    if (password_in && password_in[0]) {
+
+    if ((ssid_in && ssid_in[0]) && (password_in && password_in[0])) {
+        snprintf(ssid, sizeof(ssid), "%s", ssid_in);
         snprintf(password, sizeof(password), "%s", password_in);
     } else {
         persistent_dict_t *store = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
         cJSON *wifi = store ? persistent_dict_get_dup(store, "wifi") : NULL;
-        snprintf(password, sizeof(password), "%s", json_get_string(wifi, "password", ""));
+        snprintf(ssid, sizeof(ssid), "%s",
+                 (ssid_in && ssid_in[0]) ? ssid_in : json_get_string(wifi, "ssid", ""));
+        snprintf(password, sizeof(password), "%s",
+                 (password_in && password_in[0]) ? password_in : json_get_string(wifi, "password", ""));
         if (wifi) cJSON_Delete(wifi);
     }
 
@@ -846,13 +852,16 @@ static cJSON *build_custom_colors_list(cJSON *colors)
 }
 
 /* Mirrors _custom_colors_response(). */
-static http_response_t *custom_colors_response(cJSON *colors, const char *edit_name, const char *edit_hex)
+static http_response_t *custom_colors_response(cJSON *colors, const char *edit_name, const char *edit_hex,
+                                                const char *copy_name, const char *copy_hex)
 {
     cJSON *ctx = build_global_context();
     cJSON_AddItemToObject(ctx, "custom_colors", build_custom_colors_list(colors));
     cJSON_AddStringToObject(ctx, "page_title", "Custom Colors");
     cJSON_AddStringToObject(ctx, "edit_name", edit_name ? edit_name : "");
     cJSON_AddStringToObject(ctx, "edit_hex", edit_hex ? edit_hex : "");
+    cJSON_AddStringToObject(ctx, "copy_name", copy_name ? copy_name : "");
+    cJSON_AddStringToObject(ctx, "copy_hex", (copy_hex && copy_hex[0]) ? copy_hex : "#FF0000");
     return webserver_render_response("setup/custom_colors.html", ctx);
 }
 
@@ -865,10 +874,10 @@ http_response_t *view_custom_colors(http_request_t *req)
     if (!colors) { colors = cJSON_CreateObject(); cJSON_AddItemToObject(model, "custom_colors", colors); }
 
     if (req->method == HTTP_METHOD_GET) {
-        return custom_colors_response(colors, NULL, NULL);
+        return custom_colors_response(colors, NULL, NULL, NULL, NULL);
     }
 
-    /* POST: action=add|update|delete|edit_form|cancel. Mirrors
+    /* POST: action=add|update|delete|edit_form|copy_form|cancel. Mirrors
      * CustomColorsView.post(). Form fields are color_name/color_value
      * (color_value is a "#RRGGBB" hex string from an <input type="color">),
      * not name/color. */
@@ -910,13 +919,25 @@ http_response_t *view_custom_colors(http_request_t *req)
                      cJSON_GetArrayItem(existing, 0)->valueint & 0xFF,
                      cJSON_GetArrayItem(existing, 1)->valueint & 0xFF,
                      cJSON_GetArrayItem(existing, 2)->valueint & 0xFF);
-            return custom_colors_response(colors, color_name, hex);
+            return custom_colors_response(colors, color_name, hex, NULL, NULL);
+        }
+    } else if (strcmp(action, "copy_form") == 0 && color_name && color_name[0]) {
+        cJSON *existing = cJSON_GetObjectItem(colors, color_name);
+        if (existing && cJSON_IsArray(existing) && cJSON_GetArraySize(existing) >= 3) {
+            char hex[8];
+            snprintf(hex, sizeof(hex), "#%02X%02X%02X",
+                     cJSON_GetArrayItem(existing, 0)->valueint & 0xFF,
+                     cJSON_GetArrayItem(existing, 1)->valueint & 0xFF,
+                     cJSON_GetArrayItem(existing, 2)->valueint & 0xFF);
+            char copy_name[68];
+            snprintf(copy_name, sizeof(copy_name), "%s_copy", color_name);
+            return custom_colors_response(colors, NULL, NULL, copy_name, hex);
         }
     } else if (strcmp(action, "cancel") == 0) {
-        return custom_colors_response(colors, NULL, NULL);
+        return custom_colors_response(colors, NULL, NULL, NULL, NULL);
     }
 
-    return custom_colors_response(colors, NULL, NULL);
+    return custom_colors_response(colors, NULL, NULL, NULL, NULL);
 }
 
 http_response_t *view_custom_colors_summary(http_request_t *req)
@@ -1064,11 +1085,13 @@ http_response_t *view_status(http_request_t *req)
     cJSON_AddStringToObject(ctx, "mem_total", mem_total_str);
     cJSON_AddNumberToObject(ctx, "mem_pct", mem_pct);
 
-    /* Storage (SPIFFS partition usage) */
+    /* Storage (SPIFFS partition usage) - the "data" partition specifically
+     * (user settings/scenes/effects/etc), not "webassets" (www/templates,
+     * fixed code-controlled content the user has no reason to monitor). */
     size_t spiffs_total = 0, spiffs_used = 0;
     char storage_total_str[32] = "N/A", storage_free_str[32] = "N/A", storage_used_str[32] = "N/A";
     int storage_pct = 0;
-    if (esp_spiffs_info("storage", &spiffs_total, &spiffs_used) == ESP_OK) {
+    if (esp_spiffs_info("data", &spiffs_total, &spiffs_used) == ESP_OK) {
         size_t spiffs_free = (spiffs_total > spiffs_used) ? (spiffs_total - spiffs_used) : 0;
         fmt_bytes(spiffs_total, storage_total_str, sizeof(storage_total_str));
         fmt_bytes(spiffs_free, storage_free_str, sizeof(storage_free_str));
@@ -1097,8 +1120,13 @@ http_response_t *view_status(http_request_t *req)
     cJSON_AddStringToObject(ctx, "wifi_ssid", json_get_string(wifi_cfg, "ssid", ""));
     if (wifi_cfg) cJSON_Delete(wifi_cfg);
 
-    /* CPU / runtime */
+    /* CPU / runtime. upy_version/platform reuse the Python build's context
+     * keys (MicroPython version / sys.platform have no equivalent here) so
+     * the shared status template can show something meaningful for both
+     * builds under the same "Runtime"/"Platform" rows. */
     cJSON_AddNumberToObject(ctx, "cpu_freq_mhz", CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
+    cJSON_AddStringToObject(ctx, "upy_version", "ESP-IDF " IDF_VER);
+    cJSON_AddStringToObject(ctx, "platform", CONFIG_IDF_TARGET);
     cJSON_AddStringToObject(ctx, "reset_cause", comms_reset_reason_name());
 
     uint32_t uptime = timing_uptime_seconds();
@@ -1140,9 +1168,45 @@ http_response_t *view_status(http_request_t *req)
 
 http_response_t *view_setup(http_request_t *req)
 {
+    /* Mirrors SetupView.get(): include every summary card's data in this
+     * one response instead of leaving the browser to fire off 8+ lazy
+     * htmx loads after page paint (which, on this build, never actually
+     * happen automatically - the summary <div>s use bare hx-get with no
+     * hx-trigger, so without this the cards only ever populate after the
+     * user opens and closes one of the "Manage X" modals at least once). */
     (void)req;
     cJSON *ctx = build_global_context();
     cJSON_AddStringToObject(ctx, "current_model", lighting_get_current_model());
+
+    cJSON *model_names = lighting_get_model_names();
+    cJSON_AddNumberToObject(ctx, "model_count", cJSON_GetArraySize(model_names));
+    cJSON_Delete(model_names);
+
+    add_system_settings_context(ctx);
+
+    /* Repo settings only (cheap, local) - deliberately NOT calling
+     * ota_check_for_update() here, matching _ota_summary_context()'s use
+     * of the cached _ota_last_check rather than a live GitHub check on
+     * every page load. pending_update_count defaults to 0 until the user
+     * explicitly checks via the Updates card. */
+    char repo_owner[64], repo_name[64];
+    get_repo_settings(repo_owner, sizeof(repo_owner), repo_name, sizeof(repo_name));
+    cJSON_AddStringToObject(ctx, "repo_owner", repo_owner);
+    cJSON_AddStringToObject(ctx, "repo_name", repo_name);
+    cJSON_AddNumberToObject(ctx, "pending_update_count", 0);
+
+    add_named_ranges_summary_context(ctx);
+
+    cJSON *model = lighting_get_settings();
+    cJSON *colors = model ? cJSON_GetObjectItem(model, "custom_colors") : NULL;
+    cJSON_AddItemToObject(ctx, "custom_colors", build_custom_colors_list(colors));
+
+    add_scenes_summary_context(ctx);
+    add_effects_summary_context(ctx);
+    add_filters_summary_context(ctx);
+    add_soundscapes_context(ctx, false);
+    add_sounds_context(ctx, false, false);
+
     return webserver_render_response("setup.html", ctx);
 }
 
