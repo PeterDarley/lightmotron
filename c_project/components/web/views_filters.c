@@ -429,6 +429,10 @@ http_response_t *view_filter_edit(http_request_t *req)
                     cJSON_AddItemToArray(arr, cJSON_CreateNumber((double)g));
                     cJSON_AddItemToArray(arr, cJSON_CreateNumber((double)b));
                     cJSON_AddItemToObject(def, param_name, arr);
+                } else if (strcmp(start, "true") == 0 || strcmp(start, "True") == 0) {
+                    cJSON_AddBoolToObject(def, param_name, true);
+                } else if (strcmp(start, "false") == 0 || strcmp(start, "False") == 0) {
+                    cJSON_AddBoolToObject(def, param_name, false);
                 } else {
                     bool has_dot = strchr(start, '.') != NULL;
                     char *endptr = NULL;

@@ -5,6 +5,7 @@
 #include "mdns_setup.h"
 #include "captive_portal.h"
 #include "webserver.h"
+#include "asset_cache.h"
 #include "routes.h"
 #include "leds.h"
 #include "animation.h"
@@ -16,6 +17,7 @@
 #include "timing.h"
 #include "ip_announcement.h"
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "nvs_flash.h"
@@ -366,6 +368,15 @@ esp_err_t boot_init(void)
     /* Flash the onboard LED with the IP's last octet in the background,
      * mirroring boot.py's _run_ip_flash_sequence() thread. */
     start_ip_flash_sequence(active_ip);
+
+    /* Load all web assets into RAM before the server starts, so requests are
+     * served from memory and never read flash (see asset_cache.h). Done here,
+     * before audio init below, so the caching reads themselves don't overlap
+     * any UART activity. */
+    asset_cache_init();
+    ESP_LOGI(TAG, "Free internal RAM after asset cache: %u bytes (largest block %u)",
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
 
     /* Register web routes BEFORE starting server */
     routes_register_all();

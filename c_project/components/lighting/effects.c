@@ -72,6 +72,12 @@ void effect_resolve(const cJSON *effect_def, active_job_t *job)
     job->width = json_get_int(effect_def, "width", 5);
     job->number = json_get_int(effect_def, "number", 1);
     job->reverse = json_get_bool(effect_def, "reverse", false);
+    /* Additional per-pattern params (see active_job_t). Defaults match the
+     * effect.get(name, default) fallbacks in the Python patterns. */
+    job->saturation = (float)json_get_double(effect_def, "saturation", 1.0);
+    job->cooling = json_get_int(effect_def, "cooling", 55);
+    job->sparking = json_get_int(effect_def, "sparking", 120);
+    job->spacing = json_get_int(effect_def, "spacing", 3);
 
     const char *target = json_get_string(effect_def, "target", NULL);
     resolve_target(target, job);

@@ -13,9 +13,10 @@
 static const char *TAG = "patterns";
 
 static const char *pattern_names[] = {
-    "solid", "blink", "pulse", "fade_in", "breathe", "wave", "cylon", "phaser_strip"
+    "solid", "blink", "pulse", "fade_in", "breathe", "wave", "cylon", "phaser_strip",
+    "rainbow", "color_wipe", "fire", "gradient", "warp_pulse", "theater_chase", "heartbeat"
 };
-static const int pattern_count = 8;
+static const int pattern_count = 15;
 
 /* Max number of simultaneous wave "heads" pattern_wave will render (mirrors
  * the effect's "number" param). Extra heads beyond this are silently
@@ -408,6 +409,256 @@ int pattern_phaser_strip(active_job_t *job, uint32_t local_tick, const rgb_t *cu
     return count;
 }
 
+/* ---------------------------------------------------------------------
+ * New patterns (mirror the pattern_*() additions in lib/lighting/patterns.py).
+ * Cycle counting is handled centrally by lighting_process_tick() from
+ * duration/period, so these only compute the per-tick visual - matching the
+ * Python per-tick math and defaults exactly.
+ * ------------------------------------------------------------------- */
+
+int pattern_rainbow(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
+                    led_output_t *output, int max_output)
+{
+    (void)current_colors;
+
+    int num_leds = job->target_count;
+    if (num_leds == 0) return 0;
+
+    int cycle_ticks = job->duration > 0 ? job->duration : 80;
+    int repeats = job->number > 0 ? job->number : 1;
+    float saturation = job->saturation;
+    if (saturation < 0.0f) saturation = 0.0f;
+    if (saturation > 1.0f) saturation = 1.0f;
+
+    float base_hue = (float)(local_tick % cycle_ticks) / (float)cycle_ticks;
+
+    int count = 0;
+    for (int i = 0; i < num_leds && count < max_output; i++) {
+        float hue = base_hue + ((float)i / (float)num_leds) * (float)repeats;
+        output[count].led_index = job->target_indices[i];
+        output[count].color = color_from_hsv(hue, saturation, 1.0f);
+        count++;
+    }
+    return count;
+}
+
+int pattern_color_wipe(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
+                       led_output_t *output, int max_output)
+{
+    (void)current_colors;
+
+    int num_leds = job->target_count;
+    if (num_leds == 0) return 0;
+
+    rgb_t color_a = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 255, 255};
+    rgb_t color_b = job->color_count > 1 ? job->colors[1] : (rgb_t){0, 0, 0};
+
+    int fill_ticks = job->duration > 0 ? job->duration : 40;
+    int total = fill_ticks * 2;
+    int phase = (int)((local_tick + total - 1) % total);
+
+    int filled;
+    rgb_t primary, background;
+    if (phase < fill_ticks) {
+        filled = (int)((float)(phase + 1) / (float)fill_ticks * num_leds);
+        primary = color_a; background = color_b;
+    } else {
+        filled = (int)((float)(phase - fill_ticks + 1) / (float)fill_ticks * num_leds);
+        primary = color_b; background = color_a;
+    }
+
+    int count = 0;
+    for (int i = 0; i < num_leds && count < max_output; i++) {
+        output[count].led_index = job->target_indices[i];
+        output[count].color = (i < filled) ? primary : background;
+        count++;
+    }
+    return count;
+}
+
+/* Per-physical-LED heat buffer for the fire pattern. Global (indexed by
+ * led_index) so multiple fire effects on different ranges each keep their own
+ * heat without per-job storage; two fire effects on the SAME LEDs would share
+ * cells, which is a nonsensical config. */
+static uint8_t fire_heat[MAX_LEDS];
+static uint8_t fire_scratch[MAX_LEDS];
+
+int pattern_fire(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
+                 led_output_t *output, int max_output)
+{
+    (void)local_tick;
+    (void)current_colors;
+
+    int num_leds = job->target_count;
+    if (num_leds == 0) return 0;
+
+    int cooling = job->cooling;
+    int sparking = job->sparking;
+
+    /* Gather this range's heat into a contiguous scratch array (target order). */
+    for (int i = 0; i < num_leds; i++) {
+        int idx = job->target_indices[i];
+        fire_scratch[i] = (idx >= 0 && idx < MAX_LEDS) ? fire_heat[idx] : 0;
+    }
+
+    /* Cool every cell a little. */
+    int cool_max = ((cooling * 10) / num_leds) + 2;
+    for (int i = 0; i < num_leds; i++) {
+        int cooled = fire_scratch[i] - (rand() % (cool_max + 1));
+        fire_scratch[i] = cooled < 0 ? 0 : (uint8_t)cooled;
+    }
+
+    /* Heat drifts up (diffuses toward the far end). */
+    for (int i = num_leds - 1; i >= 2; i--) {
+        fire_scratch[i] = (uint8_t)((fire_scratch[i - 1] + fire_scratch[i - 2] + fire_scratch[i - 2]) / 3);
+    }
+
+    /* Randomly ignite new sparks near the base. */
+    if ((rand() % 256) < sparking) {
+        int spark = rand() % (num_leds < 7 ? num_leds : 7);
+        int heated = fire_scratch[spark] + (160 + (rand() % 96));
+        fire_scratch[spark] = heated > 255 ? 255 : (uint8_t)heated;
+    }
+
+    /* Write heat back and emit colors. */
+    int count = 0;
+    for (int i = 0; i < num_leds && count < max_output; i++) {
+        int idx = job->target_indices[i];
+        if (idx >= 0 && idx < MAX_LEDS) fire_heat[idx] = fire_scratch[i];
+        output[count].led_index = idx;
+        output[count].color = color_heat(fire_scratch[i]);
+        count++;
+    }
+    return count;
+}
+
+int pattern_gradient(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
+                     led_output_t *output, int max_output)
+{
+    (void)current_colors;
+
+    int num_leds = job->target_count;
+    if (num_leds == 0) return 0;
+
+    /* gradient uses all provided colors (min 2), looping around. */
+    int segments = job->color_count >= 2 ? job->color_count : 2;
+
+    int scroll_ticks = job->duration;
+    float offset = 0.0f;
+    if (scroll_ticks > 0) {
+        offset = (float)(local_tick % scroll_ticks) / (float)scroll_ticks;
+    }
+
+    int count = 0;
+    for (int i = 0; i < num_leds && count < max_output; i++) {
+        float position = ((float)i / (float)num_leds) + offset;
+        position -= floorf(position);
+        float scaled = position * (float)segments;
+        int index = (int)scaled % segments;
+        int next = (index + 1) % segments;
+        rgb_t ca = index < job->color_count ? job->colors[index] : (rgb_t){255, 255, 255};
+        rgb_t cb = next < job->color_count ? job->colors[next] : (rgb_t){0, 0, 0};
+        output[count].led_index = job->target_indices[i];
+        output[count].color = color_interpolate(ca, cb, scaled - floorf(scaled));
+        count++;
+    }
+    return count;
+}
+
+int pattern_warp_pulse(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
+                       led_output_t *output, int max_output)
+{
+    (void)current_colors;
+
+    int num_leds = job->target_count;
+    if (num_leds == 0) return 0;
+
+    rgb_t foreground = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 255, 255};
+    rgb_t background = job->color_count > 1 ? job->colors[1] : (rgb_t){0, 0, 0};
+    int width = job->width > 0 ? job->width : 4;
+    int period = job->period > 0 ? job->period : 40;
+
+    int phase = (int)((local_tick + period - 1) % period);
+    float center = (float)(num_leds - 1) / 2.0f;
+    float radius = ((float)phase / (float)period) * (center + 1.0f);
+
+    int count = 0;
+    for (int i = 0; i < num_leds && count < max_output; i++) {
+        float edge_distance = fabsf(fabsf((float)i - center) - radius);
+        rgb_t color;
+        if (edge_distance <= (float)width) {
+            float brightness = 1.0f - (edge_distance / (float)(width + 1));
+            color = color_interpolate(background, foreground, brightness);
+        } else {
+            color = background;
+        }
+        output[count].led_index = job->target_indices[i];
+        output[count].color = color;
+        count++;
+    }
+    return count;
+}
+
+int pattern_theater_chase(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
+                          led_output_t *output, int max_output)
+{
+    (void)current_colors;
+
+    int num_leds = job->target_count;
+    if (num_leds == 0) return 0;
+
+    rgb_t dot = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 255, 255};
+    rgb_t background = job->color_count > 1 ? job->colors[1] : (rgb_t){0, 0, 0};
+    int spacing = job->spacing >= 2 ? job->spacing : 3;
+    int dot_width = job->width > 0 ? job->width : 1;
+    int speed = job->duration > 0 ? job->duration : 6;
+
+    int step = (int)(local_tick / speed);
+    if (job->reverse) step = -step;
+
+    int count = 0;
+    for (int i = 0; i < num_leds && count < max_output; i++) {
+        int position = ((i - step) % spacing + spacing) % spacing;
+        output[count].led_index = job->target_indices[i];
+        output[count].color = (position < dot_width) ? dot : background;
+        count++;
+    }
+    return count;
+}
+
+int pattern_heartbeat(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
+                      led_output_t *output, int max_output)
+{
+    (void)current_colors;
+
+    int num_leds = job->target_count;
+    if (num_leds == 0) return 0;
+
+    rgb_t beat = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 255, 255};
+    rgb_t background = job->color_count > 1 ? job->colors[1] : (rgb_t){0, 0, 0};
+    int period = job->period > 0 ? job->period : 50;
+    int phase = (int)((local_tick + period - 1) % period);
+    int thump_width = period / 12;
+    if (thump_width < 2) thump_width = 2;
+
+    float first = 0.0f, second = 0.0f;
+    int d1 = abs(phase - thump_width);
+    if (d1 < thump_width) first = 1.0f - (float)d1 / (float)thump_width;
+    int d2 = abs(phase - thump_width * 3);
+    if (d2 < thump_width) second = (1.0f - (float)d2 / (float)thump_width) * 0.7f;
+
+    float intensity = first > second ? first : second;
+    rgb_t color = color_interpolate(background, beat, intensity);
+
+    int count = 0;
+    for (int i = 0; i < num_leds && count < max_output; i++) {
+        output[count].led_index = job->target_indices[i];
+        output[count].color = color;
+        count++;
+    }
+    return count;
+}
+
 /* Pattern lookup table */
 typedef struct {
     const char *name;
@@ -420,9 +671,16 @@ static const pattern_entry_t pattern_table[] = {
     {"pulse",        pattern_pulse},
     {"fade_in",      pattern_fade_in},
     {"breathe",      pattern_breathe},
-    {"wave",         pattern_wave},
-    {"cylon",        pattern_cylon},
-    {"phaser_strip", pattern_phaser_strip},
+    {"wave",          pattern_wave},
+    {"cylon",         pattern_cylon},
+    {"phaser_strip",  pattern_phaser_strip},
+    {"rainbow",       pattern_rainbow},
+    {"color_wipe",    pattern_color_wipe},
+    {"fire",          pattern_fire},
+    {"gradient",      pattern_gradient},
+    {"warp_pulse",    pattern_warp_pulse},
+    {"theater_chase", pattern_theater_chase},
+    {"heartbeat",     pattern_heartbeat},
     {NULL, NULL},
 };
 

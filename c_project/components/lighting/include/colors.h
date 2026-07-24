@@ -43,4 +43,20 @@ rgb_t color_interpolate(rgb_t a, rgb_t b, float factor);
  */
 uint8_t color_clamp(int value);
 
+/**
+ * Convert HSV (each 0.0-1.0) to RGB. Mirrors PatternMixin._hsv_to_rgb().
+ */
+rgb_t color_from_hsv(float hue, float saturation, float value);
+
+/**
+ * Convert RGB to HSV (each output 0.0-1.0). Mirrors PatternMixin._rgb_to_hsv().
+ */
+void color_to_hsv(rgb_t color, float *hue, float *saturation, float *value);
+
+/**
+ * Map a heat value (0-255) to a black-red-orange-yellow-white flame color.
+ * Mirrors PatternMixin._heat_color().
+ */
+rgb_t color_heat(int heat);
+
 #endif /* COLORS_H */

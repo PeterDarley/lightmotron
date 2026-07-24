@@ -13,6 +13,7 @@
 #include "freertos/task.h"
 
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -403,6 +404,45 @@ static void dns_task(void *pvParameters)
 }
 
 /**
+ * Look up a header value (case-insensitive key) within the raw header block
+ * [headers_start, headers_end). Returns true and fills out (NUL-terminated)
+ * on success, false if the header isn't present.
+ */
+static bool find_header_value(const char *headers_start, const char *headers_end,
+                              const char *key, char *out, size_t out_size)
+{
+    size_t key_len = strlen(key);
+    const char *line = headers_start;
+
+    while (line < headers_end) {
+        const char *line_end = memchr(line, '\n', (size_t)(headers_end - line));
+        if (!line_end) {
+            line_end = headers_end;
+        }
+
+        if ((size_t)(line_end - line) > key_len &&
+            strncasecmp(line, key, key_len) == 0 && line[key_len] == ':') {
+            const char *val = line + key_len + 1;
+            while (val < line_end && (*val == ' ' || *val == '\t')) val++;
+            const char *val_end = line_end;
+            while (val_end > val && (val_end[-1] == '\r' || val_end[-1] == ' ')) val_end--;
+
+            size_t len = (size_t)(val_end - val);
+            if (len >= out_size) {
+                len = out_size - 1;
+            }
+            memcpy(out, val, len);
+            out[len] = '\0';
+            return true;
+        }
+
+        line = line_end + 1;
+    }
+
+    return false;
+}
+
+/**
  * Parse URL-encoded form body for ssid, password and manual fields.
  */
 static void parse_form_data(const char *body, char *ssid, size_t ssid_len,
@@ -525,6 +565,12 @@ static void http_task(void *pvParameters)
             continue;
         }
 
+        /* Bound how long the read loop below can block waiting for the rest
+         * of a POST body -- a client that stalls mid-upload would otherwise
+         * hang this task (and thus the whole captive portal) indefinitely. */
+        struct timeval recv_timeout = { .tv_sec = 5, .tv_usec = 0 };
+        setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof(recv_timeout));
+
         int received = recv(client_sock, recv_buf, sizeof(recv_buf) - 1, 0);
         if (received <= 0) {
             close(client_sock);
@@ -544,12 +590,63 @@ static void http_task(void *pvParameters)
         bool credentials_saved = false;
 
         if (strcmp(method, "POST") == 0 && strcmp(path, "/save") == 0) {
-            char *body = strstr(recv_buf, "\r\n\r\n");
+            char *headers_end = strstr(recv_buf, "\r\n\r\n");
             char ssid[64] = "", password[64] = "", manual[64] = "";
 
-            if (body) {
-                body += 4;
-                parse_form_data(body, ssid, sizeof(ssid), password, sizeof(password), manual, sizeof(manual));
+            if (headers_end) {
+                char *body_start = headers_end + 4;
+                size_t header_total = (size_t)(body_start - recv_buf);
+                size_t body_already = (size_t)received > header_total
+                    ? (size_t)received - header_total : 0;
+
+                char content_length_str[16];
+                size_t content_length = 0;
+                if (find_header_value(recv_buf, headers_end, "Content-Length",
+                                       content_length_str, sizeof(content_length_str))) {
+                    content_length = (size_t)atoi(content_length_str);
+                }
+
+                /* The form only ever holds ssid/password/manual (<=64 bytes
+                 * each) plus URL-encoding overhead -- reject anything
+                 * implausibly large rather than risk a slow/hostile client
+                 * tying up the only captive-portal HTTP task. */
+                static char body_buf[1024];
+                if (content_length > 0 && content_length < sizeof(body_buf)) {
+                    size_t total_body = body_already > content_length ? content_length : body_already;
+                    memcpy(body_buf, body_start, total_body);
+
+                    /* A single recv() (above) frequently does NOT capture the
+                     * whole request on real devices -- phone captive-portal
+                     * browsers commonly send headers and body as separate
+                     * TCP segments, or pause for "100 Continue" before
+                     * sending the body at all. Keep reading until the full
+                     * Content-Length has arrived instead of silently treating
+                     * whatever happened to be in the first packet as the
+                     * complete form (previously this could parse an empty or
+                     * truncated body as a blank SSID). Mirrors the loop
+                     * request_parser.c already uses for the main webserver,
+                     * which doesn't have this bug for the same reason. */
+                    while (total_body < content_length) {
+                        int chunk = recv(client_sock, body_buf + total_body,
+                                         content_length - total_body, 0);
+                        if (chunk <= 0) {
+                            break;
+                        }
+                        total_body += (size_t)chunk;
+                    }
+                    body_buf[total_body] = '\0';
+
+                    if (total_body < content_length) {
+                        ESP_LOGW(TAG, "POST /save body incomplete: got %u of %u bytes",
+                                 (unsigned)total_body, (unsigned)content_length);
+                    }
+
+                    parse_form_data(body_buf, ssid, sizeof(ssid), password, sizeof(password), manual, sizeof(manual));
+                } else {
+                    /* No usable Content-Length -- fall back to whatever
+                     * arrived after the headers in the initial read. */
+                    parse_form_data(body_start, ssid, sizeof(ssid), password, sizeof(password), manual, sizeof(manual));
+                }
             }
 
             /* Fallback: if the hidden field wasn't populated, use the manual entry */

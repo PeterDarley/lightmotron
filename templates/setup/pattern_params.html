@@ -256,6 +256,42 @@
                 <small class="text-muted">Run the effect in the opposite direction.</small>
             </div>
             {% endif %}
+            {% if param == "saturation" %}
+            <div class="rounded border p-3 mb-2 effect-optional-card">
+                <label class="form-label mb-1" for="param_saturation">Saturation</label>
+                <input type="number" class="form-control" name="param_saturation" id="param_saturation"
+                       value="{{ param_val_saturation }}"
+                       placeholder="1.0" min="0" max="1" step="0.05" style="max-width: 200px;">
+                <small class="text-muted">Color intensity (0 = white, 1 = vivid).</small>
+            </div>
+            {% endif %}
+            {% if param == "cooling" %}
+            <div class="rounded border p-3 mb-2 effect-optional-card">
+                <label class="form-label mb-1" for="param_cooling">Cooling</label>
+                <input type="number" class="form-control" name="param_cooling" id="param_cooling"
+                       value="{{ param_val_cooling }}"
+                       placeholder="55" min="0" max="100" step="1" style="max-width: 200px;">
+                <small class="text-muted">How fast the flame cools (higher = shorter flames).</small>
+            </div>
+            {% endif %}
+            {% if param == "sparking" %}
+            <div class="rounded border p-3 mb-2 effect-optional-card">
+                <label class="form-label mb-1" for="param_sparking">Sparking</label>
+                <input type="number" class="form-control" name="param_sparking" id="param_sparking"
+                       value="{{ param_val_sparking }}"
+                       placeholder="120" min="0" max="255" step="1" style="max-width: 200px;">
+                <small class="text-muted">Chance of a new spark each tick (higher = more active fire).</small>
+            </div>
+            {% endif %}
+            {% if param == "spacing" %}
+            <div class="rounded border p-3 mb-2 effect-optional-card">
+                <label class="form-label mb-1" for="param_spacing">Spacing</label>
+                <input type="number" class="form-control" name="param_spacing" id="param_spacing"
+                       value="{{ param_val_spacing }}"
+                       placeholder="3" min="2" max="20" step="1" style="max-width: 200px;">
+                <small class="text-muted">LEDs between each marching dot.</small>
+            </div>
+            {% endif %}
             {% endfor %}
         </div>
         {% endif %}

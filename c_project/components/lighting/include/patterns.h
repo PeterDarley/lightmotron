@@ -42,5 +42,12 @@ int pattern_breathe(active_job_t *job, uint32_t local_tick, const rgb_t *current
 int pattern_wave(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
 int pattern_cylon(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
 int pattern_phaser_strip(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
+int pattern_rainbow(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
+int pattern_color_wipe(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
+int pattern_fire(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
+int pattern_gradient(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
+int pattern_warp_pulse(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
+int pattern_theater_chase(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
+int pattern_heartbeat(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
 
 #endif /* PATTERNS_H */

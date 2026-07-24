@@ -154,6 +154,17 @@ esp_err_t wifi_manager_connect(const char *ssid, const char *password)
     if (!wifi_started) {
         ESP_ERROR_CHECK(esp_wifi_start());
         wifi_started = true;
+
+        /* Disable STA power-save. The default modem-sleep mode only wakes
+         * the radio on DTIM beacon intervals, so it frequently misses
+         * unsolicited multicast mDNS queries (arriving between those
+         * windows) -- the classic cause of "<hostname>.local resolves
+         * sometimes but not reliably" on ESP32. Mirrors the AP-side
+         * esp_wifi_set_ps(WIFI_PS_NONE) in captive_portal.c. */
+        esp_err_t ps_ret = esp_wifi_set_ps(WIFI_PS_NONE);
+        if (ps_ret != ESP_OK) {
+            ESP_LOGW(TAG, "Could not disable STA power-save: %s", esp_err_to_name(ps_ret));
+        }
     }
 
     char resolved_ssid[33];

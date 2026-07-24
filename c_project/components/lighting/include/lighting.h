@@ -64,6 +64,13 @@ typedef struct {
     int width;
     int number;
     bool reverse;
+    /* Additional per-pattern params (mirror effect.get(...) reads in the
+     * Python patterns). Defaults are applied in effect_resolve(): saturation
+     * for rainbow, cooling/sparking for fire, spacing for theater_chase. */
+    float saturation; /* rainbow, 0.0-1.0 */
+    int cooling;      /* fire */
+    int sparking;     /* fire */
+    int spacing;      /* theater_chase */
     uint32_t start_tick;
     bool finished;
     char after[64];          /* Job name this depends on */

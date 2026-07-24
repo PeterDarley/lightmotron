@@ -6,6 +6,7 @@
 #include "json_helpers.h"
 
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -19,15 +20,39 @@
 static const char *TAG = "webserver";
 
 #define MAX_ROUTES 128
-/* Sized generously for the heaviest page renders (e.g. /setup, which
- * populates every summary card in one request, going through 9+ nested
- * template includes, each stacking multiple 256-512 byte local buffers in
- * template_engine.c, plus a 4KB static-file streaming buffer). Cheap to be
- * generous: anything over 4KB is placed in PSRAM automatically
- * (CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096), so this isn't competing with
- * the tight internal-DRAM budget. */
-#define CLIENT_TASK_STACK_SIZE 20480
-#define KEEPALIVE_TIMEOUT_SEC 5
+/* Sized for the heaviest page renders (e.g. /setup). Template includes nest
+ * only ~3 deep at peak (setup.html -> base_head.html -> imports.html; the
+ * dozen summary includes in setup.html are sequential and unwind between
+ * each), so a handful of template_engine.c stack frames with their
+ * 256-512 byte local buffers is the real ceiling - a few KB. 12KB leaves
+ * ~4x margin (verified via uxTaskGetStackHighWaterMark, logged below when
+ * headroom runs low).
+ *
+ * This MUST come from INTERNAL RAM: xTaskCreate() stacks are never placed in
+ * PSRAM, and must not be here anyway, since a settings write on another task
+ * can disable the flash cache (and thus PSRAM access) while a client task is
+ * mid-request. Because the whole 512KB internal heap is shared with WiFi/
+ * lwip/mDNS and gets fragmented, an oversized stack fails to find a
+ * *contiguous* block even when plenty of total RAM is free - which is why
+ * this was cut from 20KB (that caused "Failed to spawn client task" under
+ * the parallel asset requests a single page load fires off). MAX_CLIENT_TASKS
+ * caps how many run at once. */
+#define CLIENT_TASK_STACK_SIZE 12288
+/* Idle keep-alive connections block a client task (and thus a slot below) in
+ * request_parse() for this long waiting for the next request. Kept short so a
+ * browser's pool of idle keep-alive sockets releases slots quickly - a page's
+ * asset burst all arrives within ~1s, so 3s still gets full connection reuse
+ * during a load without pinning slots long after it. */
+#define KEEPALIVE_TIMEOUT_SEC 3
+/* Cap on concurrent client handler tasks. Bounds internal-RAM use
+ * (MAX_CLIENT_TASKS * CLIENT_TASK_STACK_SIZE worst case = ~72KB) so a burst of
+ * browser connections can't exhaust internal DRAM and start failing
+ * xTaskCreate(). Set to 6 to match Chrome/Firefox's 6-connections-per-host
+ * limit: a single page load opens up to 6 parallel keep-alive sockets, so a
+ * lower cap dropped the surplus every load (browsers retry, but that showed as
+ * occasional missing CSS/JS). Tracked with a counting semaphore
+ * (client_slots). Affordable now that the stack is 12KB, not 20KB. */
+#define MAX_CLIENT_TASKS 6
 
 typedef struct {
     http_method_t method;
@@ -41,6 +66,10 @@ static SemaphoreHandle_t route_mutex = NULL;
 static int server_socket = -1;
 static bool server_running = false;
 static TaskHandle_t server_task_handle = NULL;
+/* Counting semaphore of available client-handler slots (see MAX_CLIENT_TASKS).
+ * A slot is taken before spawning a client task and released when that task
+ * exits, capping concurrent connections and the internal RAM they consume. */
+static SemaphoreHandle_t client_slots = NULL;
 
 void webserver_add_route(http_method_t method, const char *path, route_handler_t handler)
 {
@@ -308,6 +337,20 @@ static void client_task(void *pvParameters)
     }
 
     close(client_sock);
+
+    /* Warn if this request came close to overflowing the stack, so an
+     * undersized CLIENT_TASK_STACK_SIZE surfaces as a log line rather than a
+     * corruption crash. High-water mark is the minimum free stack (in words)
+     * ever seen for this task. */
+    UBaseType_t stack_left_words = uxTaskGetStackHighWaterMark(NULL);
+    if (stack_left_words * sizeof(StackType_t) < 2048) {
+        ESP_LOGW(TAG, "Client task stack low: %u bytes headroom (raise CLIENT_TASK_STACK_SIZE)",
+                 (unsigned)(stack_left_words * sizeof(StackType_t)));
+    }
+
+    if (client_slots) {
+        xSemaphoreGive(client_slots);   /* Release the slot taken in server_task */
+    }
     vTaskDelete(NULL);
 }
 
@@ -335,10 +378,32 @@ static void server_task(void *pvParameters)
         ESP_LOGD(TAG, "Client connected from " IPSTR,
                  IP2STR((esp_ip4_addr_t *)&client_addr.sin_addr));
 
-        /* Spawn client handler task */
-        xTaskCreate(client_task, "http_client",
-                    CLIENT_TASK_STACK_SIZE, (void *)(intptr_t)client_sock,
-                    4, NULL);
+        /* Cap concurrency: wait briefly for a free slot. If none frees up,
+         * drop this connection (close the socket so it isn't leaked - the
+         * browser will retry) rather than over-committing internal RAM. */
+        if (client_slots && xSemaphoreTake(client_slots, pdMS_TO_TICKS(200)) != pdTRUE) {
+            ESP_LOGW(TAG, "At max %d clients, dropping connection", MAX_CLIENT_TASKS);
+            close(client_sock);
+            continue;
+        }
+
+        /* Spawn client handler task. On failure (typically low internal RAM),
+         * close the socket and release the slot - NOT doing so previously
+         * leaked an LWIP socket per failure until accept() stopped working
+         * entirely (matches lib/webserver.py, which always closes the
+         * socket via _handle_client's finally). */
+        if (xTaskCreate(client_task, "http_client",
+                        CLIENT_TASK_STACK_SIZE, (void *)(intptr_t)client_sock,
+                        4, NULL) != pdPASS) {
+            ESP_LOGW(TAG, "Failed to spawn client task, dropping connection "
+                     "(free internal=%u, largest block=%u)",
+                     (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                     (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+            close(client_sock);
+            if (client_slots) {
+                xSemaphoreGive(client_slots);
+            }
+        }
     }
 
     vTaskDelete(NULL);
@@ -352,6 +417,10 @@ esp_err_t webserver_start(int port)
 
     if (!route_mutex) {
         route_mutex = xSemaphoreCreateMutex();
+    }
+
+    if (!client_slots) {
+        client_slots = xSemaphoreCreateCounting(MAX_CLIENT_TASKS, MAX_CLIENT_TASKS);
     }
 
     /* Create server socket */

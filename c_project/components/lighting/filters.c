@@ -10,9 +10,10 @@
 static const char *TAG = "filters";
 
 static const char *filter_names[] = {
-    "null", "brightness", "sizzle", "scintillate", "spike", "dropout"
+    "null", "brightness", "sizzle", "scintillate", "spike", "dropout",
+    "afterglow", "tint", "shimmer", "hue_shift", "saturation", "vignette"
 };
-static const int filter_count_val = 6;
+static const int filter_count_val = 12;
 
 /**
  * Return variation percent (0-100) from filter params, mirroring
@@ -297,6 +298,146 @@ void filter_dropout(const cJSON *params, led_output_t *target, const rgb_t *curr
                         (rgb_t){0, 0, 0});
 }
 
+/* ---------------------------------------------------------------------
+ * New filters (mirror the filter_*() additions in lib/lighting/filters.py).
+ * `current[i]` is the previous frame's logical color for target[i]'s LED
+ * (parallel array), matching Python's get_logical_color(led_index).
+ * ------------------------------------------------------------------- */
+
+void filter_afterglow(const cJSON *params, led_output_t *target, const rgb_t *current,
+                      int count, filter_state_t *state, uint32_t tick)
+{
+    (void)state;
+    (void)tick;
+    if (count <= 0) return;
+
+    float decay = params ? (float)json_get_double(params, "decay", 0.85) : 0.85f;
+    if (decay < 0.0f) decay = 0.0f;
+    if (decay > 0.99f) decay = 0.99f;
+
+    for (int i = 0; i < count; i++) {
+        int fr = (int)(current[i].r * decay);
+        int fg = (int)(current[i].g * decay);
+        int fb = (int)(current[i].b * decay);
+        if (target[i].color.r < fr) target[i].color.r = (uint8_t)fr;
+        if (target[i].color.g < fg) target[i].color.g = (uint8_t)fg;
+        if (target[i].color.b < fb) target[i].color.b = (uint8_t)fb;
+    }
+}
+
+void filter_tint(const cJSON *params, led_output_t *target, const rgb_t *current,
+                 int count, filter_state_t *state, uint32_t tick)
+{
+    (void)current;
+    (void)state;
+    (void)tick;
+    if (count <= 0) return;
+
+    cJSON *color_item = params ? cJSON_GetObjectItem(params, "color") : NULL;
+    rgb_t tint = color_item ? color_resolve_json(color_item) : color_resolve("red");
+    float strength = params ? (float)json_get_double(params, "strength", 0.5) : 0.5f;
+    if (strength < 0.0f) strength = 0.0f;
+    if (strength > 1.0f) strength = 1.0f;
+
+    for (int i = 0; i < count; i++) {
+        int gr = target[i].color.r * tint.r / 255;
+        int gg = target[i].color.g * tint.g / 255;
+        int gb = target[i].color.b * tint.b / 255;
+        target[i].color.r = color_clamp((int)(target[i].color.r * (1.0f - strength) + gr * strength));
+        target[i].color.g = color_clamp((int)(target[i].color.g * (1.0f - strength) + gg * strength));
+        target[i].color.b = color_clamp((int)(target[i].color.b * (1.0f - strength) + gb * strength));
+    }
+}
+
+void filter_shimmer(const cJSON *params, led_output_t *target, const rgb_t *current,
+                    int count, filter_state_t *state, uint32_t tick)
+{
+    (void)current;
+    (void)state;
+    if (count <= 0) return;
+
+    float wavelength = params ? (float)json_get_double(params, "wavelength", 8.0) : 8.0f;
+    if (wavelength < 1.0f) wavelength = 1.0f;
+    float speed = params ? (float)json_get_double(params, "speed", 1.0) : 1.0f;
+    float depth = params ? (float)json_get_double(params, "depth", 0.5) : 0.5f;
+    if (depth < 0.0f) depth = 0.0f;
+    if (depth > 1.0f) depth = 1.0f;
+
+    for (int i = 0; i < count; i++) {
+        float phase = ((float)target[i].led_index / wavelength) - ((float)tick * speed / 20.0f);
+        float wave = (sinf(2.0f * (float)M_PI * phase) + 1.0f) / 2.0f;
+        float factor = 1.0f - depth * (1.0f - wave);
+        target[i].color.r = color_clamp((int)(target[i].color.r * factor));
+        target[i].color.g = color_clamp((int)(target[i].color.g * factor));
+        target[i].color.b = color_clamp((int)(target[i].color.b * factor));
+    }
+}
+
+void filter_hue_shift(const cJSON *params, led_output_t *target, const rgb_t *current,
+                      int count, filter_state_t *state, uint32_t tick)
+{
+    (void)current;
+    (void)state;
+    if (count <= 0) return;
+
+    float speed = params ? (float)json_get_double(params, "speed", 0.0) : 0.0f;
+    float offset = params ? (float)json_get_double(params, "offset", 0.0) : 0.0f;
+    float shift = offset + ((float)tick * speed / 40.0f);
+    shift -= floorf(shift);
+
+    for (int i = 0; i < count; i++) {
+        float h, s, v;
+        color_to_hsv(target[i].color, &h, &s, &v);
+        target[i].color = color_from_hsv(h + shift, s, v);
+    }
+}
+
+void filter_saturation(const cJSON *params, led_output_t *target, const rgb_t *current,
+                       int count, filter_state_t *state, uint32_t tick)
+{
+    (void)current;
+    (void)state;
+    (void)tick;
+    if (count <= 0) return;
+
+    float amount = params ? (float)json_get_double(params, "amount", 1.0) : 1.0f;
+    if (amount < 0.0f) amount = 0.0f;
+    if (amount > 2.0f) amount = 2.0f;
+
+    for (int i = 0; i < count; i++) {
+        float h, s, v;
+        color_to_hsv(target[i].color, &h, &s, &v);
+        float ns = s * amount;
+        if (ns < 0.0f) ns = 0.0f;
+        if (ns > 1.0f) ns = 1.0f;
+        target[i].color = color_from_hsv(h, ns, v);
+    }
+}
+
+void filter_vignette(const cJSON *params, led_output_t *target, const rgb_t *current,
+                     int count, filter_state_t *state, uint32_t tick)
+{
+    (void)current;
+    (void)state;
+    (void)tick;
+    if (count <= 0) return;
+
+    float falloff = params ? (float)json_get_double(params, "falloff", 0.5) : 0.5f;
+    if (falloff < 0.0f) falloff = 0.0f;
+    if (falloff > 1.0f) falloff = 1.0f;
+    bool invert = params ? json_get_bool(params, "invert", false) : false;
+
+    for (int i = 0; i < count; i++) {
+        float position = (float)i / (float)(count > 1 ? count - 1 : 1);
+        float edge = fabsf(position - 0.5f) * 2.0f;
+        if (invert) edge = 1.0f - edge;
+        float factor = 1.0f - falloff * edge;
+        target[i].color.r = color_clamp((int)(target[i].color.r * factor));
+        target[i].color.g = color_clamp((int)(target[i].color.g * factor));
+        target[i].color.b = color_clamp((int)(target[i].color.b * factor));
+    }
+}
+
 /* Filter lookup table */
 typedef struct {
     const char *name;
@@ -310,6 +451,12 @@ static const filter_entry_t filter_table[] = {
     {"scintillate", filter_scintillate},
     {"spike",       filter_spike},
     {"dropout",     filter_dropout},
+    {"afterglow",   filter_afterglow},
+    {"tint",        filter_tint},
+    {"shimmer",     filter_shimmer},
+    {"hue_shift",   filter_hue_shift},
+    {"saturation",  filter_saturation},
+    {"vignette",    filter_vignette},
     {NULL, NULL},
 };
 

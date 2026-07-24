@@ -1,4 +1,5 @@
 #include "template_engine.h"
+#include "asset_cache.h"
 #include "esp_log.h"
 
 #include <string.h>
@@ -1014,6 +1015,16 @@ char *template_render_file(const char *filename, cJSON *context)
     /* Build full path */
     char filepath[384];
     snprintf(filepath, sizeof(filepath), "%s/%s", TEMPLATES_BASE, filename);
+
+    /* Serve from the in-RAM asset cache when available, so rendering never
+     * reads flash (see asset_cache.h - avoids the flash-cache-disable window
+     * that a concurrent UART interrupt can deadlock against). Falls through
+     * to fopen() only if the cache is unavailable or missed. */
+    size_t cached_size = 0;
+    const char *cached = asset_cache_get(filepath, &cached_size);
+    if (cached) {
+        return template_render_string(cached, context);
+    }
 
     /* Read file */
     FILE *f = fopen(filepath, "r");

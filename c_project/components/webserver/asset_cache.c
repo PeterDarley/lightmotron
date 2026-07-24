@@ -1,0 +1,136 @@
+#include "asset_cache.h"
+
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+
+#include <dirent.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+
+static const char *TAG = "asset_cache";
+
+/* The webassets partition is mounted here. It holds only templates + www
+ * (the "data" settings partition is a separate mount at /data), so every
+ * file under this root is a servable asset worth caching. */
+#define ASSET_MOUNT "/spiffs"
+#define ASSET_MAX_FILES 128
+#define ASSET_MAX_PATH 160
+
+typedef struct {
+    char path[ASSET_MAX_PATH]; /* full VFS path, e.g. /spiffs/templates/home.html */
+    char *data;                /* NUL-terminated file contents */
+    size_t size;               /* byte length (excluding the terminator) */
+} asset_entry_t;
+
+static asset_entry_t entries[ASSET_MAX_FILES];
+static int entry_count = 0;
+static bool initialized = false;
+
+/* Read one file fully into a freshly allocated, NUL-terminated buffer and
+ * register it. Returns true on success. */
+static bool cache_one_file(const char *full_path)
+{
+    if (entry_count >= ASSET_MAX_FILES) {
+        ESP_LOGW(TAG, "Cache full (%d files), skipping %s", ASSET_MAX_FILES, full_path);
+        return false;
+    }
+
+    FILE *f = fopen(full_path, "r");
+    if (!f) {
+        return false;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (file_size < 0) {
+        fclose(f);
+        return false;
+    }
+
+    /* Force PSRAM regardless of size. Plain malloc() would honor
+     * CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL and pin every buffer under that
+     * threshold (4KB in this project) to internal DRAM -- with ~100+ small
+     * template/CSS/JS files that starves the internal RAM client-task
+     * stacks need (xTaskCreate stacks can't live in PSRAM), causing
+     * "Failed to spawn client task" under load. */
+    char *buf = heap_caps_malloc((size_t)file_size + 1, MALLOC_CAP_SPIRAM);
+    if (!buf) {
+        ESP_LOGE(TAG, "Out of memory caching %s (%ld bytes)", full_path, file_size);
+        fclose(f);
+        return false;
+    }
+
+    size_t read = fread(buf, 1, (size_t)file_size, f);
+    fclose(f);
+    buf[read] = '\0';
+
+    asset_entry_t *entry = &entries[entry_count];
+    strncpy(entry->path, full_path, sizeof(entry->path) - 1);
+    entry->path[sizeof(entry->path) - 1] = '\0';
+    entry->data = buf;
+    entry->size = read;
+    entry_count++;
+    return true;
+}
+
+void asset_cache_init(void)
+{
+    if (initialized) {
+        return;
+    }
+    initialized = true;
+
+    /* SPIFFS is a flat filesystem: readdir on the mount root enumerates
+     * every file with its full relative path (e.g. "templates/home.html",
+     * "www/styles/app.css"), so a single non-recursive pass reaches all of
+     * them regardless of the "subdirectory" nesting in the names. */
+    DIR *dir = opendir(ASSET_MOUNT);
+    if (!dir) {
+        ESP_LOGE(TAG, "Failed to open %s; assets will be served from flash", ASSET_MOUNT);
+        return;
+    }
+
+    size_t total_bytes = 0;
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+        if (ent->d_type == DT_DIR) {
+            continue;
+        }
+
+        char full_path[ASSET_MAX_PATH];
+        int n = snprintf(full_path, sizeof(full_path), "%s/%s", ASSET_MOUNT, ent->d_name);
+        if (n <= 0 || n >= (int)sizeof(full_path)) {
+            ESP_LOGW(TAG, "Path too long, skipping: %s", ent->d_name);
+            continue;
+        }
+
+        struct stat st;
+        if (stat(full_path, &st) != 0 || S_ISDIR(st.st_mode)) {
+            continue;
+        }
+
+        if (cache_one_file(full_path)) {
+            total_bytes += entries[entry_count - 1].size;
+        }
+    }
+    closedir(dir);
+
+    ESP_LOGI(TAG, "Cached %d asset(s), %u bytes total", entry_count, (unsigned)total_bytes);
+}
+
+const char *asset_cache_get(const char *full_path, size_t *out_size)
+{
+    if (!full_path) {
+        return NULL;
+    }
+    for (int i = 0; i < entry_count; i++) {
+        if (strcmp(entries[i].path, full_path) == 0) {
+            if (out_size) *out_size = entries[i].size;
+            return entries[i].data;
+        }
+    }
+    return NULL;
+}

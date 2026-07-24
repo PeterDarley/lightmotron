@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 static const char *TAG = "colors";
 
@@ -187,4 +188,82 @@ rgb_t color_resolve_json(const cJSON *spec)
     }
 
     return black;
+}
+
+rgb_t color_from_hsv(float hue, float saturation, float value)
+{
+    rgb_t result;
+
+    if (saturation <= 0.0f) {
+        uint8_t gray = color_clamp((int)(value * 255.0f));
+        result.r = result.g = result.b = gray;
+        return result;
+    }
+
+    hue = hue - floorf(hue);            /* wrap into 0..1 */
+    int sector = (int)(hue * 6.0f);
+    float offset = hue * 6.0f - sector;
+    float p = value * (1.0f - saturation);
+    float q = value * (1.0f - saturation * offset);
+    float t = value * (1.0f - saturation * (1.0f - offset));
+    sector %= 6;
+
+    float red, green, blue;
+    switch (sector) {
+        case 0:  red = value; green = t;     blue = p;     break;
+        case 1:  red = q;     green = value; blue = p;     break;
+        case 2:  red = p;     green = value; blue = t;     break;
+        case 3:  red = p;     green = q;     blue = value; break;
+        case 4:  red = t;     green = p;     blue = value; break;
+        default: red = value; green = p;     blue = q;     break;
+    }
+
+    result.r = color_clamp((int)(red * 255.0f));
+    result.g = color_clamp((int)(green * 255.0f));
+    result.b = color_clamp((int)(blue * 255.0f));
+    return result;
+}
+
+void color_to_hsv(rgb_t color, float *hue, float *saturation, float *value)
+{
+    float r_norm = color.r / 255.0f;
+    float g_norm = color.g / 255.0f;
+    float b_norm = color.b / 255.0f;
+
+    float maximum = fmaxf(r_norm, fmaxf(g_norm, b_norm));
+    float minimum = fminf(r_norm, fminf(g_norm, b_norm));
+    float chroma = maximum - minimum;
+
+    float h;
+    if (chroma == 0.0f) {
+        h = 0.0f;
+    } else if (maximum == r_norm) {
+        h = fmodf((g_norm - b_norm) / chroma, 6.0f) / 6.0f;
+    } else if (maximum == g_norm) {
+        h = (((b_norm - r_norm) / chroma) + 2.0f) / 6.0f;
+    } else {
+        h = (((r_norm - g_norm) / chroma) + 4.0f) / 6.0f;
+    }
+    if (h < 0.0f) h += 1.0f;
+
+    if (hue) *hue = h;
+    if (saturation) *saturation = (maximum == 0.0f) ? 0.0f : (chroma / maximum);
+    if (value) *value = maximum;
+}
+
+rgb_t color_heat(int heat)
+{
+    int clamped = heat < 0 ? 0 : (heat > 255 ? 255 : heat);
+    int scaled = (clamped * 191) / 255;
+    uint8_t ramp = (uint8_t)((scaled & 0x3F) << 2);
+
+    rgb_t result;
+    if (scaled > 128) {
+        result.r = 255; result.g = 255; result.b = ramp;
+    } else if (scaled > 64) {
+        result.r = 255; result.g = ramp; result.b = 0;
+    } else {
+        result.r = ramp; result.g = 0; result.b = 0;
+    }
+    return result;
 }

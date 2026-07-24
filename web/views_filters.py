@@ -194,6 +194,10 @@ class FilterEditView(View):
                             int(hex_color[2:4], 16),
                             int(hex_color[4:6], 16),
                         ]
+                    elif param_value.lower() == "true":
+                        filter_def[param_name] = True
+                    elif param_value.lower() == "false":
+                        filter_def[param_name] = False
                     else:
                         try:
                             filter_def[param_name] = float(param_value) if "." in param_value else int(param_value)

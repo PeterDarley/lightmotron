@@ -32,5 +32,11 @@ void filter_sizzle(const cJSON *params, led_output_t *target, const rgb_t *curre
 void filter_scintillate(const cJSON *params, led_output_t *target, const rgb_t *current, int count, filter_state_t *state, uint32_t tick);
 void filter_spike(const cJSON *params, led_output_t *target, const rgb_t *current, int count, filter_state_t *state, uint32_t tick);
 void filter_dropout(const cJSON *params, led_output_t *target, const rgb_t *current, int count, filter_state_t *state, uint32_t tick);
+void filter_afterglow(const cJSON *params, led_output_t *target, const rgb_t *current, int count, filter_state_t *state, uint32_t tick);
+void filter_tint(const cJSON *params, led_output_t *target, const rgb_t *current, int count, filter_state_t *state, uint32_t tick);
+void filter_shimmer(const cJSON *params, led_output_t *target, const rgb_t *current, int count, filter_state_t *state, uint32_t tick);
+void filter_hue_shift(const cJSON *params, led_output_t *target, const rgb_t *current, int count, filter_state_t *state, uint32_t tick);
+void filter_saturation(const cJSON *params, led_output_t *target, const rgb_t *current, int count, filter_state_t *state, uint32_t tick);
+void filter_vignette(const cJSON *params, led_output_t *target, const rgb_t *current, int count, filter_state_t *state, uint32_t tick);
 
 #endif /* FILTERS_H */

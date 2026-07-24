@@ -194,6 +194,65 @@
                             </select>
                             <small class="text-muted">What fires independently.</small>
                         </div>
+                        <div class="col-auto filter-param" data-param="decay">
+                            <label class="form-label" for="filter_param_decay">Decay</label>
+                            <input type="number" class="form-control" name="filter_param_decay" id="filter_param_decay"
+                                   value="{{ filter_val_decay }}" placeholder="0.85" min="0" max="0.99" step="0.01" style="width: 100px;">
+                            <small class="text-muted">How much of the previous frame persists (longer trails near 0.99).</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="strength">
+                            <label class="form-label" for="filter_param_strength">Strength</label>
+                            <input type="number" class="form-control" name="filter_param_strength" id="filter_param_strength"
+                                   value="{{ filter_val_strength }}" placeholder="0.5" min="0" max="1" step="0.05" style="width: 100px;">
+                            <small class="text-muted">How strongly the tint color is applied.</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="wavelength">
+                            <label class="form-label" for="filter_param_wavelength">Wavelength</label>
+                            <input type="number" class="form-control" name="filter_param_wavelength" id="filter_param_wavelength"
+                                   value="{{ filter_val_wavelength }}" placeholder="8" min="1" max="100" step="1" style="width: 100px;">
+                            <small class="text-muted">LEDs per shimmer crest.</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="speed">
+                            <label class="form-label" for="filter_param_speed">Speed</label>
+                            <input type="number" class="form-control" name="filter_param_speed" id="filter_param_speed"
+                                   value="{{ filter_val_speed }}" placeholder="1.0" min="-10" max="10" step="0.1" style="width: 100px;">
+                            <small class="text-muted">Animation speed (negative reverses direction; 0 is static).</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="depth">
+                            <label class="form-label" for="filter_param_depth">Depth</label>
+                            <input type="number" class="form-control" name="filter_param_depth" id="filter_param_depth"
+                                   value="{{ filter_val_depth }}" placeholder="0.5" min="0" max="1" step="0.05" style="width: 100px;">
+                            <small class="text-muted">How much the troughs dim (0 = none, 1 = to black).</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="offset">
+                            <label class="form-label" for="filter_param_offset">Offset</label>
+                            <input type="number" class="form-control" name="filter_param_offset" id="filter_param_offset"
+                                   value="{{ filter_val_offset }}" placeholder="0.0" min="0" max="1" step="0.05" style="width: 100px;">
+                            <small class="text-muted">Fixed hue rotation (0.0&ndash;1.0 = full circle).</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="amount">
+                            <label class="form-label" for="filter_param_amount">Amount</label>
+                            <input type="number" class="form-control" name="filter_param_amount" id="filter_param_amount"
+                                   value="{{ filter_val_amount }}" placeholder="1.0" min="0" max="2" step="0.05" style="width: 100px;">
+                            <small class="text-muted">Saturation scale (&lt;1 drains to gray, &gt;1 boosts).</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="falloff">
+                            <label class="form-label" for="filter_param_falloff">Falloff</label>
+                            <input type="number" class="form-control" name="filter_param_falloff" id="filter_param_falloff"
+                                   value="{{ filter_val_falloff }}" placeholder="0.5" min="0" max="1" step="0.05" style="width: 100px;">
+                            <small class="text-muted">How strongly the ends dim.</small>
+                        </div>
+                        <div class="col-auto filter-param" data-param="invert">
+                            <label class="form-label d-block" for="filter_param_invert">Invert</label>
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input theme-check" name="filter_param_invert"
+                                       id="filter_param_invert" value="true"
+                                       {% if filter_val_invert == "true" or filter_val_invert == "True" %}checked{% endif %}>
+                                <label class="form-check-label theme-check-label" for="filter_param_invert">
+                                    Dim the center instead of the ends
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -234,7 +293,13 @@ function toggleFilterEditParams() {
         scintillate: ['frequency', 'variation_percent', 'heat'],
         brightness: ['brightness'],
         spike: ['color', 'duration', 'period', 'variation', 'heat', 'scope'],
-        dropout: ['duration', 'period', 'variation', 'heat', 'scope']
+        dropout: ['duration', 'period', 'variation', 'heat', 'scope'],
+        afterglow: ['decay'],
+        tint: ['color', 'strength'],
+        shimmer: ['wavelength', 'speed', 'depth'],
+        hue_shift: ['speed', 'offset'],
+        saturation: ['amount'],
+        vignette: ['falloff', 'invert']
     };
 
     if (select.value && select.value !== 'null') {
