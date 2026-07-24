@@ -31,18 +31,35 @@ if (-not (Test-Path $cProjectDir)) {
 
 # Parse arguments: optional port, -Force for a full clean rebuild, -Full for
 # bootloader+partition-table+app+webassets (instead of the app-only
-# default), -Monitor to attach the serial monitor after flashing.
+# default), -Erase to wipe the ENTIRE flash first, -Monitor to attach the
+# serial monitor after flashing.
+#
+# -Erase note: neither the default app-flash nor -Full ever touches the
+# "data" (settings/scenes/etc.) or "nvs" partitions -- that's intentional so
+# deploys don't wipe user settings. But it also means a bad or stale value
+# persisted in "data" survives every reflash. If a board misbehaves in a way
+# a normal reflash won't clear (e.g. it was migrated from the old single-
+# "storage" partition layout and "data" now overlays leftover SPIFFS
+# content), -Erase runs `idf.py erase-flash` first to blank the whole chip;
+# the firmware then re-seeds fresh defaults into "data"/"nvs" on next boot.
+# This DOES discard all on-device settings, so use it deliberately.
 $port = $null
 $forceClean = $false
 $fullFlash = $false
+$eraseFlash = $false
 $doMonitor = $false
 foreach ($a in $args) {
     if ($a -eq '-Force') { $forceClean = $true }
     elseif ($a -eq '-Full') { $fullFlash = $true }
+    elseif ($a -eq '-Erase') { $eraseFlash = $true }
     elseif ($a -eq '-Monitor') { $doMonitor = $true }
     elseif (-not $port) { $port = $a }
 }
 if (-not $port) { $port = 'COM3' }
+# Erasing the whole chip removes the partition table too, so a plain
+# app-flash afterwards would have nothing to flash into -- force a full
+# flash whenever -Erase is used.
+if ($eraseFlash) { $fullFlash = $true }
 
 # Locate and dot-source the ESP-IDF PowerShell environment (adds idf.py etc.
 # to PATH for this process only).
@@ -71,6 +88,15 @@ try {
         idf.py fullclean
         if ($LASTEXITCODE -ne 0) {
             Write-Error "fullclean failed."
+            exit 1
+        }
+    }
+
+    if ($eraseFlash) {
+        Write-Output "Erasing ENTIRE flash (all partitions, including data + nvs) on ${port}..."
+        idf.py -p $port erase-flash
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "erase-flash failed."
             exit 1
         }
     }

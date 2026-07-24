@@ -19,7 +19,14 @@
 static const char *TAG = "webserver";
 
 #define MAX_ROUTES 128
-#define CLIENT_TASK_STACK_SIZE 8192
+/* Sized generously for the heaviest page renders (e.g. /setup, which
+ * populates every summary card in one request, going through 9+ nested
+ * template includes, each stacking multiple 256-512 byte local buffers in
+ * template_engine.c, plus a 4KB static-file streaming buffer). Cheap to be
+ * generous: anything over 4KB is placed in PSRAM automatically
+ * (CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096), so this isn't competing with
+ * the tight internal-DRAM budget. */
+#define CLIENT_TASK_STACK_SIZE 20480
 #define KEEPALIVE_TIMEOUT_SEC 5
 
 typedef struct {

@@ -41,6 +41,12 @@ static const char *TAG = "yx5200";
  * in lib/audio.py. */
 #define REQUIRED_STOP_CONFIRMATIONS 6
 
+/* After this many consecutive inconclusive/no-frame status reads, stop
+ * assuming the module is merely being slow and conclude nothing is
+ * physically there to respond (or it's stopped responding). Mirrors
+ * YX5200Player._no_response_threshold in lib/audio.py. */
+#define NO_RESPONSE_THRESHOLD 5
+
 static void build_frame(uint8_t *frame, uint8_t cmd, uint16_t param)
 {
     frame[0] = YX5200_START_BYTE;
@@ -122,6 +128,8 @@ esp_err_t yx5200_init(yx5200_t *player, uart_port_t uart_num, int tx_pin, int rx
     player->initialized = false;
     player->high_quality = high_quality;
     player->pending_stop_confirmations = 0;
+    player->responsive = true;   /* Optimistic until proven otherwise - see yx5200_query_status() */
+    player->no_response_streak = 0;
 
     uart_config_t uart_config = {
         .baud_rate = 9600,
@@ -194,6 +202,41 @@ esp_err_t yx5200_set_volume(yx5200_t *player, int volume)
     return ret;
 }
 
+/* Called on every inconclusive/no-frame status read. After
+ * NO_RESPONSE_THRESHOLD consecutive misses, concludes nothing is physically
+ * there and stops treating the module as playing (so callers aren't stuck
+ * thinking it's permanently busy). */
+static void note_no_response(yx5200_t *player)
+{
+    if (player->no_response_streak < NO_RESPONSE_THRESHOLD) {
+        player->no_response_streak++;
+    }
+    if (player->no_response_streak >= NO_RESPONSE_THRESHOLD && player->responsive) {
+        ESP_LOGW(TAG, "uart=%d: no response after %d attempts, assuming no module attached",
+                 player->uart_num, player->no_response_streak);
+        player->responsive = false;
+        player->is_playing = false;
+        player->pending_stop_confirmations = 0;
+    }
+}
+
+/* Called whenever a valid status frame is actually received - proves a
+ * module is physically present and responding, even if it had previously
+ * been marked unresponsive. */
+static void note_response_ok(yx5200_t *player)
+{
+    player->no_response_streak = 0;
+    if (!player->responsive) {
+        ESP_LOGI(TAG, "uart=%d: responding again", player->uart_num);
+        player->responsive = true;
+    }
+}
+
+bool yx5200_is_responsive(const yx5200_t *player)
+{
+    return player && player->responsive;
+}
+
 esp_err_t yx5200_query_status(yx5200_t *player)
 {
     if (!player || !player->initialized) return ESP_ERR_INVALID_STATE;
@@ -215,15 +258,18 @@ esp_err_t yx5200_query_status(yx5200_t *player)
     if (len < 10) {
         /* Inconclusive read - keep cached state, same as the Python driver. */
         ESP_LOGD(TAG, "status inconclusive uart=%d keep_cached=%d", player->uart_num, player->is_playing);
+        note_no_response(player);
         return ESP_OK;
     }
 
     uint8_t status_high = 0, status_low = 0;
     if (!find_response_frame(response, len, CMD_QUERY_STATUS, &status_high, &status_low)) {
         ESP_LOGD(TAG, "status no valid frame uart=%d keep_cached=%d", player->uart_num, player->is_playing);
+        note_no_response(player);
         return ESP_OK;
     }
 
+    note_response_ok(player);
     bool hw_playing = (status_low == STATUS_PLAYING) || (status_high == STATUS_PLAYING);
 
     if (!hw_playing && player->is_playing) {

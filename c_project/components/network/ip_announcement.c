@@ -66,6 +66,13 @@ static bool play_with_retry(int file_number, int max_wait_s)
         if (audio_player_play_file(file_number, false) >= 0) {
             return true;
         }
+        /* Once a module has actually been probed and found unresponsive (no
+         * physical hardware), stop burning through the retry budget every
+         * time this runs -- there's nothing that's going to become free. */
+        if (!audio_player_has_responsive_module()) {
+            ESP_LOGD(TAG, "No responsive audio modules, not retrying file %d", file_number);
+            return false;
+        }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 

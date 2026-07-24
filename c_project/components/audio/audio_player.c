@@ -89,10 +89,17 @@ int audio_player_play_file(int file_number, bool high_quality_preferred)
     /* Fast path, mirroring AudioPlayer.play_file in lib/audio.py: modules that
      * don't think they're playing are immediately available; modules that
      * think they are get a fresh query to confirm they haven't actually
-     * stopped. */
+     * stopped. Modules already known unresponsive (no physical hardware, see
+     * yx5200_is_responsive()) are skipped outright - no point sending them a
+     * command every single call. */
     bool candidate[MAX_MODULES] = {0};
     bool any_candidate = false;
+    bool any_responsive = false;
     for (int i = 0; i < module_count; i++) {
+        if (!yx5200_is_responsive(&modules[i])) {
+            continue;
+        }
+        any_responsive = true;
         if (!modules[i].is_playing) {
             candidate[i] = true;
         } else {
@@ -103,7 +110,11 @@ int audio_player_play_file(int file_number, bool high_quality_preferred)
     }
 
     if (!any_candidate) {
-        ESP_LOGW(TAG, "All %d modules busy", module_count);
+        if (!any_responsive) {
+            ESP_LOGD(TAG, "No responsive audio modules");
+        } else {
+            ESP_LOGW(TAG, "All %d modules busy", module_count);
+        }
         return -1;
     }
 
@@ -173,10 +184,15 @@ cJSON *audio_player_check_health(void)
 
     for (int i = 0; i < module_count; i++) {
         /* Actively probe responsiveness: issue a volume command and re-query
-         * status, mirroring AudioPlayer.check_health in lib/audio.py. */
-        bool ok = (yx5200_set_volume(&modules[i], current_volume) == ESP_OK);
+         * status, mirroring AudioPlayer.check_health in lib/audio.py. "ok"
+         * reflects whether the module has actually answered a status query
+         * (yx5200_is_responsive()), not just whether the UART write itself
+         * queued successfully -- a UART TX "succeeds" even with nothing
+         * physically attached to receive it. */
+        yx5200_set_volume(&modules[i], current_volume);
         vTaskDelay(pdMS_TO_TICKS(HEALTH_CHECK_SETTLE_MS));
         yx5200_query_status(&modules[i]);
+        bool ok = yx5200_is_responsive(&modules[i]);
 
         cJSON *obj = cJSON_CreateObject();
         cJSON_AddNumberToObject(obj, "module", i);
@@ -202,4 +218,12 @@ bool audio_player_is_module_playing(int module_index)
     if (module_index < 0 || module_index >= module_count) return false;
     yx5200_query_status(&modules[module_index]);
     return modules[module_index].is_playing;
+}
+
+bool audio_player_has_responsive_module(void)
+{
+    for (int i = 0; i < module_count; i++) {
+        if (yx5200_is_responsive(&modules[i])) return true;
+    }
+    return false;
 }

@@ -32,6 +32,21 @@ if (-not $idfProfile) {
 
 Push-Location $cProjectDir
 try {
+    # Force a CMake reconfigure before every release build. FIRMWARE_VERSION
+    # (components/network/CMakeLists.txt) is computed via `git describe` at
+    # CMake *configure* time, not on every build -- a plain `idf.py build`
+    # after committing/tagging wouldn't notice git state changed (nothing in
+    # CMakeLists.txt itself changed) and would keep baking in a stale
+    # version. reconfigure is cheap (doesn't rebuild object files, just
+    # reruns CMake) so it's not worth trying to detect when this is
+    # actually necessary.
+    Write-Output "Reconfiguring (to pick up current git describe)..."
+    idf.py reconfigure
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Reconfigure failed. See output above."
+        exit 1
+    }
+
     Write-Output "Building c_project..."
     idf.py build
     if ($LASTEXITCODE -ne 0) {

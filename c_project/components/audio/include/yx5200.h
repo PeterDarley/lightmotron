@@ -21,6 +21,14 @@ typedef struct {
     bool initialized;
     bool high_quality;               /* Prefer this module for high-quality sounds */
     int pending_stop_confirmations;  /* Debounce counter, see yx5200_query_status() */
+    bool responsive;                 /* False once no_response_streak crosses the
+                                       * threshold - no physical module detected (or
+                                       * it stopped responding). Reset to true the
+                                       * moment a valid status frame is received
+                                       * again, so a module plugged in later recovers
+                                       * on its own. */
+    int no_response_streak;          /* Consecutive inconclusive/no-frame status
+                                       * reads, see yx5200_query_status(). */
 } yx5200_t;
 
 /**
@@ -52,5 +60,13 @@ esp_err_t yx5200_query_status(yx5200_t *player);
  * Reset the module.
  */
 esp_err_t yx5200_reset(yx5200_t *player);
+
+/**
+ * True if the module has answered a status query recently enough to be
+ * considered physically present. False after NO_RESPONSE_THRESHOLD
+ * consecutive inconclusive reads (see yx5200_query_status()) -- e.g. no
+ * module wired up at all.
+ */
+bool yx5200_is_responsive(const yx5200_t *player);
 
 #endif /* YX5200_H */

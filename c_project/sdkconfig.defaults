@@ -32,6 +32,10 @@ CONFIG_LWIP_SO_REUSE=y
 # FreeRTOS
 CONFIG_FREERTOS_HZ=1000
 CONFIG_FREERTOS_TIMER_TASK_STACK_DEPTH=4096
+# Precise (hardware watchpoint) stack-overflow detection -- catches the
+# exact overrunning write instead of letting corrupted state crash
+# somewhere unrelated later.
+CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=y
 
 # mDNS
 CONFIG_MDNS_MAX_SERVICES=4
