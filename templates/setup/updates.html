@@ -47,6 +47,33 @@
         </span>
     </form>
 
+    <!-- C (ESP-IDF) firmware OTA. The compiled build flashes a whole firmware
+         image from a GitHub Release and sets current_version / latest_version /
+         update_available. The Python build instead syncs individual files from
+         a git tree and sets has_checked / has_updates / updates (block below).
+         current_version is only ever set by the C build, so this section never
+         renders on the Python build. -->
+    {% if current_version %}
+    <div class="small text-muted mb-2">
+        Current firmware: <code>{{ current_version }}</code>{% if latest_version %} &rarr; latest release: <code>{{ latest_version }}</code>{% endif %}
+    </div>
+    {% if update_available %}
+    <form hx-post="/updates"
+          hx-target="#updates-form"
+          hx-swap="outerHTML"
+          hx-confirm="Download and install the latest firmware, then reboot? The device will be briefly offline and this page will disconnect for ~30s.">
+        <input type="hidden" name="action" value="apply">
+        <button type="submit" class="btn btn-danger btn-sm">Install Firmware Update</button>
+        <span class="htmx-indicator ms-2">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span class="ms-1 small">Downloading &amp; installing&hellip;</span>
+        </span>
+    </form>
+    {% else %}
+    <div class="alert alert-info small py-2 mb-0">Firmware is up to date.</div>
+    {% endif %}
+    {% endif %}
+
     {% if has_checked %}
     <div class="small text-muted mb-2">
         Checked <strong>{{ checked_repository }}</strong>{% if checked_branch %} (branch: {{ checked_branch }}){% endif %}
