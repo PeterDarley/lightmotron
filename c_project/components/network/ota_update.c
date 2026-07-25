@@ -228,6 +228,20 @@ esp_err_t ota_apply_update(const char *url)
         .url = url,
         .timeout_ms = 30000,
         .crt_bundle_attach = esp_crt_bundle_attach,
+        /* GitHub's releases/download/... URL 302-redirects to
+         * objects.githubusercontent.com with a large signed URL (AWS-style
+         * query string, often 1.5-2KB) in the Location header. esp_http_client
+         * follows that redirect automatically, which means it has to build a
+         * brand new request LINE for that long URL -- and that build happens
+         * in the TX buffer (buffer_size_tx), not the RX buffer (buffer_size).
+         * Bumping buffer_size alone (previous attempt) fixed nothing because
+         * the default buffer_size_tx (512 bytes) was still the one
+         * overflowing. Both are set generously here; >4KB each so the
+         * general allocator places them in PSRAM
+         * (CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096 in this project) rather
+         * than competing with client-task stacks for internal RAM. */
+        .buffer_size = 8192,
+        .buffer_size_tx = 8192,
     };
 
     esp_https_ota_config_t ota_config = {
