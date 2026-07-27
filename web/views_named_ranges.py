@@ -5,19 +5,28 @@ import os
 _lights = None
 _rename_named_range_refs_func = None
 _summarize_led_list_func = None
+_reindex_leds_func = None
 
 # Server-side selection state for the LED naming tool
 _selected_leds = []
 _editing_range_name = None
 
+# Server-side queue for the "Reorder Strings" tool: names of ranges the user
+# has chosen to reorder, in no particular stored order -- display/swap order
+# is always recomputed from each range's current physical start index.
+_reorder_queue = []
 
-def initialize_named_range_views(lights_instance, rename_named_range_refs_func, summarize_led_list_func) -> None:
+
+def initialize_named_range_views(
+    lights_instance, rename_named_range_refs_func, summarize_led_list_func, reindex_leds_func
+) -> None:
     """Inject shared dependencies used by named range views."""
 
-    global _lights, _rename_named_range_refs_func, _summarize_led_list_func
+    global _lights, _rename_named_range_refs_func, _summarize_led_list_func, _reindex_leds_func
     _lights = lights_instance
     _rename_named_range_refs_func = rename_named_range_refs_func
     _summarize_led_list_func = summarize_led_list_func
+    _reindex_leds_func = reindex_leds_func
 
 
 def _parse_selected_tokens(selected_leds_str: str) -> list:
@@ -92,6 +101,109 @@ def _named_ranges_has_cycle(named_ranges: dict) -> bool:
             return True
 
     return False
+
+
+def _is_primary_contiguous(members: list) -> bool:
+    """True when every member is a raw LED index (no "named:" references) and
+    the members form one unbroken contiguous run with no gaps or duplicates."""
+
+    if not isinstance(members, list) or not members:
+        return False
+
+    for item in members:
+        if not isinstance(item, int):
+            return False
+
+    sorted_members = sorted(members)
+    if len(set(sorted_members)) != len(sorted_members):
+        return False
+
+    return sorted_members == list(range(sorted_members[0], sorted_members[-1] + 1))
+
+
+def _reorder_eligible_ranges() -> list:
+    """Return primary, contiguous named ranges eligible for the reorder tool,
+    sorted by their current physical start index. A range extending past the
+    current LED count is excluded (a stale range from a hardware
+    reconfiguration -- reordering a string whose far end no longer physically
+    exists isn't meaningful)."""
+
+    led_count = _lights.leds.count
+    eligible = []
+
+    for name, members in _lights.settings.get("named_ranges", {}).items():
+        if not _is_primary_contiguous(members):
+            continue
+        sorted_members = sorted(members)
+        if sorted_members[-1] >= led_count:
+            continue
+        eligible.append({
+            "name": name,
+            "members": sorted_members,
+            "start": sorted_members[0],
+            "len": len(sorted_members),
+        })
+
+    eligible.sort(key=lambda r: r["start"])
+    return eligible
+
+
+def _compute_swap_permutation(range_a_members: list, range_b_members: list) -> dict:
+    """Build the old_index -> new_index permutation for swapping two
+    non-overlapping contiguous ranges' physical positions. Whichever range
+    starts first is treated as "A"; any content strictly between them shifts
+    by the two ranges' length difference so it keeps its own relative
+    position. Each of A, B, and the shifted middle content keeps its own
+    internal LED order -- load-bearing, since pattern rendering (wave, cylon,
+    gradient, etc.) derives visual position from order within a resolved
+    target list, not raw index value."""
+
+    a_sorted = sorted(range_a_members)
+    b_sorted = sorted(range_b_members)
+    if a_sorted[0] > b_sorted[0]:
+        a_sorted, b_sorted = b_sorted, a_sorted
+
+    a_start, a_len = a_sorted[0], len(a_sorted)
+    b_start, b_len = b_sorted[0], len(b_sorted)
+
+    permutation = {}
+
+    for k, old_index in enumerate(b_sorted):
+        permutation[old_index] = a_start + k
+
+    middle_start = a_start + a_len
+    for old_index in range(middle_start, b_start):
+        permutation[old_index] = old_index + (b_len - a_len)
+
+    a_new_start = b_start + b_len - a_len
+    for k, old_index in enumerate(a_sorted):
+        permutation[old_index] = a_new_start + k
+
+    return permutation
+
+
+def _swap_named_ranges(name_a: str, name_b: str) -> bool:
+    """Swap two named ranges' physical LED positions, rewriting every affected
+    reference (other named ranges, scene targets). Re-validates both ranges
+    are still eligible and non-overlapping against current storage before
+    acting, since the reorder queue is transient per-process state that
+    nothing resets on a model switch. Returns False (no-op) if either range
+    is no longer valid for this."""
+
+    named_ranges = _lights.settings.get("named_ranges", {})
+    members_a = named_ranges.get(name_a)
+    members_b = named_ranges.get(name_b)
+
+    if not _is_primary_contiguous(members_a) or not _is_primary_contiguous(members_b):
+        return False
+
+    if set(members_a) & set(members_b):
+        return False
+
+    permutation = _compute_swap_permutation(members_a, members_b)
+    _reindex_leds_func(permutation)
+    _lights.settings_object.store()
+    return True
 
 
 def summarize_named_range_members(members: list) -> str:
@@ -387,3 +499,80 @@ class NamedRangeRemoveSubrangeView(View):
         context = _named_range_context(sort_by)
         context["page_title"] = "Named Ranges"
         return render_template("setup/led_picker.html", context)
+
+
+def _reorder_context() -> dict:
+    """Build the context for the "Reorder Strings" tool: the queued ranges
+    (in current physical order) plus the ranges still available to add."""
+
+    eligible = _reorder_eligible_ranges()
+    for r in eligible:
+        r["summary"] = _summarize_led_list_func(r["members"])
+
+    queued_names = set(_reorder_queue)
+    queued = [r for r in eligible if r["name"] in queued_names]
+    available = [r for r in eligible if r["name"] not in queued_names]
+
+    return {
+        "page_title": "Named Ranges",
+        "reorder_queue": queued,
+        "reorder_available": available,
+    }
+
+
+class NamedRangeReorderView(View):
+    """Reorder a set of non-overlapping primary named ranges, rewriting every
+    affected LED index reference (other named ranges, scene targets)."""
+
+    def get(self) -> str:
+        """Reset the reorder queue and show the tool."""
+
+        global _reorder_queue
+        _reorder_queue = []
+        return render_template("setup/named_ranges_reorder.html", _reorder_context())
+
+    def post(self) -> str:
+        """Add/remove a range from the queue, or move one up/down."""
+
+        global _reorder_queue
+        action = self.request.form_data.get("action", "").strip()
+        range_name = self.request.form_data.get("range_name", "").strip()
+        error = None
+
+        eligible = _reorder_eligible_ranges()
+        eligible_by_name = {r["name"]: r for r in eligible}
+        # Drop any queued range that's no longer eligible (renamed, deleted,
+        # became an aggregate, or a hardware change put it out of bounds)
+        # rather than acting on stale data.
+        _reorder_queue = [n for n in _reorder_queue if n in eligible_by_name]
+
+        if action == "add_to_reorder_list" and range_name:
+            if range_name not in eligible_by_name:
+                error = "That range is no longer eligible to reorder."
+            elif range_name not in _reorder_queue:
+                candidate_members = set(eligible_by_name[range_name]["members"])
+                overlaps = any(
+                    candidate_members & set(eligible_by_name[queued]["members"])
+                    for queued in _reorder_queue
+                )
+                if overlaps:
+                    error = "That range overlaps a range already in the list."
+                else:
+                    _reorder_queue.append(range_name)
+
+        elif action == "remove_from_reorder_list" and range_name:
+            _reorder_queue = [n for n in _reorder_queue if n != range_name]
+
+        elif action in ("move_range_up", "move_range_down") and range_name:
+            queued_ordered = [r for r in eligible if r["name"] in _reorder_queue]
+            names_in_order = [r["name"] for r in queued_ordered]
+            if range_name in names_in_order:
+                idx = names_in_order.index(range_name)
+                neighbor_idx = idx - 1 if action == "move_range_up" else idx + 1
+                if 0 <= neighbor_idx < len(names_in_order):
+                    _swap_named_ranges(range_name, names_in_order[neighbor_idx])
+
+        context = _reorder_context()
+        if error:
+            context["error"] = error
+        return render_template("setup/named_ranges_reorder.html", context)

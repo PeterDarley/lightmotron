@@ -55,6 +55,7 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
     triggerable_scenes: list = [n for n in all_scene_names if n != scene_name]
     stop_sounds_on_start: list = scene_meta.get("stop_sounds_on_start", [])
     stop_sounds_on_end: list = scene_meta.get("stop_sounds_on_end", [])
+    active_on_boot: bool = bool(scene_meta.get("active_on_boot", False))
 
     context: dict = {
         "scene_name": scene_name,
@@ -74,6 +75,7 @@ def _scene_edit_context(scene_name: str, edit_entry_name: str = None) -> dict:
         "scene_stop_sounds_on_start_csv": ",".join(stop_sounds_on_start),
         "scene_stop_sounds_on_end": stop_sounds_on_end,
         "scene_stop_sounds_on_end_csv": ",".join(stop_sounds_on_end),
+        "scene_active_on_boot": active_on_boot,
         "page_title": "Edit Scene",
     }
 
@@ -296,6 +298,21 @@ class SceneEditView(View):
                     lights.settings["scene_settings"][scene_name]["stop_sounds_on_end"] = stop_sounds_on_end_list
                 elif "stop_sounds_on_end" in lights.settings["scene_settings"].get(scene_name, {}):
                     del lights.settings["scene_settings"][scene_name]["stop_sounds_on_end"]
+
+                lights.settings_object.store()
+
+            elif action == "set_active_on_boot":
+                active_on_boot_value: str = self.request.form_data.get("active_on_boot", "").strip()
+
+                if "scene_settings" not in lights.settings:
+                    lights.settings["scene_settings"] = {}
+                if scene_name not in lights.settings["scene_settings"]:
+                    lights.settings["scene_settings"][scene_name] = {}
+
+                if active_on_boot_value == "1":
+                    lights.settings["scene_settings"][scene_name]["active_on_boot"] = True
+                elif "active_on_boot" in lights.settings["scene_settings"][scene_name]:
+                    del lights.settings["scene_settings"][scene_name]["active_on_boot"]
 
                 lights.settings_object.store()
 

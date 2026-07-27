@@ -429,6 +429,11 @@ esp_err_t boot_init(void)
     lighting_init();
     ESP_LOGI(TAG, "Lighting system initialized");
 
+    /* Activate whichever scene(s) are marked active_on_boot, or fall back
+     * to an arbitrary single scene if none are marked -- matches
+     * Lighting.__init__()'s boot-scene activation in lib/lighting/lighting.py. */
+    lighting_activate_boot_scenes();
+
     /* Start animation */
     animation_start();
     ESP_LOGI(TAG, "Animation started");

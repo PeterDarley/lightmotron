@@ -8,18 +8,20 @@ singleton live in ``views_common``.
 """
 
 from web import views_named_ranges
-from web.views_common import lights, summarize_led_list, _rename_named_range_refs
+from web.views_common import lights, summarize_led_list, _rename_named_range_refs, _reindex_leds
 
 # Named range views are grouped into a dedicated module by feature area.
 views_named_ranges.initialize_named_range_views(
     lights_instance=lights,
     rename_named_range_refs_func=_rename_named_range_refs,
     summarize_led_list_func=summarize_led_list,
+    reindex_leds_func=_reindex_leds,
 )
 NamedRangeSummaryView = views_named_ranges.NamedRangeSummaryView
 NamedRangeView = views_named_ranges.NamedRangeView
 NamedRangeSetView = views_named_ranges.NamedRangeSetView
 NamedRangeRemoveSubrangeView = views_named_ranges.NamedRangeRemoveSubrangeView
+NamedRangeReorderView = views_named_ranges.NamedRangeReorderView
 
 from web.views_home import (
     HomeView,

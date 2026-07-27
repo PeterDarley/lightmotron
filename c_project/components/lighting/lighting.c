@@ -445,6 +445,57 @@ esp_err_t lighting_add_scene(const char *scene_name)
     return activate_scene(scene_name);
 }
 
+esp_err_t lighting_activate_boot_scenes(void)
+{
+    cJSON *model = get_current_model_object();
+    if (!model) return ESP_FAIL;
+
+    cJSON *scenes = cJSON_GetObjectItem(model, "scenes");
+    if (!scenes) return ESP_FAIL;
+    cJSON *scene_settings = cJSON_GetObjectItem(model, "scene_settings");
+
+    char boot_scenes[MAX_ACTIVE_SCENES][64];
+    int boot_scene_count = 0;
+
+    for (cJSON *scene = scenes->child; scene && boot_scene_count < MAX_ACTIVE_SCENES; scene = scene->next) {
+        cJSON *meta = scene_settings ? cJSON_GetObjectItem(scene_settings, scene->string) : NULL;
+        if (meta && json_get_bool(meta, "active_on_boot", false)) {
+            strncpy(boot_scenes[boot_scene_count], scene->string, sizeof(boot_scenes[0]) - 1);
+            boot_scenes[boot_scene_count][sizeof(boot_scenes[0]) - 1] = '\0';
+            boot_scene_count++;
+        }
+    }
+
+    if (boot_scene_count == 0) {
+        /* No scene explicitly marked -- fall back to the model's
+         * "default_scene"/first-scene resolution, matching
+         * Lighting._activate_boot_scenes()'s Python behavior for installs
+         * that haven't touched this setting yet. */
+        return lighting_set_scene(NULL);
+    }
+
+    /* Sorted for determinism (matches Python's sorted() list) -- only
+     * actually observable if MAX_ACTIVE_SCENES is hit and some get
+     * dropped, but cheap to keep in parity regardless. */
+    for (int i = 1; i < boot_scene_count; i++) {
+        char key[64];
+        strncpy(key, boot_scenes[i], sizeof(key));
+        int j = i - 1;
+        while (j >= 0 && strcmp(boot_scenes[j], key) > 0) {
+            strncpy(boot_scenes[j + 1], boot_scenes[j], sizeof(boot_scenes[0]));
+            j--;
+        }
+        strncpy(boot_scenes[j + 1], key, sizeof(boot_scenes[0]));
+    }
+
+    esp_err_t ret = lighting_set_scene(boot_scenes[0]);
+    for (int i = 1; i < boot_scene_count; i++) {
+        esp_err_t add_ret = lighting_add_scene(boot_scenes[i]);
+        if (add_ret != ESP_OK) ret = add_ret;
+    }
+    return ret;
+}
+
 esp_err_t lighting_remove_scene(const char *scene_name)
 {
     if (!scene_name) return ESP_ERR_INVALID_ARG;

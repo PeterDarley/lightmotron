@@ -35,6 +35,7 @@ http_response_t *view_named_range(http_request_t *req);
 http_response_t *view_named_range_set(http_request_t *req);
 http_response_t *view_named_range_remove_subrange(http_request_t *req);
 http_response_t *view_named_range_summary(http_request_t *req);
+http_response_t *view_named_range_reorder(http_request_t *req);
 
 /**
  * Build the {named_ranges} context (sorted by name, mirrors

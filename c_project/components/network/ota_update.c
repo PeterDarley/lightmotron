@@ -7,6 +7,10 @@
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -15,6 +19,15 @@ static const char *TAG = "ota_update";
 
 #define GITHUB_API_URL_FMT "https://api.github.com/repos/%s/%s/releases/latest"
 #define OTA_HTTP_RESPONSE_CAPACITY 8192
+/* esp_https_ota()'s TLS handshake + X.509 cert-bundle verification needs
+ * meaningfully more stack depth than the 12KB webserver client_task stack
+ * (webserver.c) was sized for -- that budget was validated against
+ * template-render call depth, not TLS handshake depth. Run it on its own
+ * dedicated task rather than whichever client_task happens to call
+ * ota_apply_update(). This is a one-off task (never more than one OTA in
+ * flight at a time), so there's no fragmentation-driven pressure to keep it
+ * as tight as the concurrent client task pool. */
+#define OTA_APPLY_TASK_STACK_SIZE 16384
 
 /* Defaults mirror web/views.py's _ota_repo_settings() fallback values */
 #define DEFAULT_OTA_REPO_OWNER "PeterDarley"
@@ -216,16 +229,18 @@ esp_err_t ota_check_for_update(ota_update_info_t *info)
     return ESP_OK;
 }
 
-esp_err_t ota_apply_update(const char *url)
-{
-    if (!url || strlen(url) == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
+typedef struct {
+    char url[256];
+    esp_err_t result;
+    SemaphoreHandle_t done;
+} ota_apply_task_args_t;
 
-    ESP_LOGI(TAG, "Starting OTA from: %s", url);
+static void ota_apply_task(void *pvParameters)
+{
+    ota_apply_task_args_t *args = (ota_apply_task_args_t *)pvParameters;
 
     esp_http_client_config_t config = {
-        .url = url,
+        .url = args->url,
         .timeout_ms = 30000,
         .crt_bundle_attach = esp_crt_bundle_attach,
         /* GitHub's releases/download/... URL 302-redirects to
@@ -251,10 +266,45 @@ esp_err_t ota_apply_update(const char *url)
     esp_err_t ret = esp_https_ota(&ota_config);
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "OTA successful, rebooting...");
-        esp_restart();
-    } else {
-        ESP_LOGE(TAG, "OTA failed: %s", esp_err_to_name(ret));
+        esp_restart(); /* never returns */
     }
 
-    return ret;
+    ESP_LOGE(TAG, "OTA failed: %s", esp_err_to_name(ret));
+
+    UBaseType_t stack_left_words = uxTaskGetStackHighWaterMark(NULL);
+    ESP_LOGI(TAG, "OTA task stack headroom: %u bytes",
+             (unsigned)(stack_left_words * sizeof(StackType_t)));
+
+    args->result = ret;
+    xSemaphoreGive(args->done);
+    vTaskDelete(NULL);
+}
+
+esp_err_t ota_apply_update(const char *url)
+{
+    if (!url || strlen(url) == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "Starting OTA from: %s", url);
+
+    ota_apply_task_args_t args = {0};
+    strncpy(args.url, url, sizeof(args.url) - 1);
+    args.done = xSemaphoreCreateBinary();
+    if (!args.done) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    if (xTaskCreate(ota_apply_task, "ota_apply", OTA_APPLY_TASK_STACK_SIZE, &args, 4, NULL) != pdPASS) {
+        ESP_LOGE(TAG, "Failed to spawn OTA apply task");
+        vSemaphoreDelete(args.done);
+        return ESP_ERR_NO_MEM;
+    }
+
+    /* Block until the task finishes (or the device reboots on success,
+     * in which case this never returns either) -- preserves the existing
+     * synchronous return-value contract for callers. */
+    xSemaphoreTake(args.done, portMAX_DELAY);
+    vSemaphoreDelete(args.done);
+    return args.result;
 }

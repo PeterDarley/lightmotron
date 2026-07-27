@@ -166,6 +166,22 @@
 
     <div class="border-top mt-3 pt-3">
 
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input theme-check" type="checkbox" role="switch"
+                   id="active-on-boot-{{ scene_name_id }}" name="active_on_boot" value="1"
+                   {% if scene_active_on_boot %}checked{% endif %}
+                   hx-post="/scenes/edit"
+                   hx-trigger="change"
+                   hx-target="#modal-body"
+                   hx-swap="innerHTML"
+                   hx-vals='{"action": "set_active_on_boot", "scene_name": "{{ scene_name }}"}'>
+            <label class="form-check-label theme-check-label small" for="active-on-boot-{{ scene_name_id }}">
+                Start automatically when the device boots
+            </label>
+        </div>
+        <small class="text-muted d-block mb-3">Any number of scenes can be marked. All marked scenes are
+            activated together at startup; if none are marked, an arbitrary scene starts instead.</small>
+
         {% if killable_scenes %}
         <form hx-post="/scenes/edit"
               hx-target="#modal-body"

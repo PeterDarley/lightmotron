@@ -27,6 +27,7 @@ web_server.add_routes(
         "/named_range/set": views.NamedRangeSetView,
         "/named_range/remove_subrange": views.NamedRangeRemoveSubrangeView,
         "/named_range/summary": views.NamedRangeSummaryView,
+        "/named_range/reorder": views.NamedRangeReorderView,
         "/custom_colors": views.CustomColorsView,
         "/custom_colors/summary": views.CustomColorsSummaryView,
         "/scenes": views.ScenesView,

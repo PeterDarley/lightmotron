@@ -64,6 +64,7 @@ http_response_t *view_models(http_request_t *req)
     if (strcmp(action, "set") == 0 && name && name[0]) {
         esp_err_t err = lighting_set_current_model(name);
         if (err != ESP_OK) return response_create(400, "text/plain", esp_err_to_name(err));
+        lighting_activate_boot_scenes();
 
         /* Instruct HTMX to reload the setup page so summaries update - mirrors
          * the Response(status=200, headers={"HX-Redirect": "/setup"}). */
@@ -104,6 +105,7 @@ http_response_t *view_models_set(http_request_t *req)
     if (name && name[0]) {
         esp_err_t err = lighting_set_current_model(name);
         if (err != ESP_OK) return response_create(400, "text/plain", esp_err_to_name(err));
+        lighting_activate_boot_scenes();
     }
 
     http_response_t *res = response_create(200, "text/plain", "");

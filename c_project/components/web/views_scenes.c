@@ -373,6 +373,8 @@ static void fill_scene_edit_context(cJSON *ctx, cJSON *model, const char *scene_
     cJSON_AddItemToObject(ctx, "scene_stop_sounds_on_end", stop_end_arr);
     cJSON_AddStringToObject(ctx, "scene_stop_sounds_on_end_csv", stop_end_csv);
 
+    cJSON_AddBoolToObject(ctx, "scene_active_on_boot", json_get_bool(scene_meta, "active_on_boot", false));
+
     cJSON_AddStringToObject(ctx, "page_title", "Edit Scene");
 
     /* _sounds_context() merge - only "sounds" (title/file) is needed here. */
@@ -438,6 +440,24 @@ static void update_scene_settings_from_form(http_request_t *req, cJSON *model, c
     cJSON_DeleteItemFromObject(meta, "stop_sounds_on_end");
     if (cJSON_GetArraySize(stop_end_list) > 0) cJSON_AddItemToObject(meta, "stop_sounds_on_end", stop_end_list);
     else cJSON_Delete(stop_end_list);
+}
+
+/* Handles the "active on boot" toggle as its own isolated action (rather
+ * than folding it into update_scene_settings_from_form's batch), so saving
+ * it can't be affected by, or clobber, the other scene-settings forms -
+ * mirrors SceneEditView.post()'s separate "set_active_on_boot" branch in
+ * web/views_scenes.py. */
+static void set_active_on_boot_from_form(http_request_t *req, cJSON *model, const char *scene_name)
+{
+    const char *value = request_get_form_field(req, "active_on_boot");
+
+    cJSON *scene_settings = cJSON_GetObjectItem(model, "scene_settings");
+    if (!scene_settings) { scene_settings = cJSON_CreateObject(); cJSON_AddItemToObject(model, "scene_settings", scene_settings); }
+    cJSON *meta = cJSON_GetObjectItem(scene_settings, scene_name);
+    if (!meta) { meta = cJSON_CreateObject(); cJSON_AddItemToObject(scene_settings, scene_name, meta); }
+
+    cJSON_DeleteItemFromObject(meta, "active_on_boot");
+    if (value && strcmp(value, "1") == 0) cJSON_AddBoolToObject(meta, "active_on_boot", true);
 }
 
 /* ---------------------------------------------------------------------
@@ -575,6 +595,10 @@ http_response_t *view_scene_edit(http_request_t *req)
 
         } else if (action && strcmp(action, "update_scene_settings") == 0) {
             update_scene_settings_from_form(req, model, scene_name);
+            persistent_dict_save(store);
+
+        } else if (action && strcmp(action, "set_active_on_boot") == 0) {
+            set_active_on_boot_from_form(req, model, scene_name);
             persistent_dict_save(store);
         }
     }

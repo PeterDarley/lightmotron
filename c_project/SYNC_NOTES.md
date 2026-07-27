@@ -14,6 +14,49 @@ a couple of deferred lighting features, module_idx gap in sounds), not a fresh a
 Nothing has been committed to git — all of this sits as uncommitted working-tree changes,
 per explicit instruction that only the user runs git commands.
 
+## Post-audit feature additions (kept in sync, not part of the original audit)
+
+- **2026-07-24 — Named Ranges "Reorder Strings" tool**: new feature (not an
+  audit finding) letting the user swap/reorder physically-distinct LED
+  strings (primary, contiguous, non-overlapping named ranges) and have the
+  system rewrite every affected LED index reference automatically. Landed in
+  both builds together: Python `web/views_common.py` (`_reindex_leds`),
+  `web/views_named_ranges.py` (`_is_primary_contiguous`,
+  `_reorder_eligible_ranges`, `_compute_swap_permutation`,
+  `_swap_named_ranges`, `NamedRangeReorderView`), and a prerequisite parity
+  fix to `lib/lighting/lighting.py`'s `get_targets` (added comma-separated
+  multi-token string support, matching what `target_spec_resolve` already
+  did in C) — mirrored line-for-line in
+  `c_project/components/web/views_named_ranges.c`
+  (`is_primary_contiguous`/`reorder_eligible_ranges`/
+  `compute_swap_permutation`/`reindex_leds`/`swap_named_ranges`/
+  `view_named_range_reorder`), `routes.c`, and `views.h`. New shared
+  template `templates/setup/named_ranges_reorder.html` serves both builds.
+  No C-side equivalent of the Python parity fix was needed since
+  `target_spec_resolve` already supported comma-joined specs.
+
+- **2026-07-26 — Scene "active on boot" marking**: new feature letting any
+  number of scenes be flagged (`scene_settings.<name>.active_on_boot`) to
+  activate together at startup, replacing the previously dead/unreachable
+  `default_scene` single-scene mechanism (it had no UI setter in either
+  build — confirmed via full-repo grep before starting). If no scene is
+  flagged, falls back to the old single-arbitrary-scene behavior so
+  existing installs aren't left dark after upgrading. Python:
+  `Lighting._activate_boot_scenes()` (`lib/lighting/lighting.py`), called
+  from `__init__` and (replacing the old bare `set_scene(None)` call) from
+  `set_current_model()`; UI in `web/views_scenes.py`
+  (`SceneEditView.post`'s new isolated `set_active_on_boot` action, kept
+  separate from the pre-existing `update_scene_settings` batch handler
+  specifically so it can't be clobbered by, or clobber, the other
+  scene-settings forms) and `templates/setup/scene_edit.html`. C mirror:
+  `lighting_activate_boot_scenes()` (`components/lighting/lighting.c/.h`),
+  called from `main/boot.c` after `lighting_init()` and from
+  `components/web/views_models.c`'s two model-switch call sites (which
+  previously activated no scene at all on switch — a pre-existing C/Python
+  divergence, fixed as a natural side effect of wiring this in); web side in
+  `components/web/views_scenes.c` (`set_active_on_boot_from_form`,
+  `fill_scene_edit_context`'s `scene_active_on_boot` context key).
+
 ## Methodology
 
 For each file pair: read both sides, identify (a) features/fields/routes present in

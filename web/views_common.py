@@ -92,6 +92,53 @@ def _rename_named_range_refs(old_name: str, new_name: str) -> None:
                     members[i] = new_ref
 
 
+def _reindex_leds(permutation: dict) -> None:
+    """Remap every raw LED index reference in the active model per ``permutation``
+    (old_index -> new_index; any index not present is left unchanged).
+
+    Used by the Named Ranges "Reorder Strings" tool after computing a swap. Two
+    passes, mirroring the only two places raw LED indices are ever persisted:
+
+    1. named_ranges member lists -- each raw-int member is replaced in place.
+       "named:X" string members (references to other ranges) are left alone;
+       the referenced range's own members are remapped independently in this
+       same pass.
+    2. scene entry "target" strings -- "all" and "named:X" targets are left
+       alone (they don't encode raw indices). Anything else is resolved to its
+       ordered index list, remapped preserving that order (NOT sorted -- sorting
+       would scramble the visual direction of wave/gradient/rainbow-style
+       patterns, which derive position from order within the target, not index
+       value), then re-serialized as a single digit, a compact "a-b" range if
+       still ascending-contiguous, or a comma-joined string otherwise.
+    """
+
+    named_ranges: dict = lights.settings.get("named_ranges", {})
+    for members in named_ranges.values():
+        if not isinstance(members, list):
+            continue
+        for i, item in enumerate(members):
+            if isinstance(item, int):
+                members[i] = permutation.get(item, item)
+
+    for entry in _iter_scene_entries():
+        target = entry.get("target")
+        if not isinstance(target, str) or target == "all" or target.startswith("named:"):
+            continue
+
+        resolved = lights.get_targets(target)
+        if not resolved:
+            continue
+
+        remapped = [permutation.get(v, v) for v in resolved]
+
+        if len(remapped) == 1:
+            entry["target"] = str(remapped[0])
+        elif remapped == list(range(remapped[0], remapped[-1] + 1)):
+            entry["target"] = "{}-{}".format(remapped[0], remapped[-1])
+        else:
+            entry["target"] = ",".join(str(v) for v in remapped)
+
+
 def _rename_effect_refs(old_name: str, new_name: str) -> None:
     """Update all scene entries that reference an effect by its old name."""
 

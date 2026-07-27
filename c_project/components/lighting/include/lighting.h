@@ -126,6 +126,14 @@ esp_err_t lighting_set_scene(const char *scene_name);
 esp_err_t lighting_add_scene(const char *scene_name);
 
 /**
+ * Activate every scene marked scene_settings.<name>.active_on_boot in the
+ * current model. If none are marked, falls back to lighting_set_scene(NULL)
+ * (the model's "default_scene", else the first defined scene). Call once
+ * after lighting_init(), and again after switching models.
+ */
+esp_err_t lighting_activate_boot_scenes(void);
+
+/**
  * Remove a scene from the active set.
  */
 esp_err_t lighting_remove_scene(const char *scene_name);

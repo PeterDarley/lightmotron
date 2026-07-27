@@ -39,6 +39,45 @@ static void set_selected_leds(cJSON *tokens)
     g_selected_leds = tokens ? tokens : cJSON_CreateArray();
 }
 
+/* Transient queue for the "Reorder Strings" tool: names of ranges the user
+ * has chosen to reorder. Mirrors _reorder_queue in views_named_ranges.py.
+ * Display/swap order is always recomputed from each range's current
+ * physical start index, not insertion order into this array. */
+#define MAX_REORDER_QUEUE 32
+static char g_reorder_queue[MAX_REORDER_QUEUE][64];
+static int g_reorder_queue_count = 0;
+
+static bool reorder_queue_contains(const char *name)
+{
+    for (int i = 0; i < g_reorder_queue_count; i++) {
+        if (strcmp(g_reorder_queue[i], name) == 0) return true;
+    }
+    return false;
+}
+
+static void reorder_queue_remove(const char *name)
+{
+    for (int i = 0; i < g_reorder_queue_count; i++) {
+        if (strcmp(g_reorder_queue[i], name) == 0) {
+            for (int j = i; j < g_reorder_queue_count - 1; j++) {
+                strncpy(g_reorder_queue[j], g_reorder_queue[j + 1], sizeof(g_reorder_queue[j]) - 1);
+                g_reorder_queue[j][sizeof(g_reorder_queue[j]) - 1] = '\0';
+            }
+            g_reorder_queue_count--;
+            return;
+        }
+    }
+}
+
+static bool reorder_queue_add(const char *name)
+{
+    if (g_reorder_queue_count >= MAX_REORDER_QUEUE || reorder_queue_contains(name)) return false;
+    strncpy(g_reorder_queue[g_reorder_queue_count], name, sizeof(g_reorder_queue[0]) - 1);
+    g_reorder_queue[g_reorder_queue_count][sizeof(g_reorder_queue[0]) - 1] = '\0';
+    g_reorder_queue_count++;
+    return true;
+}
+
 /* Mirrors _parse_selected_tokens(): parse a comma-separated string of ints
  * and "named:X" tokens into a cJSON array of numbers/strings. */
 static cJSON *parse_selected_tokens(const char *csv)
@@ -458,6 +497,372 @@ static void rename_named_range_refs(cJSON *model, const char *old_name, const ch
             }
         }
     }
+}
+
+/* ---------------------------------------------------------------------
+ * Reorder Strings tool: swap primary, contiguous named ranges' physical
+ * positions, rewriting every affected LED index reference. Mirrors
+ * _is_primary_contiguous / _reorder_eligible_ranges / _compute_swap_permutation
+ * / _swap_named_ranges / _reindex_leds in web/views_named_ranges.py and
+ * web/views_common.py.
+ * ------------------------------------------------------------------- */
+
+/* True when every member is a raw LED index (no "named:" references) and the
+ * members form one unbroken contiguous run with no gaps or duplicates. */
+static bool is_primary_contiguous(cJSON *members)
+{
+    if (!members || !cJSON_IsArray(members)) return false;
+
+    int values[MAX_LEDS];
+    int n = 0;
+    for (cJSON *item = members->child; item; item = item->next) {
+        if (!cJSON_IsNumber(item) || n >= MAX_LEDS) return false;
+        values[n++] = item->valueint;
+    }
+    if (n == 0) return false;
+
+    qsort(values, n, sizeof(int), cmp_int);
+    for (int i = 1; i < n; i++) {
+        if (values[i] == values[i - 1]) return false; /* duplicate */
+        if (values[i] != values[i - 1] + 1) return false; /* gap */
+    }
+    return true;
+}
+
+/* Primary+contiguous named ranges eligible for the reorder tool, sorted by
+ * current physical start index, as {name, members (sorted numbers), start,
+ * len}. A range extending past the current LED count is excluded (stale
+ * range from a hardware reconfiguration). Mirrors _reorder_eligible_ranges(). */
+static cJSON *reorder_eligible_ranges(void)
+{
+    cJSON *result = cJSON_CreateArray();
+    cJSON *model = lighting_get_settings();
+    cJSON *named_ranges = model ? cJSON_GetObjectItem(model, "named_ranges") : NULL;
+    if (!named_ranges) return result;
+
+    int led_count = leds_total_count();
+
+    for (cJSON *range = named_ranges->child; range; range = range->next) {
+        if (!is_primary_contiguous(range)) continue;
+
+        int n = cJSON_GetArraySize(range);
+        int values[MAX_LEDS];
+        int idx = 0;
+        for (cJSON *item = range->child; item; item = item->next) values[idx++] = item->valueint;
+        qsort(values, n, sizeof(int), cmp_int);
+
+        if (values[n - 1] >= led_count) continue;
+
+        cJSON *entry = cJSON_CreateObject();
+        cJSON_AddStringToObject(entry, "name", range->string);
+        cJSON *members_arr = cJSON_CreateArray();
+        for (int i = 0; i < n; i++) cJSON_AddItemToArray(members_arr, cJSON_CreateNumber(values[i]));
+        cJSON_AddItemToObject(entry, "members", members_arr);
+        cJSON_AddNumberToObject(entry, "start", values[0]);
+        cJSON_AddNumberToObject(entry, "len", n);
+        cJSON_AddItemToArray(result, entry);
+    }
+
+    /* Insertion sort by start - mirrors build_named_range_entries()'s pattern. */
+    int total = cJSON_GetArraySize(result);
+    for (int i = 1; i < total; i++) {
+        cJSON *item = cJSON_DetachItemFromArray(result, i);
+        int val = json_get_int(item, "start", 0);
+        int j = i - 1;
+        while (j >= 0 && json_get_int(cJSON_GetArrayItem(result, j), "start", 0) > val) j--;
+        cJSON_InsertItemInArray(result, j + 1, item);
+    }
+
+    return result;
+}
+
+/* old_index -> new_index map, bounded by MAX_LEDS entries (a permutation
+ * only ever touches indices, each unique, so it can never exceed the total
+ * LED count). Linear lookup is fine here: this runs once per user click, not
+ * on any hot path. */
+typedef struct {
+    int old_index[MAX_LEDS];
+    int new_index[MAX_LEDS];
+    int count;
+} permutation_t;
+
+static int permutation_lookup(const permutation_t *p, int old_index)
+{
+    for (int i = 0; i < p->count; i++) {
+        if (p->old_index[i] == old_index) return p->new_index[i];
+    }
+    return old_index; /* identity outside the swap's own span */
+}
+
+static void permutation_add(permutation_t *p, int old_index, int new_index)
+{
+    if (p->count < MAX_LEDS) {
+        p->old_index[p->count] = old_index;
+        p->new_index[p->count] = new_index;
+        p->count++;
+    }
+}
+
+/* Builds the old_index -> new_index permutation for swapping two
+ * non-overlapping contiguous ranges' physical positions. Whichever range
+ * starts first is treated as "A"; any content strictly between them shifts
+ * by the two ranges' length difference so it keeps its own relative
+ * position. Each of A, B, and the shifted middle content keeps its own
+ * internal LED order - load-bearing, since pattern rendering (wave, cylon,
+ * gradient, etc.) derives visual position from order within a resolved
+ * target list, not raw index value. Mirrors _compute_swap_permutation(). */
+static void compute_swap_permutation(cJSON *members_a_in, cJSON *members_b_in, permutation_t *out)
+{
+    out->count = 0;
+
+    int a_vals[MAX_LEDS], b_vals[MAX_LEDS];
+    int a_n = 0, b_n = 0;
+    for (cJSON *item = members_a_in->child; item; item = item->next) a_vals[a_n++] = item->valueint;
+    for (cJSON *item = members_b_in->child; item; item = item->next) b_vals[b_n++] = item->valueint;
+    qsort(a_vals, a_n, sizeof(int), cmp_int);
+    qsort(b_vals, b_n, sizeof(int), cmp_int);
+
+    int *a = a_vals, *b = b_vals;
+    int an = a_n, bn = b_n;
+    if (a[0] > b[0]) {
+        int *tmp_p = a; a = b; b = tmp_p;
+        int tmp_n = an; an = bn; bn = tmp_n;
+    }
+
+    int a_start = a[0], a_len = an;
+    int b_start = b[0], b_len = bn;
+
+    for (int k = 0; k < bn; k++) {
+        permutation_add(out, b[k], a_start + k);
+    }
+
+    int middle_start = a_start + a_len;
+    for (int old_index = middle_start; old_index < b_start; old_index++) {
+        permutation_add(out, old_index, old_index + (b_len - a_len));
+    }
+
+    int a_new_start = b_start + b_len - a_len;
+    for (int k = 0; k < an; k++) {
+        permutation_add(out, a[k], a_new_start + k);
+    }
+}
+
+/* Remaps every raw LED index reference in the active model per `p`. Mirrors
+ * _reindex_leds(): named-range members are remapped elementwise in place;
+ * scene "target" strings ("all"/"named:X" left untouched) are resolved to
+ * their ordered index list, remapped PRESERVING that order (not sorted --
+ * sorting would scramble wave/gradient/rainbow visual direction, since those
+ * patterns derive position from order within the target, not index value),
+ * then re-serialized as a single digit, a compact "a-b" range if still
+ * ascending-contiguous, or a comma-joined string otherwise. */
+static void reindex_leds(const permutation_t *p, cJSON *model)
+{
+    cJSON *named_ranges = model ? cJSON_GetObjectItem(model, "named_ranges") : NULL;
+    if (named_ranges) {
+        for (cJSON *range = named_ranges->child; range; range = range->next) {
+            if (!cJSON_IsArray(range)) continue;
+            for (cJSON *item = range->child; item; item = item->next) {
+                if (cJSON_IsNumber(item)) {
+                    cJSON_SetNumberValue(item, permutation_lookup(p, item->valueint));
+                }
+            }
+        }
+    }
+
+    cJSON *scenes = model ? cJSON_GetObjectItem(model, "scenes") : NULL;
+    if (!scenes) return;
+
+    for (cJSON *scene = scenes->child; scene; scene = scene->next) {
+        for (cJSON *entry = scene->child; entry; entry = entry->next) {
+            cJSON *target = cJSON_GetObjectItem(entry, "target");
+            if (!target || !cJSON_IsString(target) || !target->valuestring) continue;
+            const char *val = target->valuestring;
+            if (strcmp(val, "all") == 0 || strncmp(val, "named:", 6) == 0) continue;
+
+            int indices[MAX_RESOLVED_LEDS];
+            int count = lighting_get_targets(val, indices, MAX_RESOLVED_LEDS);
+            if (count <= 0) continue;
+
+            int remapped[MAX_RESOLVED_LEDS];
+            for (int i = 0; i < count; i++) remapped[i] = permutation_lookup(p, indices[i]);
+
+            char new_target[512];
+            if (count == 1) {
+                snprintf(new_target, sizeof(new_target), "%d", remapped[0]);
+            } else {
+                bool contiguous_ascending = true;
+                for (int i = 1; i < count; i++) {
+                    if (remapped[i] != remapped[i - 1] + 1) { contiguous_ascending = false; break; }
+                }
+                if (contiguous_ascending) {
+                    snprintf(new_target, sizeof(new_target), "%d-%d", remapped[0], remapped[count - 1]);
+                } else {
+                    size_t off = 0;
+                    new_target[0] = '\0';
+                    for (int i = 0; i < count && off < sizeof(new_target) - 16; i++) {
+                        int written = snprintf(new_target + off, sizeof(new_target) - off,
+                                                i == 0 ? "%d" : ",%d", remapped[i]);
+                        if (written > 0) off += (size_t)written;
+                    }
+                }
+            }
+            cJSON_ReplaceItemInObject(entry, "target", cJSON_CreateString(new_target));
+        }
+    }
+}
+
+/* Swaps two named ranges' physical LED positions, rewriting every affected
+ * reference. Re-validates both ranges are still eligible and non-overlapping
+ * against current storage before acting, since the reorder queue is
+ * transient per-process state that nothing resets on a model switch.
+ * Returns false (no-op) if either range is no longer valid for this.
+ * Mirrors _swap_named_ranges(). */
+static bool swap_named_ranges(const char *name_a, const char *name_b)
+{
+    cJSON *model = lighting_get_settings();
+    cJSON *named_ranges = model ? cJSON_GetObjectItem(model, "named_ranges") : NULL;
+    if (!named_ranges) return false;
+
+    cJSON *members_a = cJSON_GetObjectItem(named_ranges, name_a);
+    cJSON *members_b = cJSON_GetObjectItem(named_ranges, name_b);
+    if (!is_primary_contiguous(members_a) || !is_primary_contiguous(members_b)) return false;
+
+    for (cJSON *ia = members_a->child; ia; ia = ia->next) {
+        for (cJSON *ib = members_b->child; ib; ib = ib->next) {
+            if (ia->valueint == ib->valueint) return false; /* overlap */
+        }
+    }
+
+    permutation_t permutation;
+    compute_swap_permutation(members_a, members_b, &permutation);
+    reindex_leds(&permutation, model);
+
+    persistent_dict_t *store = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
+    persistent_dict_save(store);
+    return true;
+}
+
+/* Builds the reorder tool's template context: eligible ranges split into
+ * "queued" (in current physical order) and "available" to add, each with a
+ * summarize_led_list() summary attached. Mirrors _reorder_context(). */
+static cJSON *build_reorder_context(void)
+{
+    cJSON *eligible = reorder_eligible_ranges();
+
+    for (cJSON *entry = eligible->child; entry; entry = entry->next) {
+        cJSON *members = cJSON_GetObjectItem(entry, "members");
+        int values[MAX_LEDS];
+        int n = 0;
+        for (cJSON *item = members->child; item; item = item->next) values[n++] = item->valueint;
+        char *summary = summarize_led_list(values, n);
+        cJSON_AddStringToObject(entry, "summary", summary);
+        free(summary);
+    }
+
+    cJSON *queued = cJSON_CreateArray();
+    cJSON *available = cJSON_CreateArray();
+    for (cJSON *entry = eligible->child; entry; entry = entry->next) {
+        const char *name = json_get_string(entry, "name", "");
+        if (reorder_queue_contains(name)) {
+            cJSON_AddItemToArray(queued, cJSON_Duplicate(entry, 1));
+        } else {
+            cJSON_AddItemToArray(available, cJSON_Duplicate(entry, 1));
+        }
+    }
+    cJSON_Delete(eligible);
+
+    cJSON *ctx = build_global_context();
+    cJSON_AddStringToObject(ctx, "page_title", "Named Ranges");
+    cJSON_AddItemToObject(ctx, "reorder_queue", queued);
+    cJSON_AddItemToObject(ctx, "reorder_available", available);
+    return ctx;
+}
+
+http_response_t *view_named_range_reorder(http_request_t *req)
+{
+    if (req->method == HTTP_METHOD_GET) {
+        g_reorder_queue_count = 0;
+        return webserver_render_response("setup/named_ranges_reorder.html", build_reorder_context());
+    }
+
+    const char *action = request_get_form_field(req, "action");
+    const char *range_name = request_get_form_field(req, "range_name");
+    const char *error = NULL;
+
+    /* Drop any queued range no longer eligible before acting, rather than
+     * acting on stale data. */
+    cJSON *eligible_now = reorder_eligible_ranges();
+    for (int i = g_reorder_queue_count - 1; i >= 0; i--) {
+        bool still_eligible = false;
+        for (cJSON *entry = eligible_now->child; entry; entry = entry->next) {
+            if (strcmp(json_get_string(entry, "name", ""), g_reorder_queue[i]) == 0) {
+                still_eligible = true;
+                break;
+            }
+        }
+        if (!still_eligible) reorder_queue_remove(g_reorder_queue[i]);
+    }
+
+    if (action && strcmp(action, "add_to_reorder_list") == 0 && range_name && range_name[0]) {
+        cJSON *candidate = NULL;
+        for (cJSON *entry = eligible_now->child; entry; entry = entry->next) {
+            if (strcmp(json_get_string(entry, "name", ""), range_name) == 0) { candidate = entry; break; }
+        }
+        if (!candidate) {
+            error = "That range is no longer eligible to reorder.";
+        } else if (!reorder_queue_contains(range_name)) {
+            bool overlaps = false;
+            cJSON *cand_members = cJSON_GetObjectItem(candidate, "members");
+            for (int i = 0; i < g_reorder_queue_count && !overlaps; i++) {
+                cJSON *other = NULL;
+                for (cJSON *entry = eligible_now->child; entry; entry = entry->next) {
+                    if (strcmp(json_get_string(entry, "name", ""), g_reorder_queue[i]) == 0) { other = entry; break; }
+                }
+                if (!other) continue;
+                cJSON *other_members = cJSON_GetObjectItem(other, "members");
+                for (cJSON *ca = cand_members->child; ca && !overlaps; ca = ca->next) {
+                    for (cJSON *cb = other_members->child; cb; cb = cb->next) {
+                        if (ca->valueint == cb->valueint) { overlaps = true; break; }
+                    }
+                }
+            }
+            if (overlaps) {
+                error = "That range overlaps a range already in the list.";
+            } else {
+                reorder_queue_add(range_name);
+            }
+        }
+    } else if (action && strcmp(action, "remove_from_reorder_list") == 0 && range_name && range_name[0]) {
+        reorder_queue_remove(range_name);
+    } else if (action && range_name && range_name[0] &&
+               (strcmp(action, "move_range_up") == 0 || strcmp(action, "move_range_down") == 0)) {
+        char ordered_names[MAX_REORDER_QUEUE][64];
+        int ordered_count = 0;
+        for (cJSON *entry = eligible_now->child; entry && ordered_count < MAX_REORDER_QUEUE; entry = entry->next) {
+            const char *name = json_get_string(entry, "name", "");
+            if (reorder_queue_contains(name)) {
+                strncpy(ordered_names[ordered_count], name, sizeof(ordered_names[0]) - 1);
+                ordered_names[ordered_count][sizeof(ordered_names[0]) - 1] = '\0';
+                ordered_count++;
+            }
+        }
+        int idx = -1;
+        for (int i = 0; i < ordered_count; i++) {
+            if (strcmp(ordered_names[i], range_name) == 0) { idx = i; break; }
+        }
+        if (idx >= 0) {
+            int neighbor_idx = (strcmp(action, "move_range_up") == 0) ? idx - 1 : idx + 1;
+            if (neighbor_idx >= 0 && neighbor_idx < ordered_count) {
+                swap_named_ranges(range_name, ordered_names[neighbor_idx]);
+            }
+        }
+    }
+
+    cJSON_Delete(eligible_now);
+
+    cJSON *ctx = build_reorder_context();
+    if (error) cJSON_AddStringToObject(ctx, "error", error);
+    return webserver_render_response("setup/named_ranges_reorder.html", ctx);
 }
 
 http_response_t *view_named_range(http_request_t *req)

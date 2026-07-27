@@ -40,6 +40,12 @@ CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=y
 # mDNS
 CONFIG_MDNS_MAX_SERVICES=4
 
+# mbedTLS: use PSRAM for its SSL buffers (16KB in + 4KB out per connection,
+# plus handshake/cert-bundle state) instead of internal DRAM -- otherwise
+# every HTTPS connection (OTA check/download) competes with the webserver's
+# client-task stacks for the same scarce internal RAM pool.
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+
 # Task Watchdog
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=30
 

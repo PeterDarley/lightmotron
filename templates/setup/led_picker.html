@@ -104,6 +104,10 @@
             <button type="button" class="btn btn-secondary" disabled>LEDs</button>
             {% endif %}
         </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm mb-1"
+                hx-get="/named_range/reorder" hx-target="#modal-body" hx-swap="innerHTML">
+            Reorder Strings
+        </button>
     </div>
     <div>
             {% for r in named_range_names %}
