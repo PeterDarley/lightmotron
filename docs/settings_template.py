@@ -94,7 +94,19 @@ optional; hardcoded defaults in settings.py are used when a key is absent.
                 "pin":              4,      # GPIO pin connected to DIN
                 "num":            144,      # total number of pixels on this strip
                 "color_order":   "GRB",    # RGB byte order expected by strip hardware
-                "brightness_curve": true     # quarter-sine brightness adjustment
+                "brightness_curve": true,    # quarter-sine brightness adjustment
+                # Optional: LED-index ranges *within this strip* that use a
+                # different color order than the strip's own (e.g. a joined-on
+                # section from a different batch/product wired differently).
+                # start/end are 0-based, inclusive, and local to this strip --
+                # NOT global LED indices. A segment's color_order must have the
+                # same channel count as the strip's own (RGB<->GRB is fine
+                # within a 3-channel strip; mixing in an RGBW segment on an
+                # RGB strip is not supported). Optional; omit or leave empty
+                # for a strip with no overrides.
+                "segments": [
+                    {"start": 20, "end": 39, "color_order": "RGB"}
+                ]
             }
         ],
 
@@ -199,3 +211,4 @@ Notes
   ``repeat_enabled=true`` with ``repeat=0`` means infinite repeat, and
   ``repeat_enabled=true`` with positive ``repeat`` means repeat that many
   additional times.
+"""

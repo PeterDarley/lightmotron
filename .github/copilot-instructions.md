@@ -9,8 +9,8 @@ Guideline:
 
 ### Johnny is the name of the AI agent.
 
-### C project
-The `c_project/` directory (an ESP-IDF/C port of the Python implementation, see `c_project/c_plan.md`) must be kept in sync with the Python implementation. Whenever changes are made to the Python code, update the corresponding C code in the same session so `c_project/` reflects current behavior. See `c_project/SYNC_NOTES.md` for the file-by-file Python-to-C mapping and audit history.
+### C project is now the only actively developed version (as of 2026-08-03)
+The Python/MicroPython implementation (`lib/`, `web/`, `boot.py`, `main.py`, `settings.py`, etc.) is no longer being updated. Do not make changes there for new features or fixes — `c_project/` (the ESP-IDF/C port, see `c_project/c_plan.md`) is the sole target going forward. Shared assets that both the (now-frozen) Python build and `c_project/` still consume — `templates/*.html`, `www/*` static assets, `docs/settings_template.py` (the JSON storage-schema reference) — should still be kept current, since `c_project/` depends on them too. `c_project/SYNC_NOTES.md` remains as a historical record of the sync effort that was done while both builds were active; it does not need further entries now that there's nothing to sync against.
 
 ### Documentation must be kept in sync
 Whenever code changes are made, update the relevant documentation (README.md, docs/*.md, docs/settings_template.py) in the same session. Do not leave documentation stale after a code change.

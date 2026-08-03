@@ -89,6 +89,53 @@
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addStripRow()">+ Add Strip</button>
         </div>
 
+        <h6 class="mb-3">LED Color Order Segments</h6>
+        <div class="mb-2">
+            <table class="table table-sm table-borderless mb-2" id="segments-table">
+                <thead>
+                    <tr>
+                        <th class="form-label-sm ps-0">Strip</th>
+                        <th class="form-label-sm">Start LED</th>
+                        <th class="form-label-sm">End LED</th>
+                        <th class="form-label-sm">Color Order</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="segments-tbody">
+                    {% for segment in ss_segments %}
+                    <tr>
+                        <td class="ps-0">
+                            <select class="form-select form-select-sm" name="segment_strip_index">
+                                {% for i in range(ss_strip_count) %}
+                                <option value="{{ i }}" {% if i == segment.strip_index %}selected{% endif %}>Strip {{ i }} (pin {{ ss_strips.i.pin }})</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td><input type="number" class="form-control form-control-sm" name="segment_start" value="{{ segment.start }}" min="0" required></td>
+                        <td><input type="number" class="form-control form-control-sm" name="segment_end" value="{{ segment.end }}" min="0" required></td>
+                        <td>
+                            <select class="form-select form-select-sm" name="segment_order">
+                                {% for order in ss_color_orders %}
+                                <option value="{{ order }}" {% if order == segment.color_order %}selected{% endif %}>{{ order }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    onclick="this.closest('tr').remove()">✕</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addSegmentRow()">+ Add Segment</button>
+            <div class="form-text">
+                For a strip built from joined sections that don't all use the same
+                wiring convention. Start/End are LED numbers within the selected
+                strip (0 = that strip's first LED), not global LED numbers.
+            </div>
+        </div>
+
         <div class="alert alert-warning small py-2">
             Changes to hostname or WiFi credentials take effect on the next reboot.
         </div>
@@ -142,6 +189,28 @@ function addStripRow() {
         '<td><input type="number" class="form-control form-control-sm" name="strip_num" value="30" min="1" max="2048" required></td>' +
         '<td><select class="form-select form-select-sm" name="strip_order">' + options + '</select></td>' +
         '<td class="text-center align-middle"><input class="form-check-input" type="checkbox" name="strip_brightness_curve" value="1" checked></td>' +
+        '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()">✕</button></td>' +
+        '</tr>';
+    tbody.insertAdjacentHTML('beforeend', row);
+}
+
+function addSegmentRow() {
+    var tbody = document.getElementById('segments-tbody');
+    var stripRows = document.querySelectorAll('#strips-tbody tr');
+    var stripOptions = '';
+    stripRows.forEach(function(row, idx) {
+        var pinInput = row.querySelector('input[name="strip_pin"]');
+        var pin = pinInput ? pinInput.value : '?';
+        stripOptions += '<option value="' + idx + '">Strip ' + idx + ' (pin ' + pin + ')</option>';
+    });
+    var orderOptions = COLOR_ORDERS.map(function(o) {
+        return '<option value="' + o + '"' + (o === 'GRB' ? ' selected' : '') + '>' + o + '</option>';
+    }).join('');
+    var row = '<tr>' +
+        '<td class="ps-0"><select class="form-select form-select-sm" name="segment_strip_index">' + stripOptions + '</select></td>' +
+        '<td><input type="number" class="form-control form-control-sm" name="segment_start" value="0" min="0" required></td>' +
+        '<td><input type="number" class="form-control form-control-sm" name="segment_end" value="0" min="0" required></td>' +
+        '<td><select class="form-select form-select-sm" name="segment_order">' + orderOptions + '</select></td>' +
         '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()">✕</button></td>' +
         '</tr>';
     tbody.insertAdjacentHTML('beforeend', row);

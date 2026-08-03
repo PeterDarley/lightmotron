@@ -57,6 +57,48 @@ per explicit instruction that only the user runs git commands.
   `components/web/views_scenes.c` (`set_active_on_boot_from_form`,
   `fill_scene_edit_context`'s `scene_active_on_boot` context key).
 
+- **2026-08-03 — Per-segment LED color order**: new feature letting an
+  LED-index range *within* a single configured strip (e.g. a physically
+  joined-on section from a different product/batch) use a different
+  color_order than the rest of that strip. Hard constraint: a segment's
+  color_order must have the same channel count (bpp) as its strip's own —
+  forced by the C driver's `rgb_t{r,g,b}` pixel buffer having no stored W
+  channel and `leds_show()` transmitting each strip as one fixed-stride
+  `rmt_transmit()` call; supporting mixed bpp within one strip would need a
+  stored W channel and variable-stride packing, a materially bigger change.
+  Storage: optional `segments: [{start, end, color_order}]` per strip
+  entry, start/end inclusive and local to that strip. Validation follows
+  the audio-player silent-drop convention (invalid/out-of-range/
+  overlapping/bpp-mismatched rows are dropped, not surfaced as a form
+  error), not the hostname reject-whole-form pattern — confirmed by
+  checking how `SystemSettingsView.post()` already treats its other
+  repeating rows before choosing this. Fixed a real bug found along the
+  way: `_parse_neopixels_storage`/`parse_neopixels_storage` discarded any
+  unknown key from a stored strip dict, which would have made a
+  freshly-saved `segments` list vanish on the very next render.
+  Python: `lib/leds.py` (`_effective_order()`, per-pixel lookup in
+  `set()`/`get()`/`identify()`, `fill()` restructured from one bulk strip
+  fill into a bulk base-order fill plus per-segment overwrite since a
+  single reordered color is wrong for a segment's pixels);
+  `web/views_system.py` (`_parse_segments_storage`, `ss_segments`/
+  `ss_strip_count` context keys, new segment-row parsing block in
+  `SystemSettingsView.post`); `templates/setup/system_settings.html` (new
+  segments table + `addSegmentRow()` JS, building its strip dropdown live
+  from the current strip rows rather than stale server context).
+  `docs/settings_template.py` updated to document the new key (also fixed
+  a pre-existing unrelated bug found while touching this file: the whole
+  file's docstring was never closed, so it failed `ast.parse()` even
+  before this session's edit).
+  C mirror: `components/leds/include/leds.h`
+  (`strip_segment_config_t`/`MAX_SEGMENTS_PER_STRIP`), `components/leds/leds.c`
+  (`strip_segment_t`, segment parsing in `leds_init_from_config`/
+  independent re-validation in `leds_init`, `effective_order_indices()`
+  used by `leds_show()`'s per-pixel loop — `bpp`/buffer-stride math is
+  untouched, only which `order_indices` gets read per pixel changes);
+  `components/web/views_system.c` (`parse_segments_storage`, flattened
+  `ss_segments`/`ss_strip_count` in `add_system_settings_context`, segment
+  parsing block in `view_system_settings`'s POST branch).
+
 ## Methodology
 
 For each file pair: read both sides, identify (a) features/fields/routes present in

@@ -534,6 +534,37 @@ class HostnameView(View):
 _COLOR_ORDERS: list = ["GRB", "RGB", "BGR", "BRG", "RBG", "GBR", "GRBW", "RGBW"]
 
 
+def _parse_segments_storage(raw) -> list:
+    """Normalise a strip's stored 'segments' list, dropping malformed entries.
+
+    Each entry is {start, end, color_order} - start/end are inclusive LED
+    indices local to the owning strip. Bpp-match against the strip's own
+    color_order is validated at save time (SystemSettingsView.post) and
+    again independently at LEDs init time (lib/leds.py); this function only
+    normalises shape/types so a malformed stored entry can't reach the
+    template.
+    """
+
+    if not isinstance(raw, list):
+        return []
+
+    segments = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            start = int(item.get("start"))
+            end = int(item.get("end"))
+        except (TypeError, ValueError):
+            continue
+        order = str(item.get("color_order", "")).upper()
+        if start < 0 or end < start or order not in _COLOR_ORDERS:
+            continue
+        segments.append({"start": start, "end": end, "color_order": order})
+
+    return segments
+
+
 def _parse_neopixels_storage(raw) -> list:
     """Normalise whatever is in storage for 'neopixels' into a list of strip dicts.
 
@@ -552,6 +583,7 @@ def _parse_neopixels_storage(raw) -> list:
                         "num": int(item.get("num", 30)),
                         "color_order": item.get("color_order", "GRB").upper(),
                         "brightness_curve": bool(item.get("brightness_curve", True)),
+                        "segments": _parse_segments_storage(item.get("segments")),
                     }
                 )
         if strips:
@@ -579,10 +611,24 @@ def _system_settings_context() -> dict:
     strips: list = _parse_neopixels_storage(sys_settings.get("neopixels"))
     audio_players: list = sys_settings.get("audio_players", [])
 
+    segments: list = []
+    for strip_index, strip in enumerate(strips):
+        for seg in strip.get("segments", []):
+            segments.append(
+                {
+                    "strip_index": strip_index,
+                    "start": seg["start"],
+                    "end": seg["end"],
+                    "color_order": seg["color_order"],
+                }
+            )
+
     return {
         "ss_wifi_ssid": wifi.get("ssid", ""),
         "ss_hostname": sys_settings.get("hostname", ""),
         "ss_strips": strips,
+        "ss_strip_count": len(strips),
+        "ss_segments": segments,
         "ss_color_orders": _COLOR_ORDERS,
         "ss_color_orders_json": json.dumps(_COLOR_ORDERS),
         "ss_audio_players": audio_players,
@@ -920,6 +966,41 @@ class SystemSettingsView(View):
 
         if not strips:
             strips = [{"pin": 4, "num": 144, "color_order": "GRB", "brightness_curve": True}]
+
+        # --- LED color-order segments (parallel arrays; grouped by strip index).
+        # Invalid/incomplete/out-of-range/overlapping/bpp-mismatched rows are
+        # silently skipped, matching how audio-player rows are handled below
+        # rather than the hostname field's reject-whole-form pattern - segments
+        # are a repeating row like strips/audio, not a single scalar field. ---
+        segment_strip_idx_raw = _as_list(fd.get("segment_strip_index"), None)
+        segment_starts_raw = _as_list(fd.get("segment_start"), None)
+        segment_ends_raw = _as_list(fd.get("segment_end"), None)
+        segment_orders_raw = _as_list(fd.get("segment_order"), None)
+
+        for i in range(
+            max(len(segment_strip_idx_raw), len(segment_starts_raw), len(segment_ends_raw), len(segment_orders_raw))
+        ):
+            try:
+                strip_idx_val: int = int(segment_strip_idx_raw[i])
+                start_val: int = int(segment_starts_raw[i])
+                end_val: int = int(segment_ends_raw[i])
+                order_val: str = str(segment_orders_raw[i]).upper()
+            except (ValueError, IndexError, TypeError):
+                continue
+
+            if not (0 <= strip_idx_val < len(strips)):
+                continue
+            target_strip = strips[strip_idx_val]
+            if not (0 <= start_val <= end_val < target_strip["num"]):
+                continue
+            if order_val not in _COLOR_ORDERS or len(order_val) != len(target_strip["color_order"]):
+                continue
+
+            existing_segments: list = target_strip.setdefault("segments", [])
+            if any(start_val <= seg["end"] and end_val >= seg["start"] for seg in existing_segments):
+                continue
+
+            existing_segments.append({"start": start_val, "end": end_val, "color_order": order_val})
 
         # --- Audio players (multi-player: parallel arrays from repeated fields) ---
         audio_uarts = _as_list(fd.get("audio_uart"), None)

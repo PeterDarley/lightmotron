@@ -272,7 +272,9 @@ static char *build_portal_html(void)
         "<button type=\"submit\">Save &amp; Connect</button>"
         "</form>"
         "<p class=\"note\">After saving, the device will reboot and join your network. "
-        "You can then access it at <strong>%s.local</strong></p>"
+        "Try <strong>%s.local</strong>, <strong>%s.lan</strong>, <strong>%s.home</strong>, "
+        "or just <strong>%s</strong> in your browser &mdash; whichever one works depends "
+        "on your router. Android usually needs the plain hostname or .lan/.home.</p>"
         "</div>"
         "<script>"
         "function onNet(s){"
@@ -290,7 +292,7 @@ static char *build_portal_html(void)
         "if(s.options.length>1&&s.options[1].value!=='__other__'){s.selectedIndex=1;onNet(s);}"
         "})();"
         "</script></body></html>",
-        safe_hostname);
+        safe_hostname, safe_hostname, safe_hostname, safe_hostname);
 
     return html;
 }
@@ -300,7 +302,9 @@ static char *build_portal_html(void)
  */
 static char *build_saved_page(void)
 {
-    static char page[1024];
+    /* Sized for the worst case: hostname escaped up to 128 chars, repeated
+     * 4 times (.local/.lan/.home/bare) plus the surrounding fixed HTML. */
+    static char page[1536];
     char safe_hostname[128];
     html_escape(safe_hostname, sizeof(safe_hostname), get_configured_hostname());
 
@@ -314,15 +318,24 @@ static char *build_saved_page(void)
         ".card{background:#1e1e1e;border-radius:8px;padding:2rem;max-width:420px;width:100%%;}"
         "h1{margin-top:0;color:#4caf50;}"
         "p{color:#aaa;}"
-        "strong{color:#fff;}"
+        "strong{color:#fff;display:block;margin:0.15rem 0;}"
+        "small{color:#777;}"
         "</style></head><body>"
         "<div class=\"card\">"
         "<h1>Credentials Saved</h1>"
         "<p>The device is rebooting and will connect to your WiFi network.</p>"
-        "<p>Once connected, you can access it at "
-        "<strong>http://%s.local/</strong></p>"
+        "<p>Once connected, try each of these until one works &mdash; which one "
+        "depends on your router:</p>"
+        "<p>"
+        "<strong>http://%s.local/</strong>"
+        "<strong>http://%s.lan/</strong>"
+        "<strong>http://%s.home/</strong>"
+        "<strong>http://%s/</strong>"
+        "</p>"
+        "<p><small>Android phones typically can't use the .local address; try "
+        "the plain hostname or .lan/.home instead.</small></p>"
         "</div></body></html>",
-        safe_hostname);
+        safe_hostname, safe_hostname, safe_hostname, safe_hostname);
 
     return page;
 }

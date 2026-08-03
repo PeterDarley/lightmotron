@@ -382,6 +382,39 @@ static bool is_valid_color_order(const char *s)
     return false;
 }
 
+/* Mirrors _parse_segments_storage(): normalize a strip's stored "segments"
+ * list, dropping malformed entries. Bpp-match against the strip's own
+ * color_order is validated at save time and again independently at
+ * leds_init() time; this only normalises shape/types. */
+static cJSON *parse_segments_storage(cJSON *raw)
+{
+    cJSON *result = cJSON_CreateArray();
+    if (!raw || !cJSON_IsArray(raw)) return result;
+
+    for (cJSON *item = raw->child; item; item = item->next) {
+        if (!cJSON_IsObject(item)) continue;
+        cJSON *start_item = cJSON_GetObjectItem(item, "start");
+        cJSON *end_item = cJSON_GetObjectItem(item, "end");
+        if (!cJSON_IsNumber(start_item) || !cJSON_IsNumber(end_item)) continue;
+
+        int start = start_item->valueint;
+        int end = end_item->valueint;
+        char order[8];
+        snprintf(order, sizeof(order), "%s", json_get_string(item, "color_order", ""));
+        for (char *p = order; *p; p++) *p = (char)toupper((unsigned char)*p);
+
+        if (start < 0 || end < start || !is_valid_color_order(order)) continue;
+
+        cJSON *segment = cJSON_CreateObject();
+        cJSON_AddNumberToObject(segment, "start", start);
+        cJSON_AddNumberToObject(segment, "end", end);
+        cJSON_AddStringToObject(segment, "color_order", order);
+        cJSON_AddItemToArray(result, segment);
+    }
+
+    return result;
+}
+
 /* Mirrors _parse_neopixels_storage(): normalize whatever is stored under
  * "neopixels" into a non-empty list of strip dicts. */
 static cJSON *parse_neopixels_storage(cJSON *raw)
@@ -400,6 +433,7 @@ static cJSON *parse_neopixels_storage(cJSON *raw)
             for (char *p = order; *p; p++) *p = (char)toupper((unsigned char)*p);
             cJSON_AddStringToObject(strip, "color_order", order);
             cJSON_AddBoolToObject(strip, "brightness_curve", json_get_bool(item, "brightness_curve", true));
+            cJSON_AddItemToObject(strip, "segments", parse_segments_storage(cJSON_GetObjectItem(item, "segments")));
             cJSON_AddItemToArray(result, strip);
         }
         if (cJSON_GetArraySize(result) > 0) return result;
@@ -449,8 +483,29 @@ static void add_system_settings_context(cJSON *ctx)
     free(hostname);
     if (wifi) cJSON_Delete(wifi);
 
-    cJSON_AddItemToObject(ctx, "ss_strips", parse_neopixels_storage(neopixels));
+    cJSON *strips = parse_neopixels_storage(neopixels);
     if (neopixels) cJSON_Delete(neopixels);
+    int strip_count = cJSON_GetArraySize(strips);
+    cJSON_AddItemToObject(ctx, "ss_strips", strips);
+    cJSON_AddNumberToObject(ctx, "ss_strip_count", strip_count);
+
+    /* Flatten every strip's "segments" into one list for the template,
+     * mirroring _system_settings_context()'s ss_segments. */
+    cJSON *segments_flat = cJSON_CreateArray();
+    int strip_idx = 0;
+    for (cJSON *strip = strips->child; strip; strip = strip->next, strip_idx++) {
+        cJSON *strip_segments = cJSON_GetObjectItem(strip, "segments");
+        if (!strip_segments || !cJSON_IsArray(strip_segments)) continue;
+        for (cJSON *seg = strip_segments->child; seg; seg = seg->next) {
+            cJSON *flat = cJSON_CreateObject();
+            cJSON_AddNumberToObject(flat, "strip_index", strip_idx);
+            cJSON_AddNumberToObject(flat, "start", json_get_int(seg, "start", 0));
+            cJSON_AddNumberToObject(flat, "end", json_get_int(seg, "end", 0));
+            cJSON_AddStringToObject(flat, "color_order", json_get_string(seg, "color_order", "GRB"));
+            cJSON_AddItemToArray(segments_flat, flat);
+        }
+    }
+    cJSON_AddItemToObject(ctx, "ss_segments", segments_flat);
 
     cJSON *color_orders = cJSON_CreateArray();
     for (size_t i = 0; i < COLOR_ORDER_COUNT; i++) cJSON_AddItemToArray(color_orders, cJSON_CreateString(COLOR_ORDERS[i]));
@@ -542,6 +597,55 @@ http_response_t *view_system_settings(http_request_t *req)
         cJSON_AddStringToObject(strip, "color_order", "GRB");
         cJSON_AddBoolToObject(strip, "brightness_curve", true);
         cJSON_AddItemToArray(strips, strip);
+    }
+
+    /* --- LED color-order segments (parallel arrays; grouped by strip index).
+     * Invalid/incomplete/out-of-range/overlapping/bpp-mismatched rows are
+     * silently skipped, matching the audio-player convention below rather
+     * than hostname's reject-whole-form pattern - segments are a repeating
+     * row like strips/audio, not a single scalar field. --- */
+    int n_segments = form_field_count(req, "segment_strip_index");
+    for (int i = 0; i < n_segments; i++) {
+        const char *idx_s = form_field_at(req, "segment_strip_index", i);
+        const char *start_s = form_field_at(req, "segment_start", i);
+        const char *end_s = form_field_at(req, "segment_end", i);
+        const char *order_s = form_field_at(req, "segment_order", i);
+        if (!idx_s || !start_s || !end_s || !order_s) continue;
+
+        int strip_idx_val = atoi(idx_s);
+        int start_val = atoi(start_s);
+        int end_val = atoi(end_s);
+        char order_val[8];
+        snprintf(order_val, sizeof(order_val), "%s", order_s);
+        for (char *p = order_val; *p; p++) *p = (char)toupper((unsigned char)*p);
+
+        if (strip_idx_val < 0 || strip_idx_val >= cJSON_GetArraySize(strips)) continue;
+        cJSON *target_strip = cJSON_GetArrayItem(strips, strip_idx_val);
+        int strip_num = json_get_int(target_strip, "num", 0);
+        const char *strip_order = json_get_string(target_strip, "color_order", "GRB");
+
+        if (!(start_val >= 0 && start_val <= end_val && end_val < strip_num)) continue;
+        if (!is_valid_color_order(order_val) || strlen(order_val) != strlen(strip_order)) continue;
+
+        cJSON *target_segments = cJSON_GetObjectItem(target_strip, "segments");
+        if (!target_segments) {
+            target_segments = cJSON_CreateArray();
+            cJSON_AddItemToObject(target_strip, "segments", target_segments);
+        }
+
+        bool overlaps = false;
+        for (cJSON *seg = target_segments->child; seg; seg = seg->next) {
+            int seg_start = json_get_int(seg, "start", 0);
+            int seg_end = json_get_int(seg, "end", 0);
+            if (start_val <= seg_end && end_val >= seg_start) { overlaps = true; break; }
+        }
+        if (overlaps) continue;
+
+        cJSON *new_segment = cJSON_CreateObject();
+        cJSON_AddNumberToObject(new_segment, "start", start_val);
+        cJSON_AddNumberToObject(new_segment, "end", end_val);
+        cJSON_AddStringToObject(new_segment, "color_order", order_val);
+        cJSON_AddItemToArray(target_segments, new_segment);
     }
 
     /* --- Audio players (parallel arrays; incomplete rows skipped) --- */

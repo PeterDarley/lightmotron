@@ -21,6 +21,24 @@ typedef struct {
  * invalid or wrong-length string falls back to "GRB" at init time. */
 #define LED_COLOR_ORDER_MAXLEN 5
 
+/* Max per-strip color-order override ranges (generous headroom above the
+ * realistic single-digit case; only bounds this fixed-size runtime config,
+ * not JSON storage, which holds an unbounded list). */
+#define MAX_SEGMENTS_PER_STRIP 4
+
+/**
+ * One LED-index range (inclusive, local to its owning strip) that uses a
+ * different color order than the strip's own base color_order. Mirrors
+ * lib/leds.py's per-strip "segments" config. Must have the same channel
+ * count as the owning strip's color_order -- mixing channel counts within
+ * one strip isn't supported (see leds.c).
+ */
+typedef struct {
+    int start;
+    int end;
+    char color_order[LED_COLOR_ORDER_MAXLEN];
+} strip_segment_config_t;
+
 /**
  * NeoPixel strip configuration.
  */
@@ -29,6 +47,8 @@ typedef struct {
     int num_leds;
     char color_order[LED_COLOR_ORDER_MAXLEN];
     bool brightness_curve;
+    strip_segment_config_t segments[MAX_SEGMENTS_PER_STRIP];
+    int num_segments;
 } strip_config_t;
 
 /* Default GPIO pin for an onboard RGB NeoPixel used by some ESP32 dev

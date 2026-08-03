@@ -43,6 +43,15 @@ static const uint8_t brightness_curve_table[256] = {
   225, 227, 229, 231, 233, 235, 237, 239, 241, 243, 245, 247, 249, 251, 253, 255,
 };
 
+/* A resolved per-strip color-order override range (see
+ * strip_segment_config_t) -- order_indices always has the same bpp as the
+ * owning strip_state_t, validated at leds_init() time. */
+typedef struct {
+    int start;
+    int end;
+    uint8_t order_indices[LED_MAX_CHANNELS];
+} strip_segment_t;
+
 /* Strip state */
 typedef struct {
     int pin;
@@ -50,6 +59,8 @@ typedef struct {
     int start_index; /* Global index offset */
     uint8_t order_indices[LED_MAX_CHANNELS]; /* per-output-byte source channel */
     int bpp; /* bytes per pixel: 3 (RGB-family) or 4 (RGBW-family) */
+    strip_segment_t segments[MAX_SEGMENTS_PER_STRIP];
+    int num_segments;
     rmt_channel_handle_t rmt_channel;
     rmt_encoder_handle_t encoder;
 } strip_state_t;
@@ -260,6 +271,21 @@ esp_err_t leds_init_from_config(const cJSON *neopixels_array)
         strncpy(configs[i].color_order, order ? order : "GRB", LED_COLOR_ORDER_MAXLEN - 1);
         configs[i].color_order[LED_COLOR_ORDER_MAXLEN - 1] = '\0';
         configs[i].brightness_curve = json_get_bool(item, "brightness_curve", true);
+
+        configs[i].num_segments = 0;
+        cJSON *segments = cJSON_GetObjectItem(item, "segments");
+        if (segments && cJSON_IsArray(segments)) {
+            for (cJSON *seg = segments->child; seg && configs[i].num_segments < MAX_SEGMENTS_PER_STRIP;
+                 seg = seg->next) {
+                strip_segment_config_t *seg_cfg = &configs[i].segments[configs[i].num_segments];
+                seg_cfg->start = json_get_int(seg, "start", -1);
+                seg_cfg->end = json_get_int(seg, "end", -1);
+                const char *seg_order = json_get_string(seg, "color_order", "");
+                strncpy(seg_cfg->color_order, seg_order ? seg_order : "", LED_COLOR_ORDER_MAXLEN - 1);
+                seg_cfg->color_order[LED_COLOR_ORDER_MAXLEN - 1] = '\0';
+                configs[i].num_segments++;
+            }
+        }
     }
 
     return leds_init(configs, count);
@@ -282,6 +308,39 @@ esp_err_t leds_init(const strip_config_t *configs, int count)
         parse_color_order(configs[i].color_order, strips[i].order_indices, &strips[i].bpp);
         strips[i].start_index = total_leds;
         total_leds += configs[i].num_leds;
+
+        /* Per-segment color-order overrides. Re-validated here independent
+         * of whatever validation happened when the settings were saved -
+         * storage can be hand-edited or restored from an older backup. A
+         * segment is dropped (not fatal to init) if its color order isn't a
+         * valid same-bpp permutation of the strip's own, or if its range is
+         * out of bounds - mirrors lib/leds.py's __init__ segment parsing. */
+        strips[i].num_segments = 0;
+        for (int s = 0; s < configs[i].num_segments && strips[i].num_segments < MAX_SEGMENTS_PER_STRIP; s++) {
+            const strip_segment_config_t *seg_cfg = &configs[i].segments[s];
+            uint8_t seg_order_indices[LED_MAX_CHANNELS];
+            int seg_bpp = 0;
+            parse_color_order(seg_cfg->color_order, seg_order_indices, &seg_bpp);
+
+            bool bpp_ok = (seg_bpp == strips[i].bpp) &&
+                          (int)strlen(seg_cfg->color_order) == seg_bpp; /* parse_color_order() silently
+                                                                          * falls back to "GRB"/bpp=3 on
+                                                                          * an invalid string, so an empty
+                                                                          * or mismatched-length input
+                                                                          * must be caught explicitly here
+                                                                          * rather than trusting seg_bpp
+                                                                          * alone. */
+            bool range_ok = seg_cfg->start >= 0 && seg_cfg->start <= seg_cfg->end &&
+                             seg_cfg->end < strips[i].num_leds;
+
+            if (bpp_ok && range_ok) {
+                strip_segment_t *seg = &strips[i].segments[strips[i].num_segments];
+                seg->start = seg_cfg->start;
+                seg->end = seg_cfg->end;
+                memcpy(seg->order_indices, seg_order_indices, sizeof(seg_order_indices));
+                strips[i].num_segments++;
+            }
+        }
 
         /* Matches LEDs._parse_brightness_curve_setting(): the curve is a
          * single global toggle, enabled if ANY strip requests it. */
@@ -449,6 +508,19 @@ rgb_t leds_wheel(int pos)
     return c;
 }
 
+/* Returns the order_indices to use for one physical pixel within a strip,
+ * honoring any per-segment color-order override that covers it, else the
+ * strip's own base order. Mirrors LEDs._effective_order() in lib/leds.py. */
+static const uint8_t *effective_order_indices(const strip_state_t *strip, int local_index)
+{
+    for (int s = 0; s < strip->num_segments; s++) {
+        if (local_index >= strip->segments[s].start && local_index <= strip->segments[s].end) {
+            return strip->segments[s].order_indices;
+        }
+    }
+    return strip->order_indices;
+}
+
 esp_err_t leds_show(void)
 {
     xSemaphoreTake(led_mutex, portMAX_DELAY);
@@ -481,19 +553,39 @@ esp_err_t leds_show(void)
                 b = (uint8_t)(b * g_brightness);
             }
 
-            /* Apply per-strip color order (any R/G/B/W permutation). */
+            /* Apply this pixel's effective color order (any R/G/B/W
+             * permutation) - the strip's base order, or a segment override
+             * if one covers this index. bpp is unchanged either way
+             * (validated equal across the strip and all its segments at
+             * leds_init() time), so the buffer stride here is untouched. */
             uint8_t source[LED_MAX_CHANNELS] = {r, g, b, 0};
+            const uint8_t *order_indices = effective_order_indices(&strips[s], i);
             for (int k = 0; k < bpp; k++) {
-                tx_buf[i * bpp + k] = source[strips[s].order_indices[k]];
+                tx_buf[i * bpp + k] = source[order_indices[k]];
             }
         }
 
-        /* Transmit */
+        /* Transmit. Errors here were previously silent -- a failing
+         * rmt_transmit()/wait_all_done() (wrong/reserved pin, encoder
+         * issue, etc.) would mean nothing ever reaches the strip even
+         * though the color pipeline upstream computed everything
+         * correctly. Logged (throttled to avoid spamming at 40Hz) rather
+         * than swallowed. */
         rmt_transmit_config_t tx_config = {
             .loop_count = 0,
         };
-        rmt_transmit(strips[s].rmt_channel, strips[s].encoder, tx_buf, num * bpp, &tx_config);
-        rmt_tx_wait_all_done(strips[s].rmt_channel, portMAX_DELAY);
+        esp_err_t tx_ret = rmt_transmit(strips[s].rmt_channel, strips[s].encoder, tx_buf, num * bpp, &tx_config);
+        if (tx_ret == ESP_OK) {
+            tx_ret = rmt_tx_wait_all_done(strips[s].rmt_channel, portMAX_DELAY);
+        }
+        if (tx_ret != ESP_OK) {
+            static uint32_t transmit_fail_count = 0;
+            if (transmit_fail_count % 40 == 0) {
+                ESP_LOGE(TAG, "Strip %d transmit failed (pin %d): %s (%u failures so far)",
+                         s, strips[s].pin, esp_err_to_name(tx_ret), (unsigned)(transmit_fail_count + 1));
+            }
+            transmit_fail_count++;
+        }
     }
 
     xSemaphoreGive(led_mutex);

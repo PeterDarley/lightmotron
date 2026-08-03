@@ -29,6 +29,17 @@ CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32
 CONFIG_LWIP_MAX_SOCKETS=16
 CONFIG_LWIP_SO_REUSE=y
 
+# Main/app_main task: default 3584 bytes is not enough headroom to call
+# lighting_activate_boot_scenes() -> activate_scene() from boot.c -- that
+# call chain's scene_metadata_t local alone (5 fixed char[8][64] arrays) is
+# ~2.1KB, on top of boot_init()'s own already-substantial flat local-variable
+# footprint (one long function, nothing returns until boot completes).
+# Overflowed with just a 7-job scene, causing a double-exception crash right
+# after "Scene activated" logged. This stack is freed once app_main()
+# returns (after animation_start()), so the larger size is a one-time
+# boot-time cost, not a standing internal-RAM reservation.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
 # FreeRTOS
 CONFIG_FREERTOS_HZ=1000
 CONFIG_FREERTOS_TIMER_TASK_STACK_DEPTH=4096

@@ -408,6 +408,26 @@ void lighting_process_tick(uint32_t tick)
         leds_set_pixel_rgb(i, logical_colors[i]);
     }
 
+    /* Debug: log the first 5 LEDs' computed color every 40 ticks (~1s at the
+     * 40Hz tick rate), plus how many scenes are active and how many LEDs the
+     * driver thinks are configured -- the three things most likely to
+     * explain "nothing lights up" on a first hardware bring-up: no scene
+     * running, zero/misconfigured LED count, or colors that are correctly
+     * black at this instant vs. a strip that just isn't responding. Remove
+     * once the hardware issue is found. */
+    if (tick % 40 == 0) {
+        int debug_count = total < 5 ? total : 5;
+        char debug_buf[160];
+        int debug_off = 0;
+        for (int i = 0; i < debug_count; i++) {
+            debug_off += snprintf(debug_buf + debug_off, sizeof(debug_buf) - debug_off,
+                                   "%s[%d]=(%u,%u,%u)", i == 0 ? "" : " ", i,
+                                   logical_colors[i].r, logical_colors[i].g, logical_colors[i].b);
+        }
+        ESP_LOGI(TAG, "LED debug: tick=%u active_scenes=%d leds=%d %s",
+                 (unsigned)tick, active_scene_count, total, debug_buf);
+    }
+
     /* Compact active scenes (remove inactive) */
     int write_idx = 0;
     for (int i = 0; i < active_scene_count; i++) {
