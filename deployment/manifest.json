@@ -1,13 +1,16 @@
 {
   "name": "Lightmotron",
-  "version": "1.0",
-  "firmware_source": "ESP32_GENERIC_S3-SPIRAM_OCT-20251209-v1.27.0.bin",
+  "version": "321860b-10-g234a91a-dirty",
+  "firmware_source": "c_project (ESP-IDF 321860b-10-g234a91a-dirty)",
   "new_install_prompt_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "lightmotron.bin", "offset": 0 }
+        { "path": "bootloader.bin", "offset": 0 },
+        { "path": "partition-table.bin", "offset": 32768 },
+        { "path": "lightmotron.bin", "offset": 65536 },
+        { "path": "webassets.bin", "offset": 6356992 }
       ]
     }
   ]

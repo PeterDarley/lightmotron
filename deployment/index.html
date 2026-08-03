@@ -184,12 +184,12 @@
 <main>
     <div class="hero">
         <h2>Install Lightmotron</h2>
-        <p>MicroPython-based lighting controller for plastic model kits. Control NeoPixel LED strips with dynamic effects via a built-in web interface over WiFi.</p>
+        <p>Lighting controller for plastic model kits. Control NeoPixel LED strips with dynamic effects via a built-in web interface over WiFi.</p>
     </div>
 
     <div class="install-box">
         <h3>Flash firmware to your ESP32-S3</h3>
-        <p>Connect your ESP32-S3-DevKitC-1 via USB, then click the button below.</p>
+        <p>Connect your YD-ESP32-S3 via USB, then click the button below.</p>
 
         <esp-web-install-button manifest="manifest.json">
             <button slot="activate" class="install-btn">
@@ -207,8 +207,14 @@
             <strong>After installation:</strong> look for a WiFi network called
             <strong>lightmotron-setup</strong> on your phone or laptop. Connect to
             it and follow the on-screen instructions to enter your home WiFi
-            credentials. The device will then be accessible at
-            <strong>http://lightmotron.local/</strong>.
+            credentials. Afterward, try
+            <strong>http://lightmotron.local/</strong>,
+            <strong>http://lightmotron.lan/</strong>,
+            <strong>http://lightmotron.home/</strong>, or just
+            <strong>http://lightmotron/</strong> &mdash; whichever one works
+            depends on your router. Android phones typically can't use the
+            <strong>.local</strong> address; try the plain hostname or
+            <strong>.lan</strong>/<strong>.home</strong> instead.
         </div>
 
         <p class="browser-note">Requires Google Chrome or Microsoft Edge (Web Serial API). USB cable must support data transfer.</p>
@@ -218,7 +224,7 @@
         <div class="card">
             <h4>Hardware</h4>
             <ul>
-                <li>ESP32-S3-DevKitC-1 (N16R8)</li>
+                <li>YD-ESP32-S3 (N16R8)</li>
                 <li>NeoPixel LED strip (default GPIO&nbsp;4)</li>
                 <li>USB-C data cable</li>
             </ul>
@@ -245,18 +251,19 @@
             </ul>
         </div>
         <div class="card">
-            <h4>Built-in effects</h4>
+            <h4>Built-in patterns</h4>
             <ul>
-                <li>Solid, Blink, Pulse, Breathe</li>
-                <li>Wave, Cylon, Phaser Strip</li>
-                <li>Fade In, Scintillate, Sizzle</li>
+                <li>Solid, Blink, Pulse, Fade In</li>
+                <li>Breathe, Wave, Cylon, Phaser Strip</li>
+                <li>Rainbow, Color Wipe, Fire, Gradient</li>
+                <li>Warp Pulse, Theater Chase, Heartbeat</li>
             </ul>
         </div>
     </div>
 </main>
 
 <footer>
-    <a href="https://github.com/yourname/lightmotron">GitHub</a> &mdash;
+    <a href="https://github.com/PeterDarley/lightmotron">GitHub</a> &mdash;
     Licensed under GPLv3
 </footer>
 

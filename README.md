@@ -76,7 +76,17 @@ To hard reset the device after uploading:
 python tools\reset_device.py COM3
 ```
 
-For browser-install deployment images (`deployment/lightmotron.bin`), build with `tools/build_deployment.py`. On ESP32-S3 N16 boards the default build now uses a full remainder-of-flash LittleFS image (14336 KB from `0x200000` to end of 16MB flash) so the filesystem mounts correctly on first boot.
+## Browser Install (No Software Required)
+
+The page at [peterdarley.github.io/lightmotron](https://peterdarley.github.io/lightmotron/) flashes the `c_project` firmware directly from Chrome or Edge over USB, via the [Web Serial API](https://developer.chrome.com/docs/capabilities/serial) (no drivers, no command line). It writes all four images a blank chip needs — bootloader, partition table, app, and web assets.
+
+To refresh the staged images after a `c_project` change:
+
+```powershell
+.\build_web_install.ps1
+```
+
+This rebuilds via ESP-IDF and copies the four flash images plus a fresh `deployment/manifest.json` into `deployment/`. Committing and pushing `deployment/` (served via GitHub Pages) is a separate, deliberate step.
 
 ## Web Interface
 
