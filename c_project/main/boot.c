@@ -378,16 +378,14 @@ esp_err_t boot_init(void)
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
 
-    /* Register web routes BEFORE starting server */
+    /* Register web routes now (doesn't accept connections yet -- just
+     * builds the route table), but hold off on webserver_start() until
+     * every subsystem a page/handler can touch (LEDs, audio, lighting) is
+     * initialized below. Starting the server earlier left a real window
+     * where an incoming request's client_task could call into lighting.c
+     * before lighting_init() had created lighting_mutex -- e.g.
+     * lighting_get_active_scenes() taking a still-NULL mutex, asserting. */
     routes_register_all();
-
-    /* Start web server */
-    ret = webserver_start(DEFAULT_HTTP_PORT);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start web server");
-        return ret;
-    }
-    ESP_LOGI(TAG, "Web server started on port %d", DEFAULT_HTTP_PORT);
 
     /* Initialize LEDs */
     cJSON *neopixels = persistent_dict_get(sys_settings, "neopixels");
@@ -428,6 +426,15 @@ esp_err_t boot_init(void)
     /* Initialize lighting system */
     lighting_init();
     ESP_LOGI(TAG, "Lighting system initialized");
+
+    /* Start web server -- now that LEDs/billboard/audio/lighting are all
+     * initialized, it's safe for a request to reach any page/handler. */
+    ret = webserver_start(DEFAULT_HTTP_PORT);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start web server");
+        return ret;
+    }
+    ESP_LOGI(TAG, "Web server started on port %d", DEFAULT_HTTP_PORT);
 
     /* Activate whichever scene(s) are marked active_on_boot, or fall back
      * to an arbitrary single scene if none are marked -- matches

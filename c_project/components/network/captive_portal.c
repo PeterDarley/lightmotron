@@ -248,6 +248,17 @@ static char *build_portal_html(void)
         "<select id=\"nsel\" onchange=\"onNet(this)\">"
         "<option value=\"\">-- select a network --</option>");
 
+    /* Rescan link: esp_wifi_scan_start() works fine in APSTA mode (this
+     * radio isn't limited to STA-only scanning the way the pre-AP scan
+     * comment above might suggest -- that comment is about scanning
+     * *before* AP mode is even up). It does briefly pause AP beaconing
+     * while it hops channels, so an in-progress page load on another
+     * client could stall for a second or two -- acceptable for a
+     * manually-triggered, infrequent rescan. */
+    offset += (size_t)snprintf(html + offset, capacity - offset,
+        "<a href=\"/rescan\" style=\"display:block;margin-top:.5rem;font-size:.8rem;"
+        "color:#0d6efd;text-decoration:none;\">&#8635; Rescan networks</a>");
+
     for (int i = 0; i < cached_network_count && offset + 256 < capacity; i++) {
         int signal_pct = 2 * (cached_networks[i].rssi + 100);
         if (signal_pct < 0) signal_pct = 0;
@@ -699,6 +710,18 @@ static void http_task(void *pvParameters)
                 free(html);
             }
 
+        } else if (strcmp(method, "GET") == 0 && strcmp(path, "/rescan") == 0) {
+            /* scan_networks() resets cached_network_count and repopulates it
+             * from a fresh scan -- safe to re-run from here since the AP is
+             * already up (see the rescan-link comment in build_portal_html()
+             * for why this works despite the pre-AP-only note above it). */
+            scan_networks();
+            char response[160];
+            int resp_len = snprintf(response, sizeof(response),
+                "HTTP/1.1 302 Found\r\nLocation: http://" AP_IP "/\r\n"
+                "Content-Length: 0\r\nConnection: close\r\n\r\n");
+            send(client_sock, response, resp_len, 0);
+
         } else if (strcmp(method, "GET") == 0) {
             /* Redirect all other GET paths (OS captive-portal probes) to / */
             char response[160];
@@ -731,19 +754,57 @@ esp_err_t captive_portal_start(void)
     ESP_LOGI(TAG, "Starting captive portal");
 
     /* Initialize WiFi with both AP and STA netifs -- STA is needed so we can
-     * scan for nearby networks before the AP radio takes over. */
+     * scan for nearby networks before the AP radio takes over.
+     *
+     * This runs as a fallback after boot_init()'s own STA-connect attempt
+     * already failed -- wifi_manager_init() already created the default
+     * event loop and initialized WiFi earlier in this same boot, so this
+     * is NOT a clean slate. esp_event_loop_create_default()/esp_wifi_init()
+     * both fail with an "already done" error in that case; ESP_ERROR_CHECK
+     * on either would abort() the whole firmware here, turning an ordinary
+     * "WiFi failed to connect" (wrong password, router down, moved
+     * networks, ...) into a permanent boot-crash-loop with no way back in
+     * to fix it -- exactly the case this fallback exists to handle. */
     ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
-    esp_netif_create_default_wifi_sta();
+    esp_err_t event_loop_ret = esp_event_loop_create_default();
+    if (event_loop_ret != ESP_OK && event_loop_ret != ESP_ERR_INVALID_STATE) {
+        ESP_ERROR_CHECK(event_loop_ret);
+    }
+
+    /* esp_netif_create_default_wifi_sta()/_ap() assert() internally on a
+     * duplicate if_key rather than returning an error -- unlike the two
+     * calls above, there's no error code to catch after the fact, so the
+     * existing netif must be checked for *before* calling. wifi_manager_init()
+     * already created "WIFI_STA_DEF" for the connect attempt that just
+     * failed; "WIFI_AP_DEF" is never created elsewhere, but check the same
+     * way for symmetry/future-proofing. */
+    if (!esp_netif_get_handle_from_ifkey("WIFI_AP_DEF")) {
+        esp_netif_create_default_wifi_ap();
+    }
+    if (!esp_netif_get_handle_from_ifkey("WIFI_STA_DEF")) {
+        esp_netif_create_default_wifi_sta();
+    }
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    esp_err_t wifi_init_ret = esp_wifi_init(&cfg);
+    /* Confirmed via device log: this IDF version returns the generic
+     * ESP_ERR_INVALID_STATE here ("WiFi is initialized by esp_wifi_init"),
+     * not ESP_ERR_WIFI_INIT_STATE as originally guessed. */
+    if (wifi_init_ret != ESP_OK && wifi_init_ret != ESP_ERR_INVALID_STATE) {
+        ESP_ERROR_CHECK(wifi_init_ret);
+    }
 
     /* Scan BEFORE the AP comes up -- once the AP is running the radio is
      * busy and a station scan returns no results (see scan_networks()). */
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_start());
+
+    /* wifi_manager's connection-timeout path (wifi_manager.c) marks its own
+     * state FAILED but never calls esp_wifi_disconnect() -- the STA can
+     * still be internally busy from that unresolved connection attempt,
+     * which is a known way for esp_wifi_scan_start() to silently return
+     * zero results. Force a clean, idle STA state before scanning. */
+    esp_wifi_disconnect();
     scan_networks();
 
     wifi_config_t wifi_config = {

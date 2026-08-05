@@ -45,6 +45,10 @@ static void ensure_loaded(persistent_dict_t *pd)
 persistent_dict_t *persistent_dict_open(const char *filepath)
 {
     ensure_global_mutex();
+    if (!global_mutex) {
+        ESP_LOGE(TAG, "Failed to create global_mutex");
+        return NULL;
+    }
     xSemaphoreTake(global_mutex, portMAX_DELAY);
 
     /* Check if already opened */
@@ -69,6 +73,11 @@ persistent_dict_t *persistent_dict_open(const char *filepath)
     pd->loaded = false;
     pd->dirty = false;
     pd->mutex = xSemaphoreCreateMutex();
+    if (!pd->mutex) {
+        ESP_LOGE(TAG, "Failed to create mutex for %s", filepath);
+        xSemaphoreGive(global_mutex);
+        return NULL;
+    }
     instance_count++;
 
     xSemaphoreGive(global_mutex);

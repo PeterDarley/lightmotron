@@ -298,6 +298,10 @@ esp_err_t leds_init(const strip_config_t *configs, int count)
     }
 
     led_mutex = xSemaphoreCreateMutex();
+    if (!led_mutex) {
+        ESP_LOGE(TAG, "Failed to create led_mutex");
+        return ESP_ERR_NO_MEM;
+    }
     num_strips = count > MAX_STRIPS ? MAX_STRIPS : count;
     total_leds = 0;
     g_brightness_curve = false;

@@ -57,7 +57,14 @@ esp_err_t animation_start(void)
     paused = false;
     tick_counter = 0;
 
-    BaseType_t created = xTaskCreatePinnedToCore(animation_task, "animation", 4096, NULL, 6,
+    /* 8192, not the original 4096: lighting_process_tick() can reach
+     * activate_scene() (via a scene's trigger_scenes_on_completion, once a
+     * cycle-limited scene finishes) which stack-allocates a ~2.1KB
+     * scene_metadata_t (metadata.h) -- on top of the tick's own call depth
+     * (pattern/filter functions, ESP_LOGI/vprintf's own stack use), that
+     * overflowed the previous size (canary-triggered panic in
+     * metadata_get_scene()). */
+    BaseType_t created = xTaskCreatePinnedToCore(animation_task, "animation", 8192, NULL, 6,
                                                   &animation_task_handle, 0);
 
     if (created != pdPASS) {

@@ -88,6 +88,10 @@ esp_err_t sound_manager_init(void)
     if (initialized) return ESP_OK;
 
     sound_mutex = xSemaphoreCreateMutex();
+    if (!sound_mutex) {
+        ESP_LOGE(TAG, "Failed to create sound_mutex");
+        return ESP_ERR_NO_MEM;
+    }
     memset(playing_sounds, 0, sizeof(playing_sounds));
     active_soundscape[0] = '\0';
     initialized = true;

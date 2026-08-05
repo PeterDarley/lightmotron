@@ -31,7 +31,7 @@ static void resolve_target(const char *target_spec, active_job_t *job)
     job->target_count = target_spec_resolve(target_spec, job->target_indices, MAX_LEDS);
 }
 
-static void resolve_filters(const cJSON *filters_array, active_job_t *job)
+static void resolve_filters(const cJSON *filters_array, const cJSON *filters_dict, active_job_t *job)
 {
     job->filter_count = 0;
     if (!filters_array || !cJSON_IsArray(filters_array)) return;
@@ -40,17 +40,29 @@ static void resolve_filters(const cJSON *filters_array, active_job_t *job)
     if (size > 8) size = 8;
 
     for (int i = 0; i < size; i++) {
-        cJSON *filter_def = cJSON_GetArrayItem(filters_array, i);
+        cJSON *entry = cJSON_GetArrayItem(filters_array, i);
+
+        /* Each entry is normally a *name* referencing model.filters[name]
+         * (e.g. "Thrusters Flicker" -> {"filter":"scintillate", ...}) --
+         * matches how the effect editor (views_effects.c) reads/writes this
+         * array. Still accept an inline object directly too, for anyone
+         * hand-authoring a filter without registering it under a name. */
+        cJSON *filter_def = entry;
+        if (cJSON_IsString(entry) && entry->valuestring) {
+            filter_def = filters_dict ? cJSON_GetObjectItem(filters_dict, entry->valuestring) : NULL;
+            if (!filter_def) continue; /* Named filter not found -- skip it. */
+        }
+
         const char *filter_name = json_get_string(filter_def, "filter", "null");
-        strncpy(job->filters[i].filter_name, filter_name,
-                sizeof(job->filters[i].filter_name) - 1);
-        job->filters[i].params = cJSON_Duplicate(filter_def, 1);
-        memset(&job->filters[i].state, 0, sizeof(filter_state_t));
+        strncpy(job->filters[job->filter_count].filter_name, filter_name,
+                sizeof(job->filters[job->filter_count].filter_name) - 1);
+        job->filters[job->filter_count].params = cJSON_Duplicate(filter_def, 1);
+        memset(&job->filters[job->filter_count].state, 0, sizeof(filter_state_t));
         job->filter_count++;
     }
 }
 
-void effect_resolve(const cJSON *effect_def, active_job_t *job)
+void effect_resolve(const cJSON *effect_def, const cJSON *filters_dict, active_job_t *job)
 {
     if (!effect_def || !job) return;
 
@@ -86,7 +98,7 @@ void effect_resolve(const cJSON *effect_def, active_job_t *job)
     resolve_colors(colors, job);
 
     cJSON *filters = json_get_array(effect_def, "filters");
-    resolve_filters(filters, job);
+    resolve_filters(filters, filters_dict, job);
 
     const char *after = json_get_string(effect_def, "after", NULL);
     if (after) {
@@ -106,8 +118,8 @@ void effect_resolve(const cJSON *effect_def, active_job_t *job)
     }
 }
 
-void effect_resolve_inline(const cJSON *job_def, active_job_t *job)
+void effect_resolve_inline(const cJSON *job_def, const cJSON *filters_dict, active_job_t *job)
 {
     /* Inline jobs use the same format as effect definitions */
-    effect_resolve(job_def, job);
+    effect_resolve(job_def, filters_dict, job);
 }

@@ -2,14 +2,16 @@
 <div class="container mt-4">
     <h1>Storage</h1>
     <div class="card mt-3">
-        <div class="card-header d-flex align-items-center justify-content-between">
+        <div class="card-header">
             <span>Raw Storage</span>
-            <button class="btn btn-outline-secondary btn-sm"
-                    onclick="return copyStorageContent(this)">
-                Copy
-            </button>
         </div>
         <div class="card-body">
+            <div class="d-flex justify-content-end mb-2">
+                <button class="btn btn-outline-secondary btn-sm"
+                        onclick="return copyStorageContent(this)">
+                    Copy
+                </button>
+            </div>
             <pre class="storage-pre"><code id="storage-content">{{ storage_json }}</code></pre>
         </div>
     </div>

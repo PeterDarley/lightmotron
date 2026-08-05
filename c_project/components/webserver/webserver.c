@@ -80,6 +80,10 @@ void webserver_add_route(http_method_t method, const char *path, route_handler_t
 
     if (!route_mutex) {
         route_mutex = xSemaphoreCreateMutex();
+        if (!route_mutex) {
+            ESP_LOGE(TAG, "Failed to create route_mutex");
+            return;
+        }
     }
 
     xSemaphoreTake(route_mutex, portMAX_DELAY);
@@ -417,10 +421,18 @@ esp_err_t webserver_start(int port)
 
     if (!route_mutex) {
         route_mutex = xSemaphoreCreateMutex();
+        if (!route_mutex) {
+            ESP_LOGE(TAG, "Failed to create route_mutex");
+            return ESP_ERR_NO_MEM;
+        }
     }
 
     if (!client_slots) {
         client_slots = xSemaphoreCreateCounting(MAX_CLIENT_TASKS, MAX_CLIENT_TASKS);
+        if (!client_slots) {
+            ESP_LOGE(TAG, "Failed to create client_slots");
+            return ESP_ERR_NO_MEM;
+        }
     }
 
     /* Create server socket */

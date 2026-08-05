@@ -44,6 +44,12 @@ esp_err_t lighting_init(void)
     }
 
     lighting_mutex = xSemaphoreCreateMutex();
+    if (!lighting_mutex) {
+        ESP_LOGE(TAG, "Failed to create lighting_mutex");
+        free(active_scenes);
+        active_scenes = NULL;
+        return ESP_ERR_NO_MEM;
+    }
     memset(logical_colors, 0, sizeof(logical_colors));
     active_scene_count = 0;
     initialized = true;
@@ -200,20 +206,20 @@ static esp_err_t activate_scene(const char *scene_name)
 
     /* Resolve all jobs in the scene */
     cJSON *effects_dict = cJSON_GetObjectItem(model, "effects");
+    cJSON *filters_dict = cJSON_GetObjectItem(model, "filters");
     cJSON *job_entry = scene_def->child;
     int job_idx = 0;
     uint32_t current_tick = animation_get_tick();
 
     while (job_entry && job_idx < MAX_JOBS_PER_SCENE) {
         active_job_t *job = &scene->jobs[job_idx];
-        strncpy(job->name, job_entry->string, sizeof(job->name) - 1);
 
         /* Check if this references a named effect or is inline */
         const char *effect_ref = json_get_string(job_entry, "effect", NULL);
         if (effect_ref && effects_dict) {
             cJSON *effect_def = cJSON_GetObjectItem(effects_dict, effect_ref);
             if (effect_def) {
-                effect_resolve(effect_def, job);
+                effect_resolve(effect_def, filters_dict, job);
             }
             /* Override with inline params */
             const char *target = json_get_string(job_entry, "target", NULL);
@@ -227,8 +233,15 @@ static esp_err_t activate_scene(const char *scene_name)
             if (after) strncpy(job->after, after, sizeof(job->after) - 1);
             job->inherit_target = json_get_bool(job_entry, "inherit_target", false);
         } else {
-            effect_resolve_inline(job_entry, job);
+            effect_resolve_inline(job_entry, filters_dict, job);
         }
+
+        /* Set after effect_resolve()/effect_resolve_inline() -- both start
+         * with memset(job, 0, sizeof(*job)), which would otherwise wipe this
+         * right back out. Other jobs' "after" dependency lookups match on
+         * this name (strcmp against scene->jobs[d].name), so it must survive
+         * job resolution intact. */
+        strncpy(job->name, job_entry->string, sizeof(job->name) - 1);
 
         /* Non-"after" jobs start counting from this scene's activation tick,
          * matching Lighting.set_scene()/add_scene() tracking scene start
@@ -417,15 +430,45 @@ void lighting_process_tick(uint32_t tick)
      * once the hardware issue is found. */
     if (tick % 40 == 0) {
         int debug_count = total < 5 ? total : 5;
-        char debug_buf[160];
+        /* static: this file pre-allocates its per-tick scratch buffers
+         * (tick_output_buf etc. above) rather than putting them on the
+         * animation task's stack -- these debug buffers need the same
+         * treatment. A stack-local version of these two overflowed that
+         * task's stack (canary-triggered panic at this same log line). */
+        static char debug_buf[160];
         int debug_off = 0;
         for (int i = 0; i < debug_count; i++) {
             debug_off += snprintf(debug_buf + debug_off, sizeof(debug_buf) - debug_off,
                                    "%s[%d]=(%u,%u,%u)", i == 0 ? "" : " ", i,
                                    logical_colors[i].r, logical_colors[i].g, logical_colors[i].b);
         }
+
+        /* Per-scene/per-job status: name, then each job as "name:F" (finished),
+         * "name:P" (waiting on an unfinished 'after' dependency), or "name:."
+         * (running/rendering this tick) -- lets a stuck 'after' chain (a job
+         * that never reaches finished, so everything chained after it waits
+         * forever) be spotted directly from the log instead of guessed at. */
+        static char scenes_buf[400];
+        int scenes_off = 0;
+        for (int s = 0; s < active_scene_count && scenes_off < (int)sizeof(scenes_buf) - 1; s++) {
+            active_scene_t *scene = &active_scenes[s];
+            if (!scene->active) continue;
+            scenes_off += snprintf(scenes_buf + scenes_off, sizeof(scenes_buf) - scenes_off,
+                                    "%s[%s:", scenes_off == 0 ? "" : " ", scene->name);
+            for (int j = 0; j < scene->job_count && scenes_off < (int)sizeof(scenes_buf) - 1; j++) {
+                active_job_t *job = &scene->jobs[j];
+                char state = job->finished ? 'F' : (job->after_pending ? 'P' : '.');
+                scenes_off += snprintf(scenes_buf + scenes_off, sizeof(scenes_buf) - scenes_off,
+                                        "%s%s:%c", j == 0 ? "" : ",", job->name, state);
+            }
+            scenes_off += snprintf(scenes_buf + scenes_off, sizeof(scenes_buf) - scenes_off, "]");
+        }
+
         ESP_LOGI(TAG, "LED debug: tick=%u active_scenes=%d leds=%d %s",
                  (unsigned)tick, active_scene_count, total, debug_buf);
+        if (scenes_off > 0) {
+            ESP_LOGI(TAG, "Scene debug: %s", scenes_buf);
+        }
     }
 
     /* Compact active scenes (remove inactive) */
