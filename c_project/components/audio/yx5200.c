@@ -65,12 +65,29 @@ static void build_frame(uint8_t *frame, uint8_t cmd, uint16_t param)
     frame[9] = YX5200_END_BYTE;
 }
 
+/* Hex-dumps up to `len` bytes of `data` under `label`, gated by the same
+ * "yx5200" log tag audio_player_init_from_config() flips to DEBUG when
+ * "audio_debug_logging" is enabled in System Settings -- no separate toggle
+ * needed. Added for first-time hardware bring-up: shows exactly what went
+ * out and what (if anything) came back, rather than just the pass/fail
+ * conclusion the existing "inconclusive"/"no valid frame" logs give. */
+static void log_hex(const char *label, int uart_num, const uint8_t *data, int len)
+{
+    char hex[RESPONSE_BUF_SIZE * 3 + 1];
+    int off = 0;
+    for (int i = 0; i < len && off < (int)sizeof(hex) - 4; i++) {
+        off += snprintf(hex + off, sizeof(hex) - off, "%02X ", data[i]);
+    }
+    ESP_LOGD(TAG, "uart=%d %s (%d bytes): %s", uart_num, label, len, len > 0 ? hex : "(none)");
+}
+
 /* Write a command frame without waiting for/draining any response. Used by
  * yx5200_query_status(), which manages its own read timing. */
 static esp_err_t send_command_raw(yx5200_t *player, uint8_t cmd, uint16_t param)
 {
     uint8_t frame[10];
     build_frame(frame, cmd, param);
+    log_hex("TX", player->uart_num, frame, 10);
 
     int written = uart_write_bytes(player->uart_num, (const char *)frame, 10);
     if (written != 10) {
@@ -90,7 +107,8 @@ static esp_err_t send_command(yx5200_t *player, uint8_t cmd, uint16_t param)
 
     vTaskDelay(pdMS_TO_TICKS(POST_COMMAND_DRAIN_MS));
     uint8_t scratch[RESPONSE_BUF_SIZE];
-    uart_read_bytes(player->uart_num, scratch, sizeof(scratch), 0);
+    int drained = uart_read_bytes(player->uart_num, scratch, sizeof(scratch), 0);
+    log_hex("post-command drain", player->uart_num, scratch, drained);
     return ESP_OK;
 }
 
@@ -211,6 +229,8 @@ static void note_no_response(yx5200_t *player)
     if (player->no_response_streak < NO_RESPONSE_THRESHOLD) {
         player->no_response_streak++;
     }
+    ESP_LOGD(TAG, "uart=%d no_response_streak=%d/%d", player->uart_num,
+             player->no_response_streak, NO_RESPONSE_THRESHOLD);
     if (player->no_response_streak >= NO_RESPONSE_THRESHOLD && player->responsive) {
         ESP_LOGW(TAG, "uart=%d: no response after %d attempts, assuming no module attached",
                  player->uart_num, player->no_response_streak);
@@ -254,6 +274,7 @@ esp_err_t yx5200_query_status(yx5200_t *player)
     vTaskDelay(pdMS_TO_TICKS(QUERY_WAIT_MS));
     uint8_t response[RESPONSE_BUF_SIZE];
     int len = uart_read_bytes(player->uart_num, response, sizeof(response), 0);
+    log_hex("RX", player->uart_num, response, len);
 
     if (len < 10) {
         /* Inconclusive read - keep cached state, same as the Python driver. */
@@ -271,6 +292,8 @@ esp_err_t yx5200_query_status(yx5200_t *player)
 
     note_response_ok(player);
     bool hw_playing = (status_low == STATUS_PLAYING) || (status_high == STATUS_PLAYING);
+    ESP_LOGD(TAG, "uart=%d valid frame: status_high=%02X status_low=%02X hw_playing=%d",
+             player->uart_num, status_high, status_low, hw_playing);
 
     if (!hw_playing && player->is_playing) {
         player->pending_stop_confirmations++;
@@ -301,7 +324,9 @@ esp_err_t yx5200_reset(yx5200_t *player)
         player->current_file = 0;
         player->pending_stop_confirmations = 0;
         /* Module firmware needs a short settle period after reset. */
+        ESP_LOGD(TAG, "uart=%d reset sent, settling for %dms", player->uart_num, RESET_SETTLE_MS);
         vTaskDelay(pdMS_TO_TICKS(RESET_SETTLE_MS));
+        ESP_LOGD(TAG, "uart=%d reset settle done", player->uart_num);
     }
     return ret;
 }

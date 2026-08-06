@@ -361,10 +361,6 @@ esp_err_t boot_init(void)
     ESP_LOGI(TAG, "Home URL (mDNS): http://%s.local/", hostname);
     ESP_LOGI(TAG, "Home URL (IP):   http://%s/", active_ip);
 
-    /* Check if IP needs to be announced (mirrors boot.py's
-     * check_and_announce_ip() call) */
-    ip_announcement_check_and_announce();
-
     /* Flash the onboard LED with the IP's last octet in the background,
      * mirroring boot.py's _run_ip_flash_sequence() thread. */
     start_ip_flash_sequence(active_ip);
@@ -422,6 +418,14 @@ esp_err_t boot_init(void)
         sound_manager_start_polling();
         ESP_LOGI(TAG, "Audio initialized");
     }
+
+    /* Check if IP needs to be announced (mirrors boot.py's
+     * check_and_announce_ip() call). Must come after audio init above --
+     * this plays a sound through the configured module(s), which don't
+     * exist yet any earlier in boot; running it before init meant the very
+     * first announcement after every boot silently failed with "No audio
+     * modules configured" even when a module was configured. */
+    ip_announcement_check_and_announce();
 
     /* Initialize lighting system */
     lighting_init();

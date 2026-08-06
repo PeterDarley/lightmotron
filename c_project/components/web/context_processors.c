@@ -6,6 +6,21 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
+
+/* Adds `key` to ctx holding an upper-cased copy of `value` -- the template
+ * engine has no filter syntax (no `{{ x|upper }}`) so this has to happen
+ * on the C side rather than in the template. */
+static void add_uppercase_string(cJSON *ctx, const char *key, const char *value)
+{
+    char upper[128];
+    size_t i = 0;
+    for (; value[i] != '\0' && i < sizeof(upper) - 1; i++) {
+        upper[i] = (char)toupper((unsigned char)value[i]);
+    }
+    upper[i] = '\0';
+    cJSON_AddStringToObject(ctx, key, upper);
+}
 
 cJSON *build_global_context(void)
 {
@@ -39,12 +54,18 @@ cJSON *build_global_context(void)
         }
         cJSON_Delete(current_theme);
 
-        /* Hostname */
+        /* Hostname. hostname_upper is a separate context key (not an
+         * in-place change to "hostname") so pages that display/edit the
+         * real, as-stored value (system_settings.html, status.html, ...)
+         * are unaffected -- it exists purely for the header/title's
+         * all-caps display. */
         cJSON *hostname = persistent_dict_get_dup(sys_store, "hostname");
         if (hostname && hostname->valuestring) {
             cJSON_AddStringToObject(ctx, "hostname", hostname->valuestring);
+            add_uppercase_string(ctx, "hostname_upper", hostname->valuestring);
         } else {
             cJSON_AddStringToObject(ctx, "hostname", "lightmotron");
+            add_uppercase_string(ctx, "hostname_upper", "lightmotron");
         }
         cJSON_Delete(hostname);
     } else {
@@ -52,6 +73,7 @@ cJSON *build_global_context(void)
         cJSON_AddStringToObject(ctx, "theme_css", "");
         cJSON_AddStringToObject(ctx, "theme_css_path", "");
         cJSON_AddStringToObject(ctx, "hostname", "lightmotron");
+        add_uppercase_string(ctx, "hostname_upper", "lightmotron");
     }
 
     /* Current model name */

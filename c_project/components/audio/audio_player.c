@@ -97,15 +97,19 @@ int audio_player_play_file(int file_number, bool high_quality_preferred)
     bool any_responsive = false;
     for (int i = 0; i < module_count; i++) {
         if (!yx5200_is_responsive(&modules[i])) {
+            ESP_LOGD(TAG, "module %d uart=%d: not responsive, skipping", i, modules[i].uart_num);
             continue;
         }
         any_responsive = true;
         if (!modules[i].is_playing) {
             candidate[i] = true;
         } else {
+            ESP_LOGD(TAG, "module %d uart=%d: is_playing=1, re-querying", i, modules[i].uart_num);
             yx5200_query_status(&modules[i]);
             candidate[i] = !modules[i].is_playing;
         }
+        ESP_LOGD(TAG, "module %d uart=%d: candidate=%d is_playing=%d", i, modules[i].uart_num,
+                 candidate[i], modules[i].is_playing);
         any_candidate = any_candidate || candidate[i];
     }
 

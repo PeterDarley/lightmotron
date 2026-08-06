@@ -57,6 +57,24 @@ CONFIG_MDNS_MAX_SERVICES=4
 # client-task stacks for the same scarce internal RAM pool.
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
 
+# Interrupt watchdog: ESP-IDF's own Kconfig already defaults this to 800
+# (instead of 300) for PSRAM-equipped boards on plain ESP32, specifically
+# because PSRAM/flash bus contention can make flash operations take longer
+# -- that auto-bump doesn't apply to ESP32-S3, but this board (N16R8) has
+# the same 8MB octal PSRAM and the same contention. First bumped 300->800
+# to match that ESP-IDF precedent; that still wasn't enough headroom --
+# "Interrupt wdt timeout on CPU1" recurred inside SPIFFS writes across four
+# separate save paths (restore, system settings, audio volume, ...), each
+# time stuck in spiffs_object_find_object_index_header_by_name's lookup.
+# SPIFFS is documented to have exactly this kind of GC-driven latency spike,
+# more so on a partition this size (8MB "data"); 3000ms gives real headroom
+# for that worst case while staying well under the 30s task watchdog, which
+# still catches a genuine infinite loop. If this recurs even at 3000ms, the
+# durable fix is migrating "data" off SPIFFS to LittleFS (ESP-IDF's
+# now-recommended filesystem, designed to avoid unbounded GC pauses) rather
+# than keeping tuning this number ever higher.
+CONFIG_ESP_INT_WDT_TIMEOUT_MS=3000
+
 # Task Watchdog
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=30
 

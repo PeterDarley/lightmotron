@@ -18,6 +18,12 @@
 
 static const char *TAG = "lighting";
 
+/* LED/scene debug logging (below, in lighting_process_tick()) -- flip to 1 to
+ * re-enable without having to reconstruct it. Added for LED hardware
+ * bring-up and the stuck-scene-chain investigation; both resolved, so it's
+ * off by default now. */
+#define LED_DEBUG_ENABLED 0
+
 /* Heap-allocated (lands in external PSRAM via CONFIG_SPIRAM_USE_MALLOC,
  * since MAX_ACTIVE_SCENES * MAX_JOBS_PER_SCENE * MAX_LEDS target_indices
  * arrays are far too large for internal DRAM). */
@@ -426,8 +432,10 @@ void lighting_process_tick(uint32_t tick)
      * driver thinks are configured -- the three things most likely to
      * explain "nothing lights up" on a first hardware bring-up: no scene
      * running, zero/misconfigured LED count, or colors that are correctly
-     * black at this instant vs. a strip that just isn't responding. Remove
-     * once the hardware issue is found. */
+     * black at this instant vs. a strip that just isn't responding. Disabled
+     * by default (see LED_DEBUG_ENABLED above) now that both bring-up issues
+     * it was added for are resolved. */
+#if LED_DEBUG_ENABLED
     if (tick % 40 == 0) {
         int debug_count = total < 5 ? total : 5;
         /* static: this file pre-allocates its per-tick scratch buffers
@@ -470,6 +478,7 @@ void lighting_process_tick(uint32_t tick)
             ESP_LOGI(TAG, "Scene debug: %s", scenes_buf);
         }
     }
+#endif /* LED_DEBUG_ENABLED */
 
     /* Compact active scenes (remove inactive) */
     int write_idx = 0;
