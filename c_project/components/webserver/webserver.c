@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "lwip/sockets.h"
+#include "lwip/inet.h"
 
 #include <string.h>
 #include <strings.h>
@@ -247,12 +248,32 @@ static void send_response(int sock, http_response_t *resp, bool keep_alive)
     }
 }
 
+static const char *http_method_name(http_method_t method)
+{
+    switch (method) {
+        case HTTP_METHOD_GET:    return "GET";
+        case HTTP_METHOD_POST:   return "POST";
+        case HTTP_METHOD_PUT:    return "PUT";
+        case HTTP_METHOD_DELETE: return "DELETE";
+        default:                 return "?";
+    }
+}
+
 /**
  * Handle a single client connection (keep-alive loop).
  */
 static void client_task(void *pvParameters)
 {
     int client_sock = (int)(intptr_t)pvParameters;
+
+    /* Resolved once per connection (not per request) since it can't change
+     * across a keep-alive connection's requests. */
+    char client_ip[16] = "?";
+    struct sockaddr_in peer_addr;
+    socklen_t peer_len = sizeof(peer_addr);
+    if (getpeername(client_sock, (struct sockaddr *)&peer_addr, &peer_len) == 0) {
+        strncpy(client_ip, inet_ntoa(peer_addr.sin_addr), sizeof(client_ip) - 1);
+    }
 
     /* Set receive timeout for keep-alive */
     struct timeval timeout = {
@@ -318,6 +339,8 @@ static void client_task(void *pvParameters)
         }
 
         if (resp) {
+            ESP_LOGI(TAG, "%s %s %s -> %d", client_ip, http_method_name(req->method),
+                     req->path, resp->status_code);
             send_response(client_sock, resp, keep_alive);
             response_free(resp);
         } else {
@@ -325,6 +348,7 @@ static void client_task(void *pvParameters)
              * treats a None handler return value as 204 No Content rather
              * than sending nothing at all — an empty reply would otherwise
              * leave the client with no response bytes for a request it made. */
+            ESP_LOGI(TAG, "%s %s %s -> 204", client_ip, http_method_name(req->method), req->path);
             http_response_t *no_content = response_create(204, "text/plain", NULL);
             if (no_content) {
                 strncpy(no_content->reason, "No Content", sizeof(no_content->reason) - 1);

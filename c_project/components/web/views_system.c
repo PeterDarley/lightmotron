@@ -11,6 +11,7 @@
 #include "audio_player.h"
 #include "timing.h"
 #include "comms.h"
+#include "asset_cache.h"
 #include "cJSON.h"
 
 #include "freertos/FreeRTOS.h"
@@ -25,7 +26,7 @@
 #include <sys/stat.h>
 #include <esp_system.h>
 #include <esp_heap_caps.h>
-#include <esp_spiffs.h>
+#include <esp_littlefs.h>
 #include <sdkconfig.h>
 
 #define THEMES_DIR "/spiffs/www/themes"
@@ -75,26 +76,41 @@ static void theme_display_name(const char *filename, char *out, size_t outsz)
     out[len] = '\0';
 }
 
-/* Mirrors _list_theme_files(): sorted ".css" filenames in the themes dir. */
+/* Mirrors _list_theme_files(): sorted ".css" filenames in the themes dir.
+ * Iterates the in-RAM asset cache rather than opendir()/readdir() on the
+ * live filesystem -- the latter used to call straight into LittleFS
+ * (esp_vfs_opendir -> lfs_dir_open -> ... -> a flash read per directory
+ * block) and hit the exact interrupt-watchdog panic asset_cache.h exists
+ * to prevent for template/static-file reads; this endpoint just never
+ * went through the cache. See asset_cache_path_at()'s doc comment. */
 static cJSON *list_theme_files(void)
 {
     cJSON *result = cJSON_CreateArray();
-    DIR *dir = opendir(THEMES_DIR);
-    if (!dir) return result;
+
+    static const char prefix[] = THEMES_DIR "/";
+    const size_t prefix_len = sizeof(prefix) - 1;
 
     char **names = NULL;
     int count = 0, cap = 0;
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
-        size_t len = strlen(entry->d_name);
-        if (len < 4 || strcmp(entry->d_name + len - 4, ".css") != 0) continue;
+    int total = asset_cache_count();
+    for (int i = 0; i < total; i++) {
+        const char *path = asset_cache_path_at(i);
+        if (!path || strncmp(path, prefix, prefix_len) != 0) continue;
+
+        const char *filename = path + prefix_len;
+        /* Skip anything in a further subdirectory (e.g. .../fonts/x.woff2)
+         * -- matches the original opendir()'s single-level listing. */
+        if (strchr(filename, '/') != NULL) continue;
+
+        size_t len = strlen(filename);
+        if (len < 4 || strcmp(filename + len - 4, ".css") != 0) continue;
+
         if (count >= cap) {
             cap = cap ? cap * 2 : 8;
             names = realloc(names, cap * sizeof(char *));
         }
-        names[count++] = strdup(entry->d_name);
+        names[count++] = strdup(filename);
     }
-    closedir(dir);
 
     qsort(names, count, sizeof(char *), cmp_str);
     for (int i = 0; i < count; i++) {
@@ -148,7 +164,7 @@ http_response_t *view_theme(http_request_t *req)
     persistent_dict_t *store = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     if (store) {
         persistent_dict_set(store, "theme", cJSON_CreateString(theme_filename ? theme_filename : ""));
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
     }
 
     http_response_t *res = response_create(200, "text/plain", "");
@@ -346,7 +362,7 @@ http_response_t *view_hostname(http_request_t *req)
         persistent_dict_t *store = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
         if (store) {
             persistent_dict_set(store, "hostname", cJSON_CreateString(""));
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
         apply_hostname_and_restart("lightmotron");
         return hostname_redirect_response("lightmotron");
@@ -363,7 +379,7 @@ http_response_t *view_hostname(http_request_t *req)
     persistent_dict_t *store = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     if (store) {
         persistent_dict_set(store, "hostname", cJSON_CreateString(hostname));
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
     }
     apply_hostname_and_restart(hostname);
     return hostname_redirect_response(hostname);
@@ -697,7 +713,7 @@ http_response_t *view_system_settings(http_request_t *req)
         persistent_dict_set(store, "hostname", cJSON_CreateString(hostname));
         persistent_dict_set(store, "neopixels", strips);
         persistent_dict_set(store, "audio_players", audio_players);
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
     } else {
         cJSON_Delete(strips);
         cJSON_Delete(audio_players);
@@ -839,7 +855,7 @@ http_response_t *view_updates(http_request_t *req)
             cJSON_AddStringToObject(ota, "repo_owner", repo_owner);
             cJSON_AddStringToObject(ota, "repo_name", repo_name);
             persistent_dict_set(store, "ota", ota);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
 
         char message[160];
@@ -994,7 +1010,7 @@ http_response_t *view_custom_colors(http_request_t *req)
     if (strcmp(action, "delete") == 0 && color_name && color_name[0] &&
         cJSON_GetObjectItem(colors, color_name)) {
         cJSON_DeleteItemFromObject(colors, color_name);
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
     } else if ((strcmp(action, "add") == 0 || strcmp(action, "update") == 0) &&
                color_name && color_name[0] && color_value && color_value[0]) {
         int r, g, b;
@@ -1013,7 +1029,7 @@ http_response_t *view_custom_colors(http_request_t *req)
             cJSON_AddItemToArray(rgb, cJSON_CreateNumber(b));
             cJSON_DeleteItemFromObject(colors, color_name);
             cJSON_AddItemToObject(colors, color_name, rgb);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
     } else if (strcmp(action, "edit_form") == 0 && color_name && color_name[0]) {
         cJSON *existing = cJSON_GetObjectItem(colors, color_name);
@@ -1189,18 +1205,18 @@ http_response_t *view_status(http_request_t *req)
     cJSON_AddStringToObject(ctx, "mem_total", mem_total_str);
     cJSON_AddNumberToObject(ctx, "mem_pct", mem_pct);
 
-    /* Storage (SPIFFS partition usage) - the "data" partition specifically
+    /* Storage (LittleFS partition usage) - the "data" partition specifically
      * (user settings/scenes/effects/etc), not "webassets" (www/templates,
      * fixed code-controlled content the user has no reason to monitor). */
-    size_t spiffs_total = 0, spiffs_used = 0;
+    size_t littlefs_total = 0, littlefs_used = 0;
     char storage_total_str[32] = "N/A", storage_free_str[32] = "N/A", storage_used_str[32] = "N/A";
     int storage_pct = 0;
-    if (esp_spiffs_info("data", &spiffs_total, &spiffs_used) == ESP_OK) {
-        size_t spiffs_free = (spiffs_total > spiffs_used) ? (spiffs_total - spiffs_used) : 0;
-        fmt_bytes(spiffs_total, storage_total_str, sizeof(storage_total_str));
-        fmt_bytes(spiffs_free, storage_free_str, sizeof(storage_free_str));
-        fmt_bytes(spiffs_used, storage_used_str, sizeof(storage_used_str));
-        storage_pct = spiffs_total ? (int)((uint64_t)spiffs_used * 100 / spiffs_total) : 0;
+    if (esp_littlefs_info("data", &littlefs_total, &littlefs_used) == ESP_OK) {
+        size_t littlefs_free = (littlefs_total > littlefs_used) ? (littlefs_total - littlefs_used) : 0;
+        fmt_bytes(littlefs_total, storage_total_str, sizeof(storage_total_str));
+        fmt_bytes(littlefs_free, storage_free_str, sizeof(storage_free_str));
+        fmt_bytes(littlefs_used, storage_used_str, sizeof(storage_used_str));
+        storage_pct = littlefs_total ? (int)((uint64_t)littlefs_used * 100 / littlefs_total) : 0;
     }
     cJSON_AddStringToObject(ctx, "storage_total", storage_total_str);
     cJSON_AddStringToObject(ctx, "storage_free", storage_free_str);

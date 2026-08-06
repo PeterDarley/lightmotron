@@ -20,8 +20,10 @@ static const char *TAG = "lighting";
 
 /* LED/scene debug logging (below, in lighting_process_tick()) -- flip to 1 to
  * re-enable without having to reconstruct it. Added for LED hardware
- * bring-up and the stuck-scene-chain investigation; both resolved, so it's
- * off by default now. */
+ * bring-up, the stuck-scene-chain investigation, and the "first click
+ * doesn't start the scene" report (root cause of the last one:
+ * activate_scene() never taking lighting_mutex, see the "Create active
+ * scene" comment below -- fixed and confirmed). Off by default again. */
 #define LED_DEBUG_ENABLED 0
 
 /* Heap-allocated (lands in external PSRAM via CONFIG_SPIRAM_USE_MALLOC,
@@ -194,6 +196,16 @@ static esp_err_t activate_scene(const char *scene_name)
         lighting_remove_scene(meta.kills[k]);
     }
 
+    /* Also always kill any existing instance of THIS scene before adding a
+     * new one -- re-activating a scene should restart it, not stack a
+     * second concurrent copy on top (observed: the Home page's "immediate"
+     * scene buttons use action=add, which never clears a same-name
+     * instance on its own; a scene would need to list its own name in its
+     * own "kills", which none do and shouldn't need to). Confirmed on
+     * hardware: two "Startup" instances both active simultaneously,
+     * fighting over the same LEDs. */
+    lighting_remove_scene(scene_name);
+
     /* Stop sounds on start */
     for (int s = 0; s < meta.stop_sounds_on_start_count; s++) {
         sound_manager_stop(meta.stop_sounds_on_start[s]);
@@ -204,7 +216,30 @@ static esp_err_t activate_scene(const char *scene_name)
         sound_manager_play(meta.sound, 0);
     }
 
-    /* Create active scene */
+    /* Create active scene. From here on, active_scenes[]/active_scene_count
+     * are mutated -- lighting_process_tick() (running concurrently on the
+     * animation task, potentially a different CPU core) reads and writes
+     * this same state every tick under lighting_mutex, as do
+     * lighting_clear_scenes()/lighting_remove_scene()/
+     * lighting_get_active_scenes(). activate_scene() never took this mutex
+     * for its own writes -- a genuine data race, confirmed by a "Scene
+     * activated ... active_scene_count now 1" log immediately followed
+     * (within the same second, no explicit kill logged in between) by
+     * active_scenes=0, with a job whose cycle count couldn't legitimately
+     * have finished that fast. Locked here, AFTER the kills loop above
+     * (which itself takes this same mutex per-call via
+     * lighting_remove_scene() -- wrapping the kills loop too would
+     * self-deadlock on this non-recursive mutex). Re-checks the capacity
+     * guard from the top of this function, now atomically with the write,
+     * since the earlier check was just an unsynchronized fast-path read. */
+    xSemaphoreTake(lighting_mutex, portMAX_DELAY);
+
+    if (active_scene_count >= MAX_ACTIVE_SCENES) {
+        xSemaphoreGive(lighting_mutex);
+        ESP_LOGW(TAG, "Max active scenes reached");
+        return ESP_ERR_NO_MEM;
+    }
+
     active_scene_t *scene = &active_scenes[active_scene_count];
     memset(scene, 0, sizeof(active_scene_t));
     strncpy(scene->name, scene_name, sizeof(scene->name) - 1);
@@ -265,7 +300,15 @@ static esp_err_t activate_scene(const char *scene_name)
     scene->job_count = job_idx;
     active_scene_count++;
 
-    ESP_LOGI(TAG, "Scene activated: %s (%d jobs)", scene_name, job_idx);
+    xSemaphoreGive(lighting_mutex);
+
+    ESP_LOGI(TAG, "Scene activated: %s (%d jobs) at slot %d, active_scene_count now %d",
+             scene_name, job_idx, active_scene_count - 1, active_scene_count);
+    for (int j = 0; j < job_idx; j++) {
+        active_job_t *job = &scene->jobs[j];
+        ESP_LOGI(TAG, "  job '%s': pattern=%s target_count=%d after='%s' cycles=%d",
+                 job->name, job->pattern_name, job->target_count, job->after, job->cycles);
+    }
     return ESP_OK;
 }
 
@@ -337,6 +380,14 @@ void lighting_process_tick(uint32_t tick)
                 if (job->period > 0) ticks_per_cycle = job->period;
 
                 int current_cycle = (int)(local_tick / ticks_per_cycle);
+#if LED_DEBUG_ENABLED
+                if (tick % 40 == 0) {
+                    ESP_LOGI(TAG, "  cycle-check '%s': tick=%u start_tick=%u local_tick=%u "
+                             "duration=%d ticks_per_cycle=%d current_cycle=%d/%d",
+                             job->name, (unsigned)tick, (unsigned)job->start_tick, (unsigned)local_tick,
+                             duration, ticks_per_cycle, current_cycle, job->cycles);
+                }
+#endif
                 if (current_cycle >= job->cycles) {
                     job->finished = true;
                     continue;
@@ -574,8 +625,12 @@ esp_err_t lighting_remove_scene(const char *scene_name)
 
     xSemaphoreTake(lighting_mutex, portMAX_DELAY);
 
+    bool found = false;
     for (int i = 0; i < active_scene_count; i++) {
         if (strcmp(active_scenes[i].name, scene_name) == 0) {
+            found = true;
+            ESP_LOGI(TAG, "lighting_remove_scene('%s'): found at slot %d, was_active=%d",
+                     scene_name, i, active_scenes[i].active);
             /* Free filter params and cached state */
             for (int j = 0; j < active_scenes[i].job_count; j++) {
                 free_job_filters(&active_scenes[i].jobs[j]);
@@ -583,6 +638,10 @@ esp_err_t lighting_remove_scene(const char *scene_name)
             active_scenes[i].active = false;
             break;
         }
+    }
+    if (!found) {
+        ESP_LOGD(TAG, "lighting_remove_scene('%s'): not in active_scenes (%d entries)",
+                 scene_name, active_scene_count);
     }
 
     xSemaphoreGive(lighting_mutex);
@@ -670,7 +729,7 @@ esp_err_t lighting_set_current_model(const char *model_name)
 
     cJSON *val = cJSON_CreateString(model_name);
     persistent_dict_set(lighting_store, "current_model", val);
-    persistent_dict_save(lighting_store);
+    persistent_dict_mark_dirty(lighting_store); persistent_dict_save(lighting_store);
     return ESP_OK;
 }
 
@@ -736,6 +795,7 @@ esp_err_t lighting_create_model(const char *model_name, bool copy_from_current)
     }
 
     cJSON_AddItemToObject(models, model_name, new_model);
+    persistent_dict_mark_dirty(lighting_store);
     return persistent_dict_save(lighting_store);
 }
 
@@ -759,6 +819,7 @@ esp_err_t lighting_delete_model(const char *model_name)
     }
 
     cJSON_DeleteItemFromObject(models, model_name);
+    persistent_dict_mark_dirty(lighting_store);
     return persistent_dict_save(lighting_store);
 }
 
@@ -785,5 +846,6 @@ esp_err_t lighting_rename_model(const char *old_name, const char *new_name)
         persistent_dict_set(lighting_store, "current_model", cJSON_CreateString(new_name));
     }
 
+    persistent_dict_mark_dirty(lighting_store);
     return persistent_dict_save(lighting_store);
 }

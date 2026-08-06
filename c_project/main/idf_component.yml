@@ -16,3 +16,4 @@ dependencies:
   #   public: true
   espressif/cjson: ^1.7.19
   espressif/mdns: '*'
+  joltwallet/littlefs: '*'

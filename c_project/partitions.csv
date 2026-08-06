@@ -5,11 +5,12 @@ phy_init,   data, phy,     0xf000,  0x1000,
 ota_0,      app,  ota_0,   0x10000, 0x300000,
 ota_1,      app,  ota_1,   0x310000,0x300000,
 # webassets holds www/ + templates/ only. It's rebuilt and reflashed on
-# every `idf.py flash` (spiffs_create_partition_image ... FLASH_IN_PROJECT
+# every `idf.py flash` (littlefs_create_partition_image ... FLASH_IN_PROJECT
 # in main/CMakeLists.txt), so nothing user-owned may ever live here.
-webassets,  data, spiffs,  0x610000,0x200000,
+# LittleFS, not SPIFFS, as of 2026-08-05 -- see LITTLEFS_MIGRATION_NOTES.md.
+webassets,  data, littlefs,0x610000,0x200000,
 # data holds /data/*.json (settings, scenes, effects, colors, sounds, ...).
 # Deliberately NOT part of the default flash target -- a normal
 # `idf.py flash` / flash_c.ps1 run must never touch this partition, or
 # every code/asset deploy would wipe the device's persistent settings.
-data,       data, spiffs,  0x810000,0x7F0000,
+data,       data, littlefs,0x810000,0x7F0000,

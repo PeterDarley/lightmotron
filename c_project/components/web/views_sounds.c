@@ -138,12 +138,12 @@ http_response_t *view_sounds(http_request_t *req)
                 cJSON_AddNumberToObject(sound, "loop_count", 0);
                 cJSON_AddNullToObject(sound, "chain_next");
                 cJSON_AddItemToObject(sounds, sound_title, sound);
-                persistent_dict_save(store);
+                persistent_dict_mark_dirty(store); persistent_dict_save(store);
             }
         } else if (strcmp(action, "delete_sound") == 0) {
             if (cJSON_GetObjectItem(sounds, sound_title)) {
                 cJSON_DeleteItemFromObject(sounds, sound_title);
-                persistent_dict_save(store);
+                persistent_dict_mark_dirty(store); persistent_dict_save(store);
             }
         }
     }
@@ -238,7 +238,7 @@ http_response_t *view_sound_edit(http_request_t *req)
             }
 
             persistent_dict_t *store = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
     }
 
@@ -338,7 +338,7 @@ http_response_t *view_audio_volume(http_request_t *req)
     persistent_dict_t *store = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     if (store) {
         persistent_dict_set(store, "master_volume", cJSON_CreateNumber(volume));
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
     }
 
     audio_player_set_volume(volume);

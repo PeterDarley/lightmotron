@@ -356,7 +356,7 @@ http_response_t *view_filters_post(http_request_t *req)
             cJSON_AddStringToObject(def, "filter", "sizzle");
             cJSON_AddItemToObject(filters_dict, filter_name, def);
         }
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
         cJSON *ctx = build_global_context();
         fill_filter_edit_context(ctx, model, filter_name);
         return webserver_render_response("setup/filter_edit.html", ctx);
@@ -366,7 +366,7 @@ http_response_t *view_filters_post(http_request_t *req)
         cJSON_GetObjectItem(filters_dict, filter_name)) {
         cJSON_DeleteItemFromObject(filters_dict, filter_name);
         rename_filter_refs(model, filter_name, NULL);
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
     }
 
     return webserver_render_response("setup/filters.html", render_filters_list_ctx(filters_dict));
@@ -471,12 +471,12 @@ http_response_t *view_filter_edit(http_request_t *req)
 
         cJSON_DeleteItemFromObject(filters_dict, filter_name);
         cJSON_AddItemToObject(filters_dict, filter_name, def);
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
 
     } else if (action && strcmp(action, "delete_filter") == 0 && filter_name && filter_name[0]) {
         if (cJSON_GetObjectItem(filters_dict, filter_name)) {
             cJSON_DeleteItemFromObject(filters_dict, filter_name);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
         return webserver_render_response("setup/filters.html", render_filters_list_ctx(filters_dict));
     }

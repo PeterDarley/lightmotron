@@ -482,12 +482,12 @@ http_response_t *view_scenes(http_request_t *req)
             if (!cJSON_GetObjectItem(scenes_dict, scene_name)) {
                 cJSON_AddItemToObject(scenes_dict, scene_name, cJSON_CreateObject());
             }
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
 
         } else if (action && strcmp(action, "delete_scene") == 0 && scene_name && scene_name[0] &&
                    cJSON_GetObjectItem(scenes_dict, scene_name)) {
             cJSON_DeleteItemFromObject(scenes_dict, scene_name);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
 
         } else if (action && strcmp(action, "rename_scene") == 0 && scene_name && scene_name[0]) {
             const char *new_name = request_get_form_field(req, "new_scene_name");
@@ -502,7 +502,7 @@ http_response_t *view_scenes(http_request_t *req)
                     cJSON_ReplaceItemInObject(model, "default_scene", cJSON_CreateString(new_name));
                 }
                 rename_scene_refs(model, scene_name, new_name);
-                persistent_dict_save(store);
+                persistent_dict_mark_dirty(store); persistent_dict_save(store);
             }
 
         } else if (action && strcmp(action, "copy_scene") == 0 && scene_name && scene_name[0] &&
@@ -512,7 +512,7 @@ http_response_t *view_scenes(http_request_t *req)
                 cJSON *src = cJSON_GetObjectItem(scenes_dict, scene_name);
                 cJSON *copy = json_deep_clone(src);
                 cJSON_AddItemToObject(scenes_dict, new_name, copy);
-                persistent_dict_save(store);
+                persistent_dict_mark_dirty(store); persistent_dict_save(store);
             }
         }
     }
@@ -584,22 +584,29 @@ http_response_t *view_scene_edit(http_request_t *req)
 
             cJSON_DeleteItemFromObject(scene_data, entry_name);
             cJSON_AddItemToObject(scene_data, entry_name, entry_dict);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
 
         } else if (action && strcmp(action, "delete_entry") == 0 && entry_name && entry_name[0]) {
             if (cJSON_GetObjectItem(scene_data, entry_name)) {
                 clear_scene_entry_after_refs(scene_data, entry_name);
                 cJSON_DeleteItemFromObject(scene_data, entry_name);
-                persistent_dict_save(store);
+                persistent_dict_mark_dirty(store); persistent_dict_save(store);
             }
 
         } else if (action && strcmp(action, "update_scene_settings") == 0) {
             update_scene_settings_from_form(req, model, scene_name);
-            persistent_dict_save(store);
+            /* Both handlers mutate `model` in place (a live pointer from
+             * lighting_get_settings() -> persistent_dict_get(), not a
+             * copy) -- that alone doesn't mark the store dirty, so
+             * persistent_dict_save() would silently no-op without this.
+             * See persistent_dict_get()'s doc comment. */
+            persistent_dict_mark_dirty(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
 
         } else if (action && strcmp(action, "set_active_on_boot") == 0) {
             set_active_on_boot_from_form(req, model, scene_name);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
     }
 
@@ -648,7 +655,7 @@ http_response_t *view_scene_edit_add_trigger(http_request_t *req)
     }
     if (!already_present) {
         cJSON_AddItemToArray(triggers, cJSON_CreateString(trigger_scene_to_add));
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
     }
 
     char scene_id[128];
@@ -716,7 +723,7 @@ http_response_t *view_scene_edit_remove_trigger(http_request_t *req)
         if (cJSON_GetArraySize(remaining) > 0) {
             cJSON_AddItemToObject(meta, "trigger_scenes_on_completion", cJSON_Duplicate(remaining, 1));
         }
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
     }
 
     char scene_id[128];

@@ -76,6 +76,52 @@ static bool cache_one_file(const char *full_path)
     return true;
 }
 
+/* Recursively walks dir_path, caching every regular file found at any depth.
+ * Unlike SPIFFS (a flat filesystem where "templates/home.html" was always
+ * one literal filename with no real directory objects, so a single
+ * non-recursive readdir on the mount root used to reach everything),
+ * LittleFS has genuine directories -- "templates" and "www" are real DT_DIR
+ * entries under the mount root, with their contents only visible one level
+ * down. d_type is used as a fast-path hint but stat() is the authoritative
+ * check, since not every VFS driver populates d_type reliably. */
+static void scan_directory(const char *dir_path, size_t *total_bytes)
+{
+    DIR *dir = opendir(dir_path);
+    if (!dir) {
+        ESP_LOGW(TAG, "Failed to open %s", dir_path);
+        return;
+    }
+
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) {
+            continue;
+        }
+
+        char full_path[ASSET_MAX_PATH];
+        int n = snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, ent->d_name);
+        if (n <= 0 || n >= (int)sizeof(full_path)) {
+            ESP_LOGW(TAG, "Path too long, skipping: %s", ent->d_name);
+            continue;
+        }
+
+        struct stat st;
+        if (stat(full_path, &st) != 0) {
+            continue;
+        }
+
+        if (S_ISDIR(st.st_mode)) {
+            scan_directory(full_path, total_bytes);
+            continue;
+        }
+
+        if (cache_one_file(full_path)) {
+            *total_bytes += entries[entry_count - 1].size;
+        }
+    }
+    closedir(dir);
+}
+
 void asset_cache_init(void)
 {
     if (initialized) {
@@ -83,40 +129,11 @@ void asset_cache_init(void)
     }
     initialized = true;
 
-    /* SPIFFS is a flat filesystem: readdir on the mount root enumerates
-     * every file with its full relative path (e.g. "templates/home.html",
-     * "www/styles/app.css"), so a single non-recursive pass reaches all of
-     * them regardless of the "subdirectory" nesting in the names. */
-    DIR *dir = opendir(ASSET_MOUNT);
-    if (!dir) {
-        ESP_LOGE(TAG, "Failed to open %s; assets will be served from flash", ASSET_MOUNT);
-        return;
-    }
-
     size_t total_bytes = 0;
-    struct dirent *ent;
-    while ((ent = readdir(dir)) != NULL) {
-        if (ent->d_type == DT_DIR) {
-            continue;
-        }
-
-        char full_path[ASSET_MAX_PATH];
-        int n = snprintf(full_path, sizeof(full_path), "%s/%s", ASSET_MOUNT, ent->d_name);
-        if (n <= 0 || n >= (int)sizeof(full_path)) {
-            ESP_LOGW(TAG, "Path too long, skipping: %s", ent->d_name);
-            continue;
-        }
-
-        struct stat st;
-        if (stat(full_path, &st) != 0 || S_ISDIR(st.st_mode)) {
-            continue;
-        }
-
-        if (cache_one_file(full_path)) {
-            total_bytes += entries[entry_count - 1].size;
-        }
+    scan_directory(ASSET_MOUNT, &total_bytes);
+    if (entry_count == 0) {
+        ESP_LOGE(TAG, "No assets cached under %s; assets will be served from flash (or 404)", ASSET_MOUNT);
     }
-    closedir(dir);
 
     ESP_LOGI(TAG, "Cached %d asset(s), %u bytes total", entry_count, (unsigned)total_bytes);
 }
@@ -133,4 +150,17 @@ const char *asset_cache_get(const char *full_path, size_t *out_size)
         }
     }
     return NULL;
+}
+
+int asset_cache_count(void)
+{
+    return entry_count;
+}
+
+const char *asset_cache_path_at(int index)
+{
+    if (index < 0 || index >= entry_count) {
+        return NULL;
+    }
+    return entries[index].path;
 }

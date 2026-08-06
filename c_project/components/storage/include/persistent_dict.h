@@ -13,7 +13,7 @@
  * should use these rather than redefining the path locally, so there is a
  * single source of truth for where each settings file lives.
  *
- * These live on the "data" SPIFFS partition (mounted at /data in
+ * These live on the "data" LittleFS partition (mounted at /data in
  * main/boot.c), which is deliberately separate from the "webassets"
  * partition (www/templates, mounted at /spiffs) so that reflashing
  * app/asset changes via `idf.py flash` never touches this data.
@@ -23,7 +23,7 @@
 #define STORAGE_SOUNDS_FILE "/data/sounds.json"
 
 /**
- * Lazy-loaded persistent dictionary backed by a JSON file on SPIFFS.
+ * Lazy-loaded persistent dictionary backed by a JSON file on LittleFS.
  *
  * Data is only loaded from disk on first access, not during initialization.
  */
@@ -48,6 +48,18 @@ persistent_dict_t *persistent_dict_open(const char *filepath);
  * The returned cJSON pointer is owned by the dict — do not free it.
  * WARNING: Not safe if another thread may modify the same key concurrently.
  * Use persistent_dict_get_dup() in multi-threaded contexts.
+ *
+ * WARNING: mutating the returned tree directly (cJSON_AddItemToObject,
+ * cJSON_DeleteItemFromObject, etc. on it or a sub-object within it) DOES
+ * update the dict's in-memory state, since this is a live pointer, not a
+ * copy -- but it does NOT mark the dict dirty, so persistent_dict_save()
+ * will silently no-op and the change is lost on reboot. Call
+ * persistent_dict_mark_dirty() after any such direct mutation, before
+ * saving. (Confirmed as a real bug 2026-08-05: a scene's "active on boot"
+ * toggle and its kills/trigger-scenes editor both mutated a live tree this
+ * way with no matching mark_dirty call -- the change looked saved
+ * immediately in the UI, since the UI reads the same in-memory tree, but
+ * reverted on every reboot.)
  */
 cJSON *persistent_dict_get(persistent_dict_t *pd, const char *key);
 
@@ -70,12 +82,21 @@ void persistent_dict_set(persistent_dict_t *pd, const char *key, cJSON *value);
 void persistent_dict_delete_key(persistent_dict_t *pd, const char *key);
 
 /**
+ * Mark the dict dirty without changing anything -- needed after directly
+ * mutating a tree obtained via persistent_dict_get() (a live pointer, not
+ * a copy), since that mutation alone doesn't set the dirty flag the way
+ * persistent_dict_set()/persistent_dict_delete_key() do. See
+ * persistent_dict_get()'s doc comment.
+ */
+void persistent_dict_mark_dirty(persistent_dict_t *pd);
+
+/**
  * Check if a key exists.
  */
 bool persistent_dict_has_key(persistent_dict_t *pd, const char *key);
 
 /**
- * Save the current state to disk (SPIFFS).
+ * Save the current state to disk (LittleFS).
  */
 esp_err_t persistent_dict_save(persistent_dict_t *pd);
 

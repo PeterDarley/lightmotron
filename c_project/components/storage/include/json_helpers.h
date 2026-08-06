@@ -42,12 +42,12 @@ cJSON *json_get_array(const cJSON *obj, const char *key);
 cJSON *json_deep_clone(const cJSON *obj);
 
 /**
- * Read a JSON file from SPIFFS and parse it. Caller must free with cJSON_Delete().
+ * Read a JSON file from LittleFS and parse it. Caller must free with cJSON_Delete().
  */
 cJSON *json_read_file(const char *filepath);
 
 /**
- * Write a cJSON object to a file on SPIFFS.
+ * Write a cJSON object to a file on LittleFS.
  */
 esp_err_t json_write_file(const char *filepath, const cJSON *obj);
 

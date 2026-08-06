@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "lwip/sockets.h"
 #include "lwip/dns.h"
+#include "lwip/inet.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -588,6 +589,10 @@ static void http_task(void *pvParameters)
         if (client_sock < 0) {
             continue;
         }
+        char client_ip[16];
+        strncpy(client_ip, inet_ntoa(client_addr.sin_addr), sizeof(client_ip) - 1);
+        client_ip[sizeof(client_ip) - 1] = '\0';
+        uint32_t request_start_ms = esp_log_timestamp();
 
         /* Bound how long the read loop below can block waiting for the rest
          * of a POST body -- a client that stalls mid-upload would otherwise
@@ -597,6 +602,7 @@ static void http_task(void *pvParameters)
 
         int received = recv(client_sock, recv_buf, sizeof(recv_buf) - 1, 0);
         if (received <= 0) {
+            ESP_LOGI(TAG, "%s (no request received, recv=%d)", client_ip, received);
             close(client_sock);
             continue;
         }
@@ -612,6 +618,7 @@ static void http_task(void *pvParameters)
         }
 
         bool credentials_saved = false;
+        int response_status = 0; /* 0 = no response branch matched/logged below */
 
         if (strcmp(method, "POST") == 0 && strcmp(path, "/save") == 0) {
             char *headers_end = strstr(recv_buf, "\r\n\r\n");
@@ -680,7 +687,9 @@ static void http_task(void *pvParameters)
             }
 
             if (strlen(ssid) > 0) {
+                ESP_LOGI(TAG, "%s POST /save: saving credentials for SSID '%s'...", client_ip, ssid);
                 save_wifi_credentials(ssid, password);
+                ESP_LOGI(TAG, "%s POST /save: credentials saved, building response...", client_ip);
 
                 char *saved_page = build_saved_page();
                 char response[1536];
@@ -690,9 +699,11 @@ static void http_task(void *pvParameters)
                     (int)strlen(saved_page), saved_page);
                 send(client_sock, response, resp_len, 0);
                 credentials_saved = true;
+                response_status = 200;
             } else {
                 const char *bad_request = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
                 send(client_sock, bad_request, strlen(bad_request), 0);
+                response_status = 400;
             }
 
         } else if (strcmp(method, "GET") == 0 && (strcmp(path, "/") == 0 || strcmp(path, "/index.html") == 0)) {
@@ -706,6 +717,7 @@ static void http_task(void *pvParameters)
                         (int)strlen(html), html);
                     send(client_sock, response, resp_len, 0);
                     free(response);
+                    response_status = 200;
                 }
                 free(html);
             }
@@ -721,6 +733,7 @@ static void http_task(void *pvParameters)
                 "HTTP/1.1 302 Found\r\nLocation: http://" AP_IP "/\r\n"
                 "Content-Length: 0\r\nConnection: close\r\n\r\n");
             send(client_sock, response, resp_len, 0);
+            response_status = 302;
 
         } else if (strcmp(method, "GET") == 0) {
             /* Redirect all other GET paths (OS captive-portal probes) to / */
@@ -729,11 +742,16 @@ static void http_task(void *pvParameters)
                 "HTTP/1.1 302 Found\r\nLocation: http://" AP_IP "/\r\n"
                 "Content-Length: 0\r\nConnection: close\r\n\r\n");
             send(client_sock, response, resp_len, 0);
+            response_status = 302;
 
         } else {
             const char *bad_request = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
             send(client_sock, bad_request, strlen(bad_request), 0);
+            response_status = 400;
         }
+
+        ESP_LOGI(TAG, "%s %s %s -> %d (%ums)", client_ip, method, path, response_status,
+                 (unsigned)(esp_log_timestamp() - request_start_ms));
 
         close(client_sock);
 
@@ -842,7 +860,13 @@ esp_err_t captive_portal_start(void)
     xTaskCreate(dns_task, "dns_task", 4096, NULL, 5, &dns_task_handle);
 
     /* Start HTTP task */
-    xTaskCreate(http_task, "portal_http", 6144, NULL, 5, &http_task_handle);
+    /* 16384, not the original 6144: save_wifi_credentials() ->
+     * persistent_dict_save() -> json_write_file() now runs LittleFS's
+     * write path (lfs_dir_commit/lfs_dir_relocatingcommit/lfs_bd_sync/...),
+     * which is meaningfully deeper than SPIFFS's was -- overflowed the
+     * previous size (canary-triggered panic while saving WiFi credentials
+     * from the captive portal). See LITTLEFS_MIGRATION_NOTES.md. */
+    xTaskCreate(http_task, "portal_http", 16384, NULL, 5, &http_task_handle);
 
     return ESP_OK;
 }

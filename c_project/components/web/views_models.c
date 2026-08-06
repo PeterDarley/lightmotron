@@ -153,7 +153,7 @@ http_response_t *view_models_wrap(http_request_t *req)
     cJSON_AddItemToObject(models, model_name, old ? old : cJSON_CreateObject());
     persistent_dict_set(store, "models", models);
     persistent_dict_set(store, "current_model", cJSON_CreateString(model_name));
-    persistent_dict_save(store);
+    persistent_dict_mark_dirty(store); persistent_dict_save(store);
 
     return render_models_page();
 }

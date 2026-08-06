@@ -62,18 +62,40 @@ CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
 # because PSRAM/flash bus contention can make flash operations take longer
 # -- that auto-bump doesn't apply to ESP32-S3, but this board (N16R8) has
 # the same 8MB octal PSRAM and the same contention. First bumped 300->800
-# to match that ESP-IDF precedent; that still wasn't enough headroom --
-# "Interrupt wdt timeout on CPU1" recurred inside SPIFFS writes across four
-# separate save paths (restore, system settings, audio volume, ...), each
-# time stuck in spiffs_object_find_object_index_header_by_name's lookup.
-# SPIFFS is documented to have exactly this kind of GC-driven latency spike,
-# more so on a partition this size (8MB "data"); 3000ms gives real headroom
-# for that worst case while staying well under the 30s task watchdog, which
-# still catches a genuine infinite loop. If this recurs even at 3000ms, the
-# durable fix is migrating "data" off SPIFFS to LittleFS (ESP-IDF's
-# now-recommended filesystem, designed to avoid unbounded GC pauses) rather
-# than keeping tuning this number ever higher.
-CONFIG_ESP_INT_WDT_TIMEOUT_MS=3000
+# to match that ESP-IDF precedent; recurred repeatedly under SPIFFS (stuck
+# in spiffs_object_find_object_index_header_by_name), which motivated
+# migrating "data"/"webassets" to LittleFS (see LITTLEFS_MIGRATION_NOTES.md)
+# -- but recurred AGAIN post-migration, this time at 3000ms, stuck in
+# LittleFS's lfs_dir_splittingcompact (a directory-block reorganization
+# during json_write_file()'s atomic rename). Bumped to 5000ms alongside the
+# LittleFS lookahead/cache tuning below -- and recurred a THIRD time at
+# 5000ms, same lfs_dir_splittingcompact, this time during the fopen() half
+# of json_write_file()'s write (esp_littlefs_file_sync inside
+# vfs_littlefs_open), not the rename half. Three distinct write-adjacent
+# call sites hitting the same LittleFS internal function suggests this
+# isn't just "needs more lookahead" -- likely also accumulated directory
+# fragmentation from this session's many crash-mid-write cycles (LittleFS
+# is power-loss-safe, so these shouldn't have corrupted anything, but
+# orphaned .tmp entries/relocations from repeated interrupted writes could
+# still be adding real compaction work). Bumped to 8000ms as an immediate
+# backstop; a clean erase of "data" (fresh directory, no accumulated
+# churn) is the more durable next step if this recurs even here -- see
+# LITTLEFS_MIGRATION_NOTES.md. Still well under the 30s task watchdog,
+# which still catches a genuine infinite loop.
+CONFIG_ESP_INT_WDT_TIMEOUT_MS=8000
+
+# LittleFS lookahead/cache buffers: both were still at their tiny Kconfig
+# defaults (128 / 512 bytes) despite "data" being an 8MB partition (~2048
+# blocks). A lookahead buffer that small needs multiple scan passes to find
+# free blocks during compaction, directly inflating time spent in the
+# interrupt-disabled flash critical section -- the proximate cause of the
+# "Interrupt wdt timeout on CPU1" panics above. 512 bytes of lookahead
+# tracks 4096 blocks in a single pass (double this partition's block
+# count); cache doubled too since a bigger buffered read/write reduces the
+# total number of individual flash-access calls. Pure runtime tuning, not
+# an on-disk format change -- safe to adjust without reformatting.
+CONFIG_LITTLEFS_LOOKAHEAD_SIZE=512
+CONFIG_LITTLEFS_CACHE_SIZE=1024
 
 # Task Watchdog
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=30

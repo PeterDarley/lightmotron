@@ -130,6 +130,14 @@ void persistent_dict_set(persistent_dict_t *pd, const char *key, cJSON *value)
     xSemaphoreGive(pd->mutex);
 }
 
+void persistent_dict_mark_dirty(persistent_dict_t *pd)
+{
+    if (!pd) return;
+    xSemaphoreTake(pd->mutex, portMAX_DELAY);
+    pd->dirty = true;
+    xSemaphoreGive(pd->mutex);
+}
+
 void persistent_dict_delete_key(persistent_dict_t *pd, const char *key)
 {
     if (!pd || !key) {

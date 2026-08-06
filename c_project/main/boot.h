@@ -6,7 +6,7 @@
 /**
  * Initialize all system components in the correct order.
  *
- * Sequence: NVS → SPIFFS → Storage defaults → WiFi (hostname set, then
+ * Sequence: NVS → LittleFS → Storage defaults → WiFi (hostname set, then
  * connect; captive portal on missing/failed credentials) → mDNS →
  * IP announcement → onboard-LED IP flash (background task) → Web routes/
  * server → LEDs → Billboard → Audio → Lighting → Animation

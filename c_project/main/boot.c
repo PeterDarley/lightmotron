@@ -19,7 +19,7 @@
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"
-#include "esp_spiffs.h"
+#include "esp_littlefs.h"
 #include "nvs_flash.h"
 #include "cJSON.h"
 #include "freertos/FreeRTOS.h"
@@ -258,36 +258,65 @@ esp_err_t boot_init(void)
     /* Seed random number generator */
     srand((unsigned int)esp_log_timestamp());
 
-    /* Initialize SPIFFS - two separate partitions (see partitions.csv):
+    /* Initialize LittleFS - two separate partitions (see partitions.csv):
      * "webassets" (www/templates, rebuilt and rewritten on every
      * `idf.py flash`) and "data" (user settings, never touched by
      * flashing). Keeping them separate means a normal code/asset deploy
-     * can never wipe scenes/effects/colors/WiFi credentials/etc. */
-    esp_vfs_spiffs_conf_t webassets_conf = {
+     * can never wipe scenes/effects/colors/WiFi credentials/etc.
+     *
+     * Migrated from SPIFFS 2026-08-05 (see LITTLEFS_MIGRATION_NOTES.md) --
+     * SPIFFS's garbage-collection pauses were repeatedly tripping the
+     * interrupt watchdog during ordinary settings writes. base_path/
+     * partition_label are unchanged so nothing else in the app needed to
+     * change; only the on-flash format did. */
+    esp_vfs_littlefs_conf_t webassets_conf = {
         .base_path = STORAGE_MOUNT_POINT,
         .partition_label = "webassets",
-        .max_files = 10,
         .format_if_mount_failed = true,
     };
-    ret = esp_vfs_spiffs_register(&webassets_conf);
+    ret = esp_vfs_littlefs_register(&webassets_conf);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to mount webassets SPIFFS (%s)", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to mount webassets LittleFS (%s)", esp_err_to_name(ret));
         return ret;
     }
-    ESP_LOGI(TAG, "webassets SPIFFS mounted");
+    ESP_LOGI(TAG, "webassets LittleFS mounted");
 
-    esp_vfs_spiffs_conf_t data_conf = {
+    esp_vfs_littlefs_conf_t data_conf = {
         .base_path = DATA_MOUNT_POINT,
         .partition_label = "data",
-        .max_files = 10,
         .format_if_mount_failed = true,
     };
-    ret = esp_vfs_spiffs_register(&data_conf);
+    ret = esp_vfs_littlefs_register(&data_conf);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to mount data SPIFFS (%s)", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to mount data LittleFS (%s)", esp_err_to_name(ret));
         return ret;
     }
-    ESP_LOGI(TAG, "data SPIFFS mounted");
+    ESP_LOGI(TAG, "data LittleFS mounted");
+
+    /* Force LittleFS's janitorial work (metadata-pair compaction, orphan
+     * cleanup, block-allocator population -- see lfs_fs_gc() in
+     * managed_components/joltwallet__littlefs) here at boot, before
+     * anything else touches either partition, instead of letting it
+     * happen implicitly inside whatever write triggers it first. This is
+     * the same lfs_dir_splittingcompact work that's been tripping the
+     * interrupt watchdog during ordinary settings saves (see
+     * LITTLEFS_MIGRATION_NOTES.md) -- running it here pays down any
+     * accumulated compaction debt at boot, when nothing else is
+     * contending for CPU/flash and a stall is easy to diagnose, instead
+     * of mid-request. esp_littlefs doesn't expose lfs_fs_gc() itself, so
+     * esp_littlefs_gc() (added to the vendored component alongside this
+     * change) is a thin wrapper around it. Not fatal if it fails --
+     * that just means the debt carries over to the next write, same as
+     * before this existed. */
+    uint32_t gc_start = esp_log_timestamp();
+    ret = esp_littlefs_gc("data");
+    ESP_LOGI(TAG, "data LittleFS gc: %s (%ums)", esp_err_to_name(ret),
+             (unsigned)(esp_log_timestamp() - gc_start));
+
+    gc_start = esp_log_timestamp();
+    ret = esp_littlefs_gc("webassets");
+    ESP_LOGI(TAG, "webassets LittleFS gc: %s (%ums)", esp_err_to_name(ret),
+             (unsigned)(esp_log_timestamp() - gc_start));
 
     /* Seed defaults */
     ret = boot_seed_defaults();

@@ -526,7 +526,7 @@ http_response_t *view_effects(http_request_t *req)
                 cJSON_AddStringToObject(def, "pattern", "solid");
                 cJSON_AddItemToObject(effects_dict, effect_name, def);
             }
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
             /* Go straight to editing the new effect, matching Python. */
             cJSON *ctx = build_global_context();
             fill_effect_edit_context(ctx, model, effect_name);
@@ -535,7 +535,7 @@ http_response_t *view_effects(http_request_t *req)
         } else if (action && strcmp(action, "delete_effect") == 0 && effect_name && effect_name[0] &&
                    cJSON_GetObjectItem(effects_dict, effect_name)) {
             cJSON_DeleteItemFromObject(effects_dict, effect_name);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
     }
 
@@ -609,16 +609,16 @@ http_response_t *view_effect_edit(http_request_t *req)
 
         if (strcmp(action, "add_effect_filter") == 0 && filter_name && filter_name[0] && found_idx < 0) {
             cJSON_AddItemToArray(filters_list, cJSON_CreateString(filter_name));
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         } else if (strcmp(action, "remove_effect_filter") == 0 && found_idx >= 0) {
             cJSON_DeleteItemFromArray(filters_list, found_idx);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         } else if (strcmp(action, "move_effect_filter_up") == 0 && found_idx > 0) {
             swap_array_strings(filters_list, found_idx - 1, found_idx);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         } else if (strcmp(action, "move_effect_filter_down") == 0 && found_idx >= 0 && found_idx < n - 1) {
             swap_array_strings(filters_list, found_idx, found_idx + 1);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
 
         cJSON *ctx = build_global_context();
@@ -650,13 +650,13 @@ http_response_t *view_effect_edit(http_request_t *req)
 
         cJSON_DeleteItemFromObject(effects_dict, effect_name);
         cJSON_AddItemToObject(effects_dict, effect_name, effect_dict);
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
 
     } else if (action && strcmp(action, "delete_effect") == 0 && effect_name && effect_name[0]) {
         if (effects_dict && cJSON_GetObjectItem(effects_dict, effect_name)) {
             persistent_dict_t *store = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
             cJSON_DeleteItemFromObject(effects_dict, effect_name);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
         cJSON *ctx = build_global_context();
         cJSON_AddItemToObject(ctx, "effects", build_effects_list(effects_dict));

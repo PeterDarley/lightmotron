@@ -102,7 +102,20 @@ http_response_t *view_restore(http_request_t *req)
     persistent_dict_t *lighting_store = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
 
     if (sys_store && sys_data) {
+        /* Preserve this device's own WiFi credentials across a restore,
+         * no matter what (if anything) the uploaded file has for "wifi".
+         * view_backup() deliberately strips "wifi" from what it exports
+         * ("so restoring a backup on a different device doesn't overwrite
+         * its network config" -- see its comment above) but that intent
+         * only holds if restore also refuses to apply a "wifi" key that
+         * DOES show up in an uploaded file -- e.g. an older backup
+         * predating that stripping, or a hand-edited one -- otherwise the
+         * current device's WiFi still gets clobbered. */
+        cJSON *current_wifi = persistent_dict_get_dup(sys_store, "wifi");
         replace_all_keys(sys_store, sys_data);
+        if (current_wifi) {
+            persistent_dict_set(sys_store, "wifi", current_wifi);
+        }
         persistent_dict_save(sys_store);
     }
     if (lighting_store && lighting_data) {

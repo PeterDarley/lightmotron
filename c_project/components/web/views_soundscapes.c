@@ -203,12 +203,12 @@ http_response_t *view_soundscapes(http_request_t *req)
         if (strcmp(action, "create") == 0) {
             if (!cJSON_GetObjectItem(soundscapes, soundscape_name)) {
                 cJSON_AddItemToObject(soundscapes, soundscape_name, cJSON_CreateObject());
-                persistent_dict_save(store);
+                persistent_dict_mark_dirty(store); persistent_dict_save(store);
             }
         } else if (strcmp(action, "delete") == 0) {
             if (cJSON_GetObjectItem(soundscapes, soundscape_name)) {
                 cJSON_DeleteItemFromObject(soundscapes, soundscape_name);
-                persistent_dict_save(store);
+                persistent_dict_mark_dirty(store); persistent_dict_save(store);
             }
         }
     }
@@ -385,13 +385,13 @@ http_response_t *view_soundscape_edit(http_request_t *req)
             cJSON_AddNumberToObject(entry, "repeat", repeat_count);
             cJSON_DeleteItemFromObject(soundscape, entry_name);
             cJSON_AddItemToObject(soundscape, entry_name, entry);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
     } else if (action && strcmp(action, "delete_entry") == 0) {
         const char *entry_name = request_get_form_field(req, "entry_name");
         if (entry_name && entry_name[0] && soundscape && cJSON_GetObjectItem(soundscape, entry_name)) {
             cJSON_DeleteItemFromObject(soundscape, entry_name);
-            persistent_dict_save(store);
+            persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
     } else if (action && strcmp(action, "update_entry") == 0) {
         const char *entry_name = request_get_form_field(req, "entry_name");
@@ -409,7 +409,7 @@ http_response_t *view_soundscape_edit(http_request_t *req)
                 cJSON_AddBoolToObject(entry, "repeat_enabled", repeat_enabled);
                 cJSON_DeleteItemFromObject(entry, "repeat");
                 cJSON_AddNumberToObject(entry, "repeat", repeat_count);
-                persistent_dict_save(store);
+                persistent_dict_mark_dirty(store); persistent_dict_save(store);
             }
         }
 

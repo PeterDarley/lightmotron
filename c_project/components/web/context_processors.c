@@ -8,15 +8,16 @@
 #include <stdio.h>
 #include <ctype.h>
 
-/* Adds `key` to ctx holding an upper-cased copy of `value` -- the template
- * engine has no filter syntax (no `{{ x|upper }}`) so this has to happen
- * on the C side rather than in the template. */
+/* Adds `key` to ctx holding an upper-cased, dash-to-space copy of `value`
+ * (e.g. "event-horizon" -> "EVENT HORIZON") for display in the title/
+ * header -- the template engine has no filter syntax (no `{{ x|upper }}`)
+ * so this has to happen on the C side rather than in the template. */
 static void add_uppercase_string(cJSON *ctx, const char *key, const char *value)
 {
     char upper[128];
     size_t i = 0;
     for (; value[i] != '\0' && i < sizeof(upper) - 1; i++) {
-        upper[i] = (char)toupper((unsigned char)value[i]);
+        upper[i] = value[i] == '-' ? ' ' : (char)toupper((unsigned char)value[i]);
     }
     upper[i] = '\0';
     cJSON_AddStringToObject(ctx, key, upper);

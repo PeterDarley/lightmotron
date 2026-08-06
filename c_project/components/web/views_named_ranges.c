@@ -738,7 +738,7 @@ static bool swap_named_ranges(const char *name_a, const char *name_b)
     reindex_leds(&permutation, model);
 
     persistent_dict_t *store = persistent_dict_open(STORAGE_LIGHTING_SETTINGS_FILE);
-    persistent_dict_save(store);
+    persistent_dict_mark_dirty(store); persistent_dict_save(store);
     return true;
 }
 
@@ -921,7 +921,7 @@ http_response_t *view_named_range(http_request_t *req)
     if (strcmp(action, "delete") == 0 && old_name && old_name[0] && named_ranges &&
         cJSON_GetObjectItem(named_ranges, old_name)) {
         cJSON_DeleteItemFromObject(named_ranges, old_name);
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
     } else if (range_name && range_name[0] && named_ranges) {
         if (has_cycle(named_ranges, range_name, tokens)) {
             cJSON_Delete(tokens);
@@ -936,7 +936,7 @@ http_response_t *view_named_range(http_request_t *req)
             cJSON_DeleteItemFromObject(named_ranges, old_name);
             rename_named_range_refs(model, old_name, range_name);
         }
-        persistent_dict_save(store);
+        persistent_dict_mark_dirty(store); persistent_dict_save(store);
     }
 
     cJSON_Delete(tokens);
