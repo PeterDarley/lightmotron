@@ -1,7 +1,7 @@
 {
   "name": "Lightmotron",
-  "version": "321860b-10-g234a91a-dirty",
-  "firmware_source": "c_project (ESP-IDF 321860b-10-g234a91a-dirty)",
+  "version": "321860b-15-g4e76fa5-dirty",
+  "firmware_source": "c_project (ESP-IDF 321860b-15-g4e76fa5-dirty)",
   "new_install_prompt_erase": true,
   "builds": [
     {
