@@ -1,7 +1,7 @@
 # Hardware & Wiring Reference
 
-This page covers wiring for the audio and matrix-display hardware. For
-NeoPixel LED strip wiring, see the [NeoPixel Wiring Diagram](neopixel-wiring.md).
+This page covers wiring for the audio hardware. For NeoPixel LED strip
+wiring, see the [NeoPixel Wiring Diagram](neopixel-wiring.md).
 
 ## Microcontroller
 
@@ -30,23 +30,18 @@ Wiring notes:
   depends on how many modules you're wiring and which UARTs you assign
   them to.
 
-## MAX7219 Scrolling LED Matrix (Billboard)
+## MAX7219 Scrolling LED Matrix (Billboard) — not currently supported
 
-Uses SPI (not I2C).
+An earlier hardware configuration included a MAX7219-based scrolling LED
+matrix display. The driver code is still in the tree
+(`c_project/components/billboard/`) for reference, but it's **not wired
+up or activated** in the current firmware — `main/boot.c` deliberately
+never calls into it, and no default settings are seeded for it. Don't wire
+one up expecting it to work.
 
-| MAX7219 pin | ESP32 GPIO | Wire function |
-|---|---|---|
-| DIN | GPIO 23 | SPI MOSI (data in) |
-| CLK | GPIO 18 | SPI SCK (clock) |
-| CS | GPIO 5 | Chip select |
-| VCC | 5V | Power (must be 5V, not 3.3V) |
-| GND | GND | Common ground |
-
-Since the MAX7219 module runs its SPI lines at 5V logic and the ESP32-S3's
-GPIOs are 3.3V, a logic level converter is needed on CLK, DIN, and CS (a
-4-channel 3.3V↔5V converter module works well here). VCC and GND connect
-directly — only the signal lines need level shifting.
-
-Pin numbers and module count are configurable on the Setup page → System
-Settings; the table above reflects a typical wiring, not a hard-coded
-requirement.
+If you're reviving this feature, the driver's default pin assumptions were
+DIN→GPIO23 (SPI MOSI), CLK→GPIO18 (SPI SCK), CS→GPIO5, running at 5V logic
+(needs a level shifter on the signal lines from the ESP32-S3's 3.3V GPIOs).
+Note that GPIO5 in particular is a common choice for other things (an
+audio module's UART RX, for instance) — check for conflicts before reusing
+that default.

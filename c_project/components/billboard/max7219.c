@@ -156,18 +156,21 @@ esp_err_t max7219_init(max7219_t *dev, int mosi_pin, int sck_pin, int cs_pin, in
     dev->framebuffer = calloc(num_modules * 8, 1);
     if (!dev->framebuffer) return ESP_ERR_NO_MEM;
 
-    /* Configure CS pin */
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << cs_pin),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&io_conf);
-    gpio_set_level(cs_pin, 1);
-
-    /* Configure SPI */
+    /* Configure SPI first, before claiming the CS pin. CS is a plain GPIO
+     * driven manually (spics_io_num = -1 below), not managed by the SPI
+     * driver -- if it were claimed unconditionally up front, a failure in
+     * spi_bus_initialize()/spi_bus_add_device() (e.g. an invalid mosi_pin,
+     * left over from an incomplete/unconfigured billboard entry in
+     * settings) would still leave the CS pin claimed as a driven-high GPIO
+     * output afterward, for the rest of the boot. If that pin happens to
+     * be shared with something else's input (observed in practice: the
+     * default CS pin, GPIO5, colliding with a YX5200 audio module
+     * configured to use GPIO5 as its UART RX -- the module's TX signal was
+     * permanently overridden by this pin being held high, so status
+     * queries never received a byte while playback commands, which only
+     * need the separate TX pin, worked fine), that's a real, silent
+     * cross-peripheral conflict. Only claim CS once the SPI bus is known
+     * to be valid. */
     spi_bus_config_t bus_cfg = {
         .mosi_io_num = mosi_pin,
         .miso_io_num = -1,
@@ -180,6 +183,8 @@ esp_err_t max7219_init(max7219_t *dev, int mosi_pin, int sck_pin, int cs_pin, in
     esp_err_t ret = spi_bus_initialize(SPI2_HOST, &bus_cfg, SPI_DMA_DISABLED);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "SPI bus init failed: %s", esp_err_to_name(ret));
+        free(dev->framebuffer);
+        dev->framebuffer = NULL;
         return ret;
     }
 
@@ -195,8 +200,22 @@ esp_err_t max7219_init(max7219_t *dev, int mosi_pin, int sck_pin, int cs_pin, in
     ret = spi_bus_add_device(SPI2_HOST, &dev_cfg, &dev->spi);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "SPI device add failed");
+        spi_bus_free(SPI2_HOST);
+        free(dev->framebuffer);
+        dev->framebuffer = NULL;
         return ret;
     }
+
+    /* SPI bus confirmed valid -- now safe to claim the CS pin. */
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << cs_pin),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+    gpio_set_level(cs_pin, 1);
 
     /* Initialize MAX7219 registers. Order matches Matrix8x8._init_display()
      * in lib/max7219.py: enter shutdown first to configure safely, then

@@ -44,12 +44,43 @@ static float filter_variation_percent(const cJSON *params, float default_percent
     return default_percent;
 }
 
-/** Uniform random float in [-range, range], mirroring random.uniform(-r, r). */
-static float uniform_signed(float range)
+/**
+ * Steps a persistent sizzle/scintillate deviation ratio by up to heat_ratio,
+ * biased toward or away from zero (the target color) based on how close the
+ * deviation already is to the max_ratio boundary:
+ *
+ *   P(move toward target) = 0.5 + 0.5 * (|deviation| / max_ratio)
+ *
+ * so a deviation sitting exactly at the target is a 50/50 coin flip on
+ * which way it jumps next, and one already sitting at the configured
+ * variation boundary is always pushed back toward the target -- it can
+ * never overshoot past max_ratio (the trailing clamp is just a safety net
+ * for a heat step landing exactly on/past the edge in one jump).
+ */
+static float step_deviation(float deviation, float heat_ratio, float max_ratio)
 {
-    if (range <= 0.0f) return 0.0f;
-    float unit = (float)rand() / (float)RAND_MAX; /* [0, 1] */
-    return (unit * 2.0f - 1.0f) * range;
+    if (max_ratio <= 0.0f) return 0.0f;
+    if (heat_ratio <= 0.0f) return deviation;
+
+    float distance_ratio = fabsf(deviation) / max_ratio;
+    if (distance_ratio > 1.0f) distance_ratio = 1.0f;
+    float p_toward = 0.5f + 0.5f * distance_ratio;
+
+    float coin = (float)rand() / (float)RAND_MAX;
+    bool toward = coin < p_toward;
+
+    /* Sign of the *current* deviation defines "toward"/"away"; at exactly
+     * zero this arbitrarily picks +1, which combined with p_toward=0.5
+     * there naturally reduces to a plain random-direction jump -- exactly
+     * the "50% up / 50% down at the target" case, no special-casing
+     * needed. */
+    float sign = deviation < 0.0f ? -1.0f : 1.0f;
+    float step = heat_ratio * ((float)rand() / (float)RAND_MAX); /* magnitude in [0, heat_ratio] */
+    deviation += toward ? -sign * step : sign * step;
+
+    if (deviation > max_ratio) deviation = max_ratio;
+    if (deviation < -max_ratio) deviation = -max_ratio;
+    return deviation;
 }
 
 void filter_null(const cJSON *params, led_output_t *target, const rgb_t *current,
@@ -88,58 +119,77 @@ void filter_brightness(const cJSON *params, led_output_t *target, const rgb_t *c
 void filter_sizzle(const cJSON *params, led_output_t *target, const rgb_t *current,
                    int count, filter_state_t *state, uint32_t tick)
 {
-    /* Uniform random deviation applied identically to every LED: one random
-     * factor per channel per update, matching FilterMixin.filter_sizzle().
-     * `tick` is the effect's local tick (see lighting.c's filter_fn call),
-     * matching Python's tick_number=local_tick. */
+    /* Persistent random-walk deviation shared identically by every LED: one
+     * walked factor per channel, stepped on update ticks and held (applied
+     * every tick, not just update ticks) in between -- see step_deviation().
+     * `tick` is the effect's local tick (see lighting.c's filter_fn call). */
     (void)current;
-    (void)state;
 
     if (count <= 0) return;
 
     int frequency = params ? json_get_int(params, "frequency", 40) : 40;
     float variation_percent = filter_variation_percent(params, 20.0f);
     float variation_ratio = variation_percent / 100.0f;
+    float heat_ratio = (params ? (float)json_get_int(params, "heat", 10) : 10.0f) / 100.0f;
 
     int interval = frequency > 0 ? (40 / frequency) : 1;
     if (interval < 1) interval = 1;
 
-    if ((tick % (uint32_t)interval) != 0) return;
+    if (!state) return;
 
-    float dev_r = uniform_signed(variation_ratio);
-    float dev_g = uniform_signed(variation_ratio);
-    float dev_b = uniform_signed(variation_ratio);
+    if ((tick % (uint32_t)interval) == 0) {
+        state->shared_deviation[0] = step_deviation(state->shared_deviation[0], heat_ratio, variation_ratio);
+        state->shared_deviation[1] = step_deviation(state->shared_deviation[1], heat_ratio, variation_ratio);
+        state->shared_deviation[2] = step_deviation(state->shared_deviation[2], heat_ratio, variation_ratio);
+    }
 
     for (int i = 0; i < count; i++) {
-        target[i].color.r = color_clamp((int)roundf(target[i].color.r * (1.0f + dev_r)));
-        target[i].color.g = color_clamp((int)roundf(target[i].color.g * (1.0f + dev_g)));
-        target[i].color.b = color_clamp((int)roundf(target[i].color.b * (1.0f + dev_b)));
+        target[i].color.r = color_clamp((int)roundf(target[i].color.r * (1.0f + state->shared_deviation[0])));
+        target[i].color.g = color_clamp((int)roundf(target[i].color.g * (1.0f + state->shared_deviation[1])));
+        target[i].color.b = color_clamp((int)roundf(target[i].color.b * (1.0f + state->shared_deviation[2])));
     }
 }
 
 void filter_scintillate(const cJSON *params, led_output_t *target, const rgb_t *current,
                         int count, filter_state_t *state, uint32_t tick)
 {
-    /* Independent random deviation per LED per channel, matching
-     * FilterMixin.filter_scintillate(). */
+    /* Same random walk as filter_sizzle(), but each LED gets its own
+     * independent walk instead of sharing one -- see filter_state_t's doc
+     * comment for why per_led_deviation is heap-allocated rather than a
+     * fixed MAX_LEDS-sized array. */
     (void)current;
-    (void)state;
 
-    if (count <= 0) return;
+    if (count <= 0 || !state) return;
 
     int frequency = params ? json_get_int(params, "frequency", 40) : 40;
     float variation_percent = filter_variation_percent(params, 20.0f);
     float variation_ratio = variation_percent / 100.0f;
+    float heat_ratio = (params ? (float)json_get_int(params, "heat", 10) : 10.0f) / 100.0f;
 
     int interval = frequency > 0 ? (40 / frequency) : 1;
     if (interval < 1) interval = 1;
 
-    if ((tick % (uint32_t)interval) != 0) return;
+    if (!state->per_led_deviation || state->per_led_deviation_count != count) {
+        free(state->per_led_deviation);
+        state->per_led_deviation = calloc((size_t)count * 3, sizeof(float));
+        state->per_led_deviation_count = state->per_led_deviation ? count : 0;
+    }
+
+    bool should_step = (tick % (uint32_t)interval) == 0;
 
     for (int i = 0; i < count; i++) {
-        float dev_r = uniform_signed(variation_ratio);
-        float dev_g = uniform_signed(variation_ratio);
-        float dev_b = uniform_signed(variation_ratio);
+        float dev_r = 0.0f, dev_g = 0.0f, dev_b = 0.0f;
+        if (state->per_led_deviation) {
+            float *slot = &state->per_led_deviation[i * 3];
+            if (should_step) {
+                slot[0] = step_deviation(slot[0], heat_ratio, variation_ratio);
+                slot[1] = step_deviation(slot[1], heat_ratio, variation_ratio);
+                slot[2] = step_deviation(slot[2], heat_ratio, variation_ratio);
+            }
+            dev_r = slot[0];
+            dev_g = slot[1];
+            dev_b = slot[2];
+        }
 
         target[i].color.r = color_clamp((int)roundf(target[i].color.r * (1.0f + dev_r)));
         target[i].color.g = color_clamp((int)roundf(target[i].color.g * (1.0f + dev_g)));

@@ -192,6 +192,56 @@ only, gated by `audio_debug_logging`, since those are high-volume.
 
 **Not yet reflashed/retested.**
 
+### RESOLVED: root cause was a GPIO conflict with the (inert) billboard driver, not the module or the debounce logic at all
+
+User reflashed with the above and still got the identical failure. Then
+ran the decisive test: same physical board, known-good (just proven by
+booting the *Python* build on it and getting the full IP announcement),
+reflashed with the C build, same board, same wiring — and got the exact
+same "only the first file" symptom. That conclusively ruled out wiring/
+hardware, which the previous entry's "no response after 5 attempts, even
+on the very first idle-state health-check query" evidence had pointed at.
+
+Real root cause: `components/billboard/max7219.c`'s `max7219_init()`
+claims its CS pin as a GPIO output and drives it high
+(`gpio_config()`/`gpio_set_level(cs_pin, 1)`) **unconditionally, before**
+validating the rest of the SPI config — and never releases it on the
+failure path. This device's boot log showed `spicommon_bus_initialize_io:
+mosi not valid` / `SPI bus init failed` (a stale/incomplete `billboard`
+settings entry, no billboard hardware actually present) — but the CS pin
+claim above already happened by that point regardless. `DEFAULT_BILLBOARD_CS`
+(`main/settings.h`) is GPIO5, which is exactly the pin this board's audio
+module was configured to use as its UART RX line. With that pin pinned
+high by the billboard's GPIO claim, the YX5200's TX signal was permanently
+overridden on the shared wire: play/reset/volume commands (TX-only, ESP→
+module) worked perfectly, but every status query (which needs the
+module's response to actually reach the ESP32's RX) got nothing, from the
+very first query onward — exactly matching every log captured across this
+whole investigation. This was never a timing, debounce, or protocol issue;
+every fix applied earlier in this file (the reprobe mechanism, the
+no-response/is_playing decoupling, the logging) was real, correct, and
+still worth having for genuine transient flakiness, but none of it could
+fix a permanently-shorted RX line.
+
+Two fixes applied:
+1. `max7219_init()` reordered so the CS pin is only claimed *after*
+   `spi_bus_initialize()`/`spi_bus_add_device()` both succeed, with the
+   framebuffer/bus properly released on either failure path. This alone
+   prevents a broken billboard config from ever holding a GPIO hostage
+   again, regardless of what else that pin is used for.
+2. Per user direction ("the billboard is cruft from an old version... it
+   shouldn't be activated at all"), `main/boot.c`'s billboard init call
+   and its default-settings seeding block were both removed. The billboard
+   driver code stays in `components/billboard/` for reference, but nothing
+   in the current firmware calls into it, and a fresh device no longer
+   gets a `billboard` key seeded into its settings at all — removing the
+   GPIO5 collision at its source rather than relying only on fix #1's
+   defensive reordering. Confirmed via a clean rebuild that this actually
+   drops now-unreferenced code (~30KB smaller binary).
+
+**Not yet reflashed/retested**, but this is the real fix — next boot
+should play the complete IP announcement.
+
 ### FreeRTOS stack-overflow watchpoint
 
 `c_project/sdkconfig.defaults`: `CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=y`.

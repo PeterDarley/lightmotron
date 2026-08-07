@@ -2,8 +2,8 @@
 
 A lighting controller for plastic model kits, running on an ESP32-S3. Uses
 NeoPixel LED strips to produce dynamic lighting effects, with optional MP3
-sound playback and a scrolling LED matrix display — all configured and
-controlled from a web interface over WiFi, no app or account required.
+sound playback — all configured and controlled from a web interface over
+WiFi, no app or account required.
 
 ## License
 
@@ -21,7 +21,6 @@ Distribution of the software itself, except as part of a larger product or servi
 * NeoPixel LED strip control with 15 built-in animation patterns and 11 post-processing filters
 * Combine effects into named **scenes**, triggered manually or automatically
 * Optional MP3 sound playback (looping, chaining, soundscapes) synced to scenes
-* Optional MAX7219 scrolling LED matrix display
 * Multiple named **Models**, for controlling more than one kit from a single device
 * Browser-based control interface — no app install required
 * WiFi connectivity with a guided first-time setup (captive portal)
@@ -60,8 +59,6 @@ Already have a Lightmotron device and just want to update it? Use
   [NeoPixel Wiring Diagram](docs/neopixel-wiring.md)
 * **Sound (optional)**: up to 3 YX5200-based MP3 player modules with a
   small amplifier and speakers — see the [Hardware Reference](docs/hardware.md)
-* **Display (optional)**: a MAX7219-based scrolling LED matrix — also in
-  the [Hardware Reference](docs/hardware.md)
 
 ## First Boot — WiFi Setup
 

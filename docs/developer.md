@@ -23,8 +23,12 @@ the current C firmware.
   `c_project/components/` — `web` (HTTP request handlers), `webserver`
   (the HTTP server + template engine itself), `storage` (persistent JSON
   config), `lighting` (patterns/filters/scenes/animation), `leds`
-  (NeoPixel driver), `audio` (YX5200 MP3 modules), `billboard` (MAX7219
-  matrix display), `network` (WiFi, captive portal, mDNS, OTA), and `util`.
+  (NeoPixel driver), `audio` (YX5200 MP3 modules), `network` (WiFi,
+  captive portal, mDNS, OTA), and `util`. There's also a `billboard`
+  component (MAX7219 matrix display) — it's cruft from an earlier
+  hardware configuration, kept in the tree for reference but never called
+  from `boot.c`; see [Hardware Reference](hardware.md#max7219-scrolling-led-matrix-billboard--not-currently-supported)
+  if you're reviving it.
 * **Storage**: all runtime state (settings, scenes, effects, sounds, WiFi
   credentials) lives as JSON on a dedicated LittleFS partition, kept
   separate from the web-asset partition so that flashing new firmware
@@ -47,5 +51,5 @@ the current C firmware.
 * **[Storage Format Reference](settings_template.py)** — the full JSON
   schema, key by key.
 * **[Theming Guide](theming.md)** — the CSS theming system for the web UI.
-* **[Hardware Reference](hardware.md)** — audio and matrix-display wiring
-  (see also [NeoPixel Wiring](neopixel-wiring.md) for LED strip wiring).
+* **[Hardware Reference](hardware.md)** — audio wiring (see also
+  [NeoPixel Wiring](neopixel-wiring.md) for LED strip wiring).

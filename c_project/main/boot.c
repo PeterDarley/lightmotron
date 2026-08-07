@@ -107,15 +107,13 @@ esp_err_t boot_seed_defaults(void)
         persistent_dict_set(sys_settings, "audio_debug_logging", val);
     }
 
-    /* Seed billboard */
-    if (!persistent_dict_get(sys_settings, "billboard")) {
-        cJSON *billboard = cJSON_CreateObject();
-        cJSON_AddNumberToObject(billboard, "mosi", DEFAULT_BILLBOARD_MOSI);
-        cJSON_AddNumberToObject(billboard, "clk", DEFAULT_BILLBOARD_CLK);
-        cJSON_AddNumberToObject(billboard, "cs", DEFAULT_BILLBOARD_CS);
-        cJSON_AddNumberToObject(billboard, "num_modules", DEFAULT_BILLBOARD_NUM_MODULES);
-        persistent_dict_set(sys_settings, "billboard", billboard);
-    }
+    /* Billboard is deliberately not seeded or activated -- see the longer
+     * comment at its (removed) init call site below for why. Not seeding
+     * a "billboard" key at all means a fresh device's settings don't carry
+     * a phantom config for a feature that never runs, and specifically
+     * avoids DEFAULT_BILLBOARD_CS (GPIO5) ending up in persisted settings
+     * where it could collide with an unrelated pin choice elsewhere (e.g.
+     * an audio module's UART RX). */
 
     persistent_dict_save(sys_settings);
 
@@ -419,19 +417,19 @@ esp_err_t boot_init(void)
         ESP_LOGI(TAG, "LEDs initialized");
     }
 
-    /* Initialize billboard */
-    cJSON *billboard_cfg = persistent_dict_get(sys_settings, "billboard");
-    if (billboard_cfg) {
-        int mosi = cJSON_GetObjectItem(billboard_cfg, "mosi")->valueint;
-        int clk = cJSON_GetObjectItem(billboard_cfg, "clk")->valueint;
-        int cs = cJSON_GetObjectItem(billboard_cfg, "cs")->valueint;
-        int num = cJSON_GetObjectItem(billboard_cfg, "num_modules")->valueint;
-        int brightness = 7; /* default mid brightness */
-        cJSON *brt = cJSON_GetObjectItem(billboard_cfg, "brightness");
-        if (brt && cJSON_IsNumber(brt)) brightness = brt->valueint;
-        billboard_init(mosi, clk, cs, num, brightness);
-        ESP_LOGI(TAG, "Billboard initialized");
-    }
+    /* Billboard (MAX7219 scrolling matrix) support is retained in
+     * components/billboard/ for reference but is deliberately not
+     * activated -- it's cruft from an old hardware configuration, not part
+     * of the current build. Confirmed as a real (not just theoretical)
+     * source of trouble: max7219_init()'s CS pin (default GPIO5) is
+     * claimed as a driven-high GPIO output unconditionally, even when the
+     * rest of its SPI config is invalid/unconfigured -- on a board where
+     * that pin was also wired as a YX5200 audio module's UART RX line,
+     * this silently broke every status query to that module (see
+     * AUDIO_UART_CRASH_NOTES.md) despite billboard hardware not even being
+     * present. Leaving this disabled avoids that whole class of conflict
+     * regardless of what's left over in a device's persisted "billboard"
+     * settings. */
 
     /* Initialize audio */
     cJSON *audio_players = persistent_dict_get(sys_settings, "audio_players");

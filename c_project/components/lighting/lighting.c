@@ -136,6 +136,11 @@ static void free_job_filters(active_job_t *job)
             cJSON_Delete(job->filters[f].state.cached_params);
             job->filters[f].state.cached_params = NULL;
         }
+        if (job->filters[f].state.per_led_deviation) {
+            free(job->filters[f].state.per_led_deviation);
+            job->filters[f].state.per_led_deviation = NULL;
+            job->filters[f].state.per_led_deviation_count = 0;
+        }
     }
 }
 

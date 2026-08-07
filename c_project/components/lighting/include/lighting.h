@@ -45,6 +45,19 @@ typedef struct {
 typedef struct {
     spike_group_state_t spike_groups[MAX_SPIKE_GROUPS];
     void *cached_params; /* Reserved for filters that need modified params */
+    /* sizzle/scintillate: persistent per-channel deviation ratio, stepped
+     * incrementally each update rather than redrawn from scratch each time
+     * -- see step_deviation() in filters.c. sizzle shares one walk across
+     * every LED (shared_deviation); scintillate gives each LED its own,
+     * heap-allocated lazily and sized to the job's actual LED count since
+     * embedding a MAX_LEDS*3 float array in every filter slot regardless
+     * of filter type would be a large fixed cost repeated per job/scene
+     * slot (see BUILD_NOTES.md's DRAM overflow history for why that's a
+     * real concern here, not a theoretical one). Freed in
+     * free_job_filters() alongside cached_params. */
+    float shared_deviation[3];
+    float *per_led_deviation;
+    int per_led_deviation_count;
 } filter_state_t;
 
 /**

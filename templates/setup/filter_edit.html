@@ -70,7 +70,7 @@
                                    id="filter_param_heat"
                                    value="{{ filter_val_heat }}"
                                    placeholder="10" min="0" step="1" style="width: 100px;">
-                            <small class="text-muted" id="filter_param_heat_hint">Step size per tick (sizzle/scintillate) or &plusmn; random ticks added to spike duration.</small>
+                            <small class="text-muted" id="filter_param_heat_hint">Size of each random jump, as a percentage (sizzle/scintillate) or &plusmn; random ticks added to spike duration.</small>
                         </div>
                         <div class="col-auto filter-param" data-param="brightness">
                             <label class="form-label" for="filter_param_brightness">Brightness</label>
@@ -315,6 +315,15 @@ function toggleFilterEditParams() {
             paramElements[i].style.display = '';
         } else {
             paramElements[i].style.display = 'none';
+        }
+    }
+
+    var heatHint = document.getElementById('filter_param_heat_hint');
+    if (heatHint) {
+        if (select.value === 'sizzle' || select.value === 'scintillate') {
+            heatHint.textContent = 'Size of each random jump, as a percentage (higher = more flickery). Whether a jump moves toward or away from the target color depends on how far the current value already is from it.';
+        } else {
+            heatHint.textContent = 'Random ± ticks added to spike duration.';
         }
     }
 }

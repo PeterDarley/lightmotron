@@ -264,20 +264,24 @@ last). Filters are order-independent in their result — see the
 Passes the LED list through unchanged. Useful for testing or as a placeholder.
 
 #### `sizzle`
-Computes a single random deviation from the first LED's current position toward its target color, then applies that same deviation uniformly to all LEDs. Creates a coordinated group flicker.
+Walks a single random deviation, shared identically by every LED, gradually toward and away from the target color — creating a coordinated group flicker. Each channel remembers where it currently is between updates (it's a walk, not a fresh random redraw each time), and holds that value steadily until the next update.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `frequency` | 40 | Updates per second |
-| `variation_percent` | 20 | Maximum random channel deviation as a percentage of each channel's current target value |
+| `frequency` | 40 | Updates per second — how often the deviation takes its next step |
+| `variation_percent` | 20 | How far the deviation is allowed to stray from the target color, as a percentage of each channel's current target value. Acts as a boundary: the closer the deviation already is to this limit, the more likely the next step moves it back toward the target rather than further away — at the limit, it always moves back. At the target (no deviation), each step is an even 50/50 toward-vs-away coin flip. |
+| `heat` | 10 | Size of each step, as a percentage — how much the deviation can move in a single update. Higher heat means bigger, more visibly flickery jumps; lower heat means smaller, smoother steps toward the same overall `variation_percent` range. |
 
 #### `scintillate`
-Like `sizzle` but each LED is adjusted independently, creating a sparkling/twinkling effect where individual LEDs vary in different directions.
+Like `sizzle`, but each LED walks its own independent deviation instead of sharing one — creating a sparkling/twinkling effect where individual LEDs vary in different directions at different times.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `frequency` | 40 | Updates per second |
-| `variation_percent` | 20 | Maximum random channel deviation as a percentage of each channel's current target value |
+| `frequency` | 40 | Updates per second — how often each LED's deviation takes its next step |
+| `variation_percent` | 20 | How far each LED's deviation is allowed to stray from the target color, as a percentage of each channel's current target value. Same boundary/direction-bias behavior as `sizzle` above, applied independently per LED. |
+| `heat` | 10 | Size of each LED's step, as a percentage. Same effect as `sizzle`'s `heat` — higher is more flickery, lower is smoother — applied independently per LED. |
+
+If you want the old "too aggressive"-feeling jumpiness turned down without losing the overall sparkle range: lower `heat` first (smaller, smoother steps toward the same boundary) before touching `variation_percent` (which changes how far it's allowed to wander overall). Lowering `frequency` also calms things down, but by making it change less *often* rather than less *abruptly* — the two are independent dials.
 
 #### `brightness`
 Multiplies each target RGB channel by a constant factor. Each resulting channel value is clamped to the inclusive integer range `0..255`.
