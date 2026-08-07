@@ -1,7 +1,8 @@
 """Reference for the persistent storage JSON structure (storage.json).
 
 All device configuration is stored in a single JSON file (storage.json) on
-the ESP32 filesystem, managed by PersistentDict (lib/storage.py).
+the ESP32 filesystem, managed by the device's persistent-storage
+subsystem (see docs/developer.md and docs/internals.md).
 
 The top-level keys are:
 
@@ -32,7 +33,7 @@ The top-level keys are:
     ui_settings       -- (legacy key, migrated to system_settings)
 
 Below is the full reference structure for ``system_settings``.  All keys are
-optional; hardcoded defaults in settings.py are used when a key is absent.
+optional; built-in firmware defaults are used when a key is absent.
 
 {
     "system_settings": {

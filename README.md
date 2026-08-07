@@ -1,8 +1,11 @@
 # Lightmotron
 
-A MicroPython-based lighting controller for plastic model kits, running on an ESP32. Uses NeoPixel LED strips to produce dynamic lighting effects, and exposes a web interface for control over WiFi.
+A lighting controller for plastic model kits, running on an ESP32-S3. Uses
+NeoPixel LED strips to produce dynamic lighting effects, with optional MP3
+sound playback and a scrolling LED matrix display — all configured and
+controlled from a web interface over WiFi, no app or account required.
 
-## Liscence
+## License
 
 You are welcome to use this project in products, research, kits, and services.
 Selling the software itself, or minor variations of it, as a standalone product is against the spirit of the project.
@@ -15,36 +18,50 @@ Distribution of the software itself, except as part of a larger product or servi
 
 ## Features
 
-* NeoPixel LED strip control for model lighting effects
-* MAX7219 4-module scrolling LED matrix display
-* Web server for browser-based control
-* WiFi connectivity
+* NeoPixel LED strip control with 15 built-in animation patterns and 11 post-processing filters
+* Combine effects into named **scenes**, triggered manually or automatically
+* Optional MP3 sound playback (looping, chaining, soundscapes) synced to scenes
+* Optional MAX7219 scrolling LED matrix display
+* Multiple named **Models**, for controlling more than one kit from a single device
+* Browser-based control interface — no app install required
+* WiFi connectivity with a guided first-time setup (captive portal)
+* Firmware updates over WiFi, right from the web interface
+
+## Install
+
+<a id="install"></a>
+
+**[peterdarley.github.io/lightmotron](https://peterdarley.github.io/lightmotron/)**
+— flashes the firmware directly from your browser over USB. No drivers,
+no command line, no account.
+
+1. Connect your ESP32-S3 board to your computer with a USB-C **data**
+   cable (not a charge-only cable).
+2. Open the link above in **Google Chrome** or **Microsoft Edge** (this
+   uses the [Web Serial API](https://developer.chrome.com/docs/capabilities/serial),
+   which only those browsers support).
+3. Click **Install Lightmotron** and select your device's serial port when
+   prompted.
+
+That's it — the page writes everything a blank board needs. Once it's
+done, unplug the USB cable (or leave it connected for power) and continue
+to [First Boot](#first-boot--wifi-setup) below.
+
+Already have a Lightmotron device and just want to update it? Use
+**Setup → Updates** in the web interface instead — see
+[Firmware Updates](#firmware-updates) below.
 
 ## Hardware
 
-### Microcontroller
-* YD-ESP32-S3 board (ESP32-S3-WROOM-1 N16R8 module — 16MB flash, 8MB octal PSRAM)
-
-### Lighting
-* NeoPixel LED strip (default GPIO 4; configurable via System Settings)
-
-### Audio
-* Up to 3× WWZMDiB YX5200 MP3 player modules (DFPlayer-compatible, serial UART)
-* 1× PAM8403 stereo amplifier module (analog volume via onboard pot)
-* 1–3× 3W 8Ω mini speakers
-* Passive mix network: one 1kΩ resistor per player on DAC_R → PAM8403 input
-* 1kΩ resistor on each ESP32-S3 TX → YX5200 RX line
-
-## Setup
-
-This repo uses a git submodule for shared MicroPython libraries. After cloning, run:
-
-```bash
-git submodule init
-git submodule update
-```
-
-Code is parsed by MicroPython on-device, so use MicroPython-safe Python syntax in runtime files (for example, avoid PEP 604 union annotations like `str | None`).
+* **Microcontroller**: YD-ESP32-S3 board (ESP32-S3-WROOM-1 N16R8 module —
+  16MB flash, 8MB octal PSRAM)
+* **Lighting**: a NeoPixel-compatible LED strip (default GPIO 4;
+  configurable in System Settings) — see the
+  [NeoPixel Wiring Diagram](docs/neopixel-wiring.md)
+* **Sound (optional)**: up to 3 YX5200-based MP3 player modules with a
+  small amplifier and speakers — see the [Hardware Reference](docs/hardware.md)
+* **Display (optional)**: a MAX7219-based scrolling LED matrix — also in
+  the [Hardware Reference](docs/hardware.md)
 
 ## First Boot — WiFi Setup
 
@@ -52,220 +69,61 @@ On first boot (or whenever WiFi credentials are missing or fail to connect), the
 
 1. Look for a WiFi network called **`lightmotron-setup`** on your phone or laptop and connect to it.
 2. Your device should automatically open the portal page. If not, navigate to `http://192.168.4.1/`.
-3. The page shows a list of nearby WiFi networks sorted by signal strength. Select yours, enter the password, then tap **Save & Connect**. If your network isn't listed, choose **Other** to enter the SSID manually.
-4. The device reboots and joins your network. You can then access it at `http://lightmotron.local/` (or `http://<hostname>.local/` if you have set a custom hostname).
+3. The page shows a list of nearby WiFi networks sorted by signal strength. Select yours, enter the password, then tap **Save & Connect**. If your network isn't listed, choose **Other** to enter the SSID manually, or use the **rescan** link if you don't see it yet.
+4. The device reboots and joins your network. You can then access it at `http://lightmotron.local/` (or `http://<hostname>.local/` if you've set a custom hostname). If `.local` addresses don't resolve on your network (common on Android), try `http://lightmotron.lan/`, `http://lightmotron.home/`, or just `http://lightmotron/`.
 
-SSID matching is case-insensitive, so credentials stored with different capitalisation will still connect.
+SSID matching is case-insensitive, so credentials stored with different capitalization will still connect.
 
-Credentials are stored persistently, so this only needs to be done once. To change them later use the **System Settings** card on the Setup page.
-
-## Uploading to the Device
-
-```powershell
-.\upload.ps1
-```
-
-`upload.ps1` now attempts to quiet the runtime (stops the web server when possible)
-before transfer, uses mpremote resume mode to avoid upload-time soft resets, and retries transient transport/raw-REPL failures automatically.
-It also always recopies critical runtime files (`boot.py`, `main.py`, `lib/audio.py`, `lib/sounds.py`) even during incremental uploads, to self-heal from stale or partial files left by interrupted transfers.
-The upload summary distinguishes true hash-detected changes from these mandatory refresh files.
-
-To hard reset the device after uploading:
-
-```powershell
-python tools\reset_device.py COM3
-```
-
-## Browser Install (No Software Required)
-
-The page at [peterdarley.github.io/lightmotron](https://peterdarley.github.io/lightmotron/) flashes the `c_project` firmware directly from Chrome or Edge over USB, via the [Web Serial API](https://developer.chrome.com/docs/capabilities/serial) (no drivers, no command line). It writes all four images a blank chip needs — bootloader, partition table, app, and web assets.
-
-To refresh the staged images after a `c_project` change:
-
-```powershell
-.\build_web_install.ps1
-```
-
-This rebuilds via ESP-IDF and copies the four flash images plus a fresh `deployment/manifest.json` into `deployment/`. Committing and pushing `deployment/` (served via GitHub Pages) is a separate, deliberate step.
+Credentials are stored persistently, so this only needs to be done once. To change them later, use **System Settings** on the Setup page.
 
 ## Web Interface
 
-Once the device is running and connected to WiFi, open your browser and navigate to the device's IP address (e.g., `http://192.168.1.100/` or use the hostname `http://lightmotron.local/` if mDNS is available). (These screen shots are messed up.  I'll fix them at some point.)
-
-At boot, routes are registered before the HTTP server thread starts so `/` consistently resolves to the dynamic Home page rather than transiently falling back to `www/index.html`.
+Once the device is on your network, open its address in a browser.
 
 ### Home Page
-Control animation playback and trigger scenes. Start/stop lighting animations, switch between configured scenes, and play sounds from the audio modules.
-The Active Scenes list includes both ongoing scenes and immediate scenes while they are currently running.
-When stopping animation, the runtime now waits for any in-flight frame to finish before applying the stop clear, so LEDs reliably settle to black/off.
-The Home animation controls also now update to the stopped button state immediately when Stop is pressed.
-Home now uses a single Soundscapes section for audio controls; the master volume slider and Stop All Sounds control are shown there.
-The Immediate scenes section is only shown when at least one scene is configured as immediate.
+
+Control animation playback and trigger scenes from here day-to-day: start/stop the lighting engine, switch between scenes, play sounds and soundscapes. The Active Scenes list shows both ongoing scenes and any immediate (one-shot trigger) scenes while they're running.
 
 ![Home page](docs/screenshots/home.png)
 
 ### Setup Page
-Configure all lighting settings and system configuration in one place. Each section opens a dialog to manage that category.
-Cards use a consistent responsive grid layout (up to four cards per row on wide screens), and the Named Ranges summary area scrolls to prevent that card from growing excessively tall.
+
+Configure everything: custom colors, named LED ranges, effects, filters, scenes, sounds, soundscapes, models, and the interface theme. See the **[Programming Guide](docs/programming.md)** for a complete walkthrough of every option and what it does.
 
 ![Setup page](docs/screenshots/setup.png)
-
-#### System Settings
-Configure WiFi credentials, mDNS hostname, NeoPixel strip settings, and audio player UART pins. Changes take effect on the next reboot.
-
-**IP Address Announcement**: When the device boots with audio players configured and its IP address has changed since the last boot, it will automatically announce the new IP address. This uses randomly-selected voice 8 or 9, playing the digits of each octet with 2-second pauses between them, then repeating once after 15 seconds. Click **Mark Current IP as Announced** to store the current IP so it won't be announced again unless the IP changes.
-
-#### Models
-Manage multiple named "Models" — each Model is a self-contained collection of lighting configuration (scenes, effects, filters, named ranges, custom colors, and optional per-model sounds). Use the Models card on the Setup page to create, rename, delete, or switch the active model. The device stores the active model in persistent settings; older single-model installations are automatically migrated into a default model named "Model".
-
-#### Custom Colors
-Define and name your own colors to reuse across effects and scenes.
-
 ![Custom Colors](docs/screenshots/setup-colors.png)
-![Edit a color](docs/screenshots/setup-colors-edit.png)
-
-#### Named Ranges
-Group LED indices and give them meaningful names (e.g. "Nacelle", "Hull"). Use the LED picker to visually select individual LEDs, or include another named range to build composite groups. Range buttons show the resolved LED summary, and included subranges are listed separately in the editor where they can be removed.
-In the LED picker, button highlights show only LEDs directly selected in the current range; LEDs inherited through included subranges are not highlighted as direct selections.
-When you add an included subrange from the dropdown, the editor updates immediately by clearing the selector and adding the subrange chip without waiting for a full modal refresh.
-The Setup page Named Ranges summary uses the same compact format on initial load and after modal-driven refreshes.
-
 ![Named Ranges](docs/screenshots/setup-ranges.png)
-![Edit a range](docs/screenshots/setup-ranges-edit.png)
-
-#### Filters
-Create reusable post-processing filters (sparkle, flicker, etc.) that can be applied to any effect.
-
 ![Filters](docs/screenshots/setup-filters.png)
-![Edit a filter](docs/screenshots/setup-filters-edit.png)
-
-#### Effects
-Create reusable lighting animations with a pattern, colors, and optional filters.
-
 ![Effects](docs/screenshots/setup-effects.png)
-![Edit an effect](docs/screenshots/setup-effects-edit.png)
-
-#### Scenes
-Combine effects into complete lighting scenarios. Each scene contains one or more jobs assigning effects to LED targets.
-Scenes can also define scene-level behavior: kill other scenes on start, play a trigger sound, stop selected sounds on start, and stop selected sounds when the scene ends.
-
 ![Scenes](docs/screenshots/setup-scenes.png)
-![Edit a scene](docs/screenshots/setup-scene-edit.png)
-![Edit a job](docs/screenshots/setup-job-edit.png)
-
-#### Sounds
-Create named sounds that map to MP3 file numbers on the SD cards in your audio modules. Associate titles with files, choose whether they appear on Home, and mark sounds as high quality for preferential playback on high-quality modules.
-Home single-sound Stop now verifies module state and retries the stop command when needed, reducing cases where UI switches to Play but hardware keeps playing.
-Playback-end detection now requires multiple consecutive stopped status reads from the module to reduce false "ended" transitions while audio is still audible.
-
-#### Soundscapes
-Create ordered groups of sound entries. Entries are editable in Setup after creation (sound, repeat enabled, repeat count). Repeat behavior is: with Repeat disabled it plays once, with Repeat enabled and count `0` it repeats forever, and with Repeat enabled and a positive count it repeats that many additional times.
-Soundscape progression is tied to the active soundscape entry finishing; unrelated sound end events do not advance or retrigger the soundscape.
-Home status polling also reconciles active soundscape state with current playback, so controls recover if a playback-end transition is missed.
-
-#### Theme
-Choose a CSS theme to customise the look of the interface.
-
 ![Theme picker](docs/screenshots/setup-theme.png)
 
-#### Updates
-Use Setup -> Updates for OTA code updates directly from GitHub.
+System Settings on this page also covers WiFi credentials, hostname, NeoPixel strip wiring, and audio module pin assignments — changes there take effect on the next reboot.
 
-Workflow:
-1. Choose the repository owner/name (defaults to `PeterDarley/lightmotron`) and save.
-2. Run **Check Now** to compare local files with the selected repository.
-3. Review the changed file list (added / modified).
-4. Run **Apply Updates** to pull and write changed files.
-
-GitHub is the canonical source — any file on the device that differs from the repo will be overwritten. Files on the device that are not in the repo are left untouched.
+**IP address announcement**: if audio modules are configured and the device's IP address has changed since it last booted, it announces the new address by voice automatically (each octet's digits, repeated once after 15 seconds). Use **Mark Current IP as Announced** on the Setup page if you don't want to hear it again for the current address.
 
 ### Status Page
-Monitor system health and performance. View memory usage, storage space, networking details (hostname, IP, connection state, SSID), animation state, the reason for the last reboot (power-on, watchdog, soft reset, etc. — useful for diagnosing unexpected restarts; also printed to the serial log at boot), and configured audio modules with current responsiveness. Download/restore all configuration as JSON.
-Status cards use the same responsive card grid as Setup (up to four cards per row on wide screens), and status tables are rendered with theme-friendly styling so they blend with the active CSS theme.
-Restore now uses a `.json` file upload flow (select file -> review -> confirm) instead of pasting raw JSON into a textarea.
+
+Monitor system health: memory and storage usage, networking details, animation state, the reason for the last reboot, and the responsiveness of any configured audio modules. Download or restore your entire configuration as a JSON backup file from here — restoring never overwrites WiFi credentials, so a backup is safe to move between devices.
 
 ![Status page](docs/screenshots/status.png)
 
 ### Storage Page
-View and export the raw JSON configuration of all settings. The WiFi password is shown as `***` for security.
 
-The **backup download** (available from the Status page) omits WiFi credentials entirely so that restoring a backup on a different device does not overwrite its network configuration.
+View the raw JSON configuration underlying everything else on the device, for advanced inspection or manual editing. WiFi passwords are masked as `***` here for safety.
 
-## Lighting System
+## Firmware Updates
 
-The lighting system allows you to create custom **scenes** that control LED colors and animations.
+Setup → Updates checks the configured GitHub repository (defaults to this
+one) for a newer release and, when you confirm, downloads and installs it
+— no cable required. Your settings, scenes, and sounds are untouched by an
+update; only the firmware itself changes.
 
-### Key Concepts
+## History
 
-* **Scene** — A named configuration that controls LED behavior. Scenes can run continuously or be triggered on-demand.
-* **Effect** — A reusable LED animation (e.g., "pulse", "wave", "breathe"). Each effect has parameters you can customize.
-* **Filter** — Optional post-processing applied to effects (e.g., "sparkle", "flicker"). Multiple filters can be stacked.
-* **Named Range** — A group of LEDs that you label (e.g., "engine lights"). Useful for targeting groups instead of individual indices.
-* **Custom Color** — Save your own colors with custom names to reuse across scenes.
-
-### Using the Web Interface
-
-The **Setup** page provides a visual editor for all lighting configuration:
-
-1. **Custom Colors** — Define and name your own colors once, reuse them everywhere
-2. **Named Ranges** — Group LEDs and give them meaningful names (e.g., "Nacelle", "Hull")
-3. **Effects** — Create reusable animations with specific patterns, colors, and behavior
-4. **Filters** — Add optional visual tweaks to effects (sparkle, flicker, etc.)
-5. **Scenes** — Combine effects into complete lighting scenes; assign effects to LED groups
-
-Once configured, use the **Home** page to:
-* Start/stop animation playback
-* View active scenes
-* Trigger immediate scene changes
-
-### Effects Overview
-
-| Effect | What It Does | Good For |
-|---|---|---|
-| **Solid** | Single color, no animation | Steady lights, engine glow |
-| **Blink** | Symmetric on/off flashing | Warning lights, indicators |
-| **Pulse** | Asymmetric flashing with separate on-time and period | Pulsing beacons |
-| **Fade In** | Smooth color transition | Startup sequences, transitions |
-| **Breathe** | Smooth up-and-down oscillation | Life-like breathing, organic feel |
-| **Wave** | Moving light across LEDs | Scanning beams, comet sweep |
-| **Cylon** | Wave that bounces back and forth | Iconic bouncing scan effect |
-| **Phaser Strip** | Two waves converge from opposite ends | Sci-fi phaser effects |
-| **Rainbow** | Cycling, spatially-spread hue sweep | Party lights, prismatic effects |
-| **Color Wipe** | Progressive fill, then wipe back | Loading/charging sequences, reveals |
-| **Fire** | Flickering flame simulation | Torches, engine fire, forges |
-| **Gradient** | Spatial blend across two or more colors, optionally scrolling | Ambient backdrops, smooth color transitions |
-| **Warp Pulse** | Band expanding outward from the center | Sci-fi warp/energy surges |
-| **Theater Chase** | Evenly spaced dots marching along the strip | Marquee lights, runway effects |
-| **Heartbeat** | Organic double-thump ("lub-dub") then rest | Life-support monitors, tension cues |
-
-Use `Blink` for equal on/off timing. Use `Pulse` when you need a short flash with a longer gap, such as one tick on every second.
-
-### Filters Overview
-
-Filters add visual flavor to effects after they render:
-
-| Filter | What It Does | Good For |
-|---|---|---|
-| **Scintillate** | Independent sparkling per LED | Twinkling stars, fireworks |
-| **Sizzle** | Synchronized group flicker | Electrical arcing, unified flicker |
-| **Brightness** | Multiplies each RGB channel by a constant, clamped to 0-255 | Global dimming/boost, quick intensity matching |
-| **Afterglow** | Blends each LED toward its own previous frame | Motion trails, phosphor-glow look |
-| **Tint** | Multiplicative color overlay, like a lighting gel | Red-alert washes, mood color grading |
-| **Shimmer** | Smooth brightness wave traveling along the strip | Water/light shimmer, energy fields |
-| **Hue Shift** | Rotates every color around the hue wheel | Animated color cycling on any effect |
-| **Saturation** | Scales color saturation toward gray or full color | "Systems failing" desaturation, color pop |
-| **Vignette** | Dims the ends of the range, brightest in the middle | Spotlight focus, framing an effect |
-
-### Advanced: Direct Configuration
-
-For advanced users, lighting can be configured directly via the persistent storage JSON. See [docs/internals.md](docs/internals.md) for the complete technical reference including all effect parameters, color names, and target specifications.
-
-
----
+Lightmotron began as a MicroPython project. It's since been fully rewritten in C for better performance and reliability, and that's what you'll get from the installer above — the original MicroPython version is no longer maintained. If you're curious about the internals or want to build the firmware yourself, see the [Developer Guide](docs/developer.md).
 
 ## Documentation
 
-* [**Theming Guide**](docs/theming.md) — CSS theming system, custom classes, sound effects
-* [**Lighting Internals**](docs/internals.md) — Technical reference for patterns, filters, and configuration
-* [**NeoPixel Wiring**](docs/neopixel-wiring.md) — LED strip pinout and connection details
-* [**Storage Format**](docs/settings_template.py) — Reference for the persistent storage JSON structure
+* **[Programming Guide](docs/programming.md)** — how to configure effects, filters, sounds, and scenes
+* **[Developer Guide](docs/developer.md)** — architecture, building from source, and links to the rest of the technical docs

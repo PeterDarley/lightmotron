@@ -1,90 +1,81 @@
 # Lighting System Internals
 
-This document provides detailed technical specifications for patterns and filters. For user-facing documentation, see the [README](../README.md).
+Implementation reference for the `c_project` firmware (ESP-IDF/C on
+ESP32-S3). This documents *how the system works*, not how to configure it —
+for that, see the [Programming Guide](programming.md). For a repo-wide
+architecture overview and links to the rest of the developer docs, start at
+the [Developer Guide](developer.md).
 
-## Web UI View Modules
+## Web/HTTP Layer
 
-Web request handlers are split by logical feature area into per-feature modules: `web/views_home.py` (home page, scene panel, animation), `web/views_models.py`, `web/views_scenes.py`, `web/views_effects.py`, `web/views_filters.py`, `web/views_colors.py` (custom colors and the shared color-select fragment), `web/views_sounds.py`, `web/views_soundscapes.py`, `web/views_storage.py` (storage viewer, backup/restore), `web/views_system.py` (setup, status, theme, hostname, system settings, reboot, OTA updates), and `web/views_named_ranges.py`. Shared helpers and the `lights` singleton live in `web/views_common.py`, while `web/views.py` is a thin aggregator that wires up the named-range views and re-exports every view class for route registration (`web/routes.py` resolves handlers as `views.ClassName`).
+Request handling is split by feature area, one C file per area, under
+`c_project/components/web/`: `views_home.c` (home page, scene panel,
+animation), `views_models.c`, `views_scenes.c`, `views_effects.c`,
+`views_filters.c`, `views_sounds.c`, `views_soundscapes.c`,
+`views_storage.c` (storage viewer, backup/restore), `views_system.c`
+(setup, status, theme, hostname, system settings, reboot, OTA, custom
+colors), and `views_named_ranges.c`. Route registration lives in
+`components/web/routes.c`; global template context (theme, hostname) is
+injected by `context_processors.c`.
 
-Static assets served by the built-in web server use content-type-based cache policy. JavaScript and CSS responses are sent with `Cache-Control: no-cache, max-age=0, must-revalidate` so browser UI updates are picked up immediately after deployment, while non-code assets keep a longer cache lifetime.
-Static response writes use a send-all loop so larger CSS/JS payloads are not truncated by partial socket writes.
-The named-range LED picker template also appends a version query parameter to `led_picker.js` based on file mtime, ensuring the script URL changes when that file changes.
-Web server startup now handles transient socket creation `OSError 23` (ENFILE) by retrying briefly and then exiting cleanly (without uncaught thread traceback) if descriptors are still exhausted after retries.
-Client disconnect resets (`OSError 104` / `ECONNRESET`) during request reads are treated as normal disconnects and no longer logged as 500 server errors.
-Boot now prioritizes `/lib` on `sys.path` before runtime imports, reducing accidental shadowing by stale root-level modules (for example `/audio.py` overshadowing `/lib/audio.py`).
-Audio startup can send a UART soft-reset command (DFPlayer/YX5200 command `0x0C`) to each configured module during boot to recover players that occasionally fail after ESP32 reset. This is controlled by `system_settings.audio_reset_on_boot` (default true).
-When diagnosing sound stop/play state issues, enable `system_settings.audio_debug_logging` to print UART command/status traces, explicit `/sounds/status` endpoint hit/render traces, and mapped playing-state summaries to serial logs.
-Additionally, sound-status diagnostics now emit baseline serial traces (`sounds-status: ...` and `audio: status ...`) even when `audio_debug_logging` is off, so endpoint-hit and low-level status checks remain visible during troubleshooting.
-Home scene actions (`/set_scene`) return a server-rendered `scenes/scene_panel.html` fragment and swap `#scene_panel` so active-scene labels and ongoing/immediate button states always reflect server truth, including scene kills triggered by `scene_settings.kills`.
-Scene trigger sound playback (`scene_settings.sound`) is handled by the lighting runtime (`Lighting.set_scene` / `Lighting.add_scene`), not by web views, so sounds also play for non-UI scene activations, including the default scene selected at boot via `set_scene(None)`.
-Scene-level sound stop lists are also runtime-driven: `scene_settings.stop_sounds_on_start` is applied before scene activation, and `scene_settings.stop_sounds_on_end` is applied when a scene is removed or replaced.
-Home sound controls only include sounds where `show_on_home` is true and use adaptive HTMX polling against `/sounds/status`: `every 5s` while any sound is currently playing, and `every 30s` when all sounds are idle.
-Setup modal soundscape editing posts to `/soundscapes/edit` via HTMX for add and update entry actions, avoiding fallback form posts to the current page URL.
-Entry delete is available only on the soundscapes manager list (not within the per-soundscape editor).
-The soundscape editor uses mutually exclusive modes: add/list mode or single-entry edit mode (never both at once).
-Saving an existing soundscape entry returns to the soundscapes manager table view in the modal (editor closes and table refreshes immediately), and the edit mode includes a Cancel button that also returns to the manager list.
-Home soundscape buttons use sanitized DOM ids for per-button HTMX swap targets, so soundscape names containing spaces still update and trigger correctly.
-Soundscape entries now store `repeat_enabled` and `repeat`. Runtime semantics are: repeat disabled = play once; repeat enabled + `repeat=0` = infinite repeat; repeat enabled + positive `repeat` = repeat that many additional times.
-When a sound is started from a soundscape entry, entry repeat settings take precedence and per-sound `loop_count` is suppressed for that playback.
-The Setup Soundscapes manager table includes metadata columns (entry count, repeat summary, and a sound-name preview) so users can inspect configurations without opening each soundscape.
-The Setup Soundscapes summary card now uses precomputed count/plural fields from server context (rather than template filters) and is refreshed when the setup modal closes after soundscape saves.
-The Home "Active Scenes" label/list intentionally shows only ongoing scenes; immediate scenes are trigger actions and are not displayed there.
+The HTTP server itself (`components/webserver/`) is a custom
+socket-based server with its own minimal template engine
+(`template_engine.c`) — not a third-party framework. It supports variable
+interpolation (`{{ x }}`, `{{ x.key }}`), `{% for %}`/`{% if %}` blocks, and
+`{% include %}`.
 
-Sound playback supports three advanced features configured per-sound:
-- **Looping**: When `loop: true`, a sound automatically restarts when playback ends, repeating indefinitely until stopped manually.
-- **Stopping other sounds**: The `stops: [...]` list specifies which other sounds are stopped when this sound starts. Useful for enforcing mutually exclusive playback (e.g., muting background music when an alert plays).
-- **Chaining**: When `next_sound: "title"` is set, the specified sound automatically starts when the current sound ends. Enables sequences like intro→main→outro without UI intervention.
+All web assets (`templates/`, `www/`) are read into RAM once at boot
+(`asset_cache.c`) rather than read from flash per-request. This isn't just
+a performance optimization — a per-request flash read briefly disables the
+flash cache on both CPU cores, and doing that on every page load previously
+caused hard-to-diagnose UART interrupt-watchdog crashes when it collided
+with the audio driver's own interrupts (see `AUDIO_UART_CRASH_NOTES.md` for
+the full investigation).
 
-Sound looping and chaining are detected by the continuous audio polling system (`_poll_tick()` every 100ms). When a module transitions from playing→stopped, `SoundManager.check_for_ended_sounds()` detects the transition and takes the configured action (restart if loop, or start next_sound if chaining).
-Audio polling is fail-fast: if polling setup or a polling tick raises, the firmware prints a full traceback (`sys.print_exception`), stops the polling timer to avoid repeated hidden failures, and re-raises the exception rather than suppressing it.
+## Storage Subsystem
 
-## Lighting Module Layout
+All persistent configuration lives in JSON files on a LittleFS partition
+(`components/storage/persistent_dict.c`), mounted separately from the
+`webassets` partition specifically so that flashing new firmware/web
+assets never touches user settings. Key behaviors:
 
-The lighting runtime is split into focused modules under `lib/lighting/` to
-reduce update payloads and improve maintainability:
+* **Lazy loading** — a file's contents are only read from flash on first
+  access, not at `persistent_dict_open()` time.
+* **In-memory caching with an explicit dirty flag** — `persistent_dict_get()`
+  returns a live pointer into the in-memory cJSON tree, not a copy.
+  Mutating that tree directly (rather than going through
+  `persistent_dict_set()`/`persistent_dict_delete_key()`) does **not**
+  mark the store dirty, so `persistent_dict_save()` silently no-ops and
+  the change is lost on reboot. Code that needs to mutate a live-referenced
+  tree in place must call `persistent_dict_mark_dirty()` before saving.
+* **Atomicity** — writes go straight to the target file (no
+  temp-file-then-rename dance); LittleFS itself guarantees a file's
+  contents are committed atomically on close/sync, so a power loss
+  mid-write reverts to the previous committed state rather than leaving a
+  torn file.
+* **Thread safety** — each `persistent_dict_t` has its own FreeRTOS mutex.
 
-- `lighting.py`: model/settings orchestration, scene lifecycle, target/color helpers
-- `patterns.py`: pattern implementations (`pattern_*`)
-- `effects.py`: effect resolution and per-tick execution pipeline
-- `filters.py`: filter implementations (`filter_*`) and filter grouping helpers
-- `metadata.py`: `PATTERN_METADATA` and `FILTER_METADATA`
-The storage page copy button uses the Clipboard API when available and falls back to `document.execCommand('copy')` for non-secure/device-browser contexts.
+## Lighting Subsystem
 
-## Configuration Format
+`components/lighting/` implements the animation runtime:
 
-Lighting is defined by **scenes**, each containing one or more **jobs**. Each job assigns a **pattern** to a set of target LEDs, and optionally a list of **filters** that post-process the result.
+* `lighting.c` — scene lifecycle (activate/remove), model/settings binding
+* `animation.c` — the tick loop (FreeRTOS task, 25ms interval)
+* `patterns.c` — pattern implementations (`pattern_*`)
+* `effects.c` — effect resolution and per-tick execution
+* `filters.c` — filter implementations (`filter_*`)
+* `colors.c` — named/hex/RGB color resolution
+* `named_ranges.c` — named-range target resolution (including composite
+  ranges that reference other named ranges)
+* `metadata.c` — scene metadata (kills, trigger sound, stop lists)
 
-When a scene entry is renamed in the Setup UI, other entries in the same
-scene that reference it via `after` are automatically updated to the new
-entry name.
-When a scene entry is deleted in the Setup UI, any same-scene `after`
-references pointing to that entry are automatically cleared.
+### Configuration Format
 
-Filters are applied sequentially: each filter receives the output of the
-previous filter. On scene restart (`set_scene`), transient filter runtime
-state is cleared so timing-based filters (for example `dropout`/`spike`)
-start from a clean phase.
-Timing-based filters are evaluated using effect-local ticks (relative to each
-effect's own start tick), not the global animation tick.
+Lighting is defined by **scenes**, each containing one or more **jobs**.
+Each job assigns a **pattern** to a set of target LEDs, plus an optional
+list of **filters** that post-process the pattern's output:
 
-Scene auto-completion only applies when every effect in the scene has an
-explicit `cycles` limit and all such effects have finished. If a scene
-contains any effect without `cycles` (infinite repeat), that scene is treated
-as ongoing and is not auto-removed.
-The home page scene grouping uses this same rule: scenes with at least one
-infinite effect are shown as ongoing.
-
-## Audio Debug Logging
-
-Audio module logs include the configured UART and pin mapping so wiring can be
-verified directly from boot/runtime output.
-
-- `AudioPlayer: configured modules:` entries include `uart`, `tx_pin`, and `rx_pin`.
-- Health checks include `uart`, `tx`, and `rx` in each module line.
-- YX5200 command logs include `UART N (tx=X, rx=Y)` on send, response, no-response,
-  and write/read error messages.
-
-```python
+```json
 "scenes": {
     "My Scene": {
         "job_name": {
@@ -97,31 +88,98 @@ verified directly from boot/runtime output.
 }
 ```
 
-## Models
+For the full set of pattern/filter names and their parameters, see the
+[Programming Guide](programming.md) — the reference there is the same one
+users see in the Setup UI.
 
-The system supports multiple named Models. Each Model is a top-level container that holds a complete lighting configuration — for example `scenes`, `effects`, `filters`, `named_ranges`, `custom_colors`, and (optionally) a per-model `sounds` mapping. The persistent storage layout used by the device is::
+Filters are applied sequentially, each receiving the previous filter's
+output. Every filter receives both the pattern's **target color** for this
+tick and the LED's **current color** from the previous tick; differences
+are calculated against the target but applied to the current color. This
+makes filter order not affect the final result — chaining `[a, b]` produces
+the same output as `[b, a]`.
 
-    "lighting_settings": {
-        "models": {
-            "ModelName": { ... },
-            "OtherModel": { ... }
-        },
-        "current_model": "ModelName"
-    }
+Scene auto-completion applies only when every effect in a scene has an
+explicit `cycles` limit and all of them have finished; a scene with any
+infinite-repeat effect is treated as ongoing and never auto-removed. The
+Home page's "ongoing vs. immediate" grouping uses this same rule.
 
-On first load the runtime will automatically migrate older single-model installations (where `scenes`, `effects`, etc. lived directly under `lighting_settings`) into a single model named "Model". There's also a helper API available on the `Lighting` singleton: `wrap_current_settings_into_model("Model")` which explicitly performs this wrapping and will raise an error if the settings already use the models container.
+### Models
 
-At runtime the `Lighting` instance binds `self.settings` to the active model dictionary and all UI and runtime operations (scene start/stop, named-range edits, effect updates, etc.) operate within that active model. When a model contains a `sounds` mapping it is preferred for playback; otherwise the top-level `sounds` mapping is used.
+The system supports multiple named **Models** — each a complete,
+self-contained lighting configuration. Storage layout:
 
-## OTA Updates
+```json
+"lighting_settings": {
+    "models": {
+        "ModelName": { "scenes": {}, "effects": {}, "filters": {}, "named_ranges": {}, "custom_colors": {} },
+        "OtherModel": { ... }
+    },
+    "current_model": "ModelName"
+}
+```
 
-Code updates are managed from Setup -> Updates. The updater checks GitHub for changed files, lists additions/modifications/deletions, then applies updates only when explicitly confirmed.
+At runtime, the active model's dictionary is what every scene/effect/
+named-range operation reads and writes. When a model defines its own
+`sounds` mapping it's preferred for playback; otherwise the top-level
+`sounds` mapping is used.
 
-For hash comparison consistency on Windows checkouts, local text files are normalized from CRLF to LF before computing git-style blob SHAs. This includes common git dotfiles such as `.gitignore`.
+## Audio Subsystem
 
-The repository source is configurable in persistent storage under:
+`components/audio/` has three layers: `yx5200.c` (per-module UART driver,
+DFPlayer-compatible command/response protocol), `audio_player.c`
+(multi-module selection: picks a free/high-quality module for a play
+request), and `sound_manager.c` (loop/chain/stop-list logic, driven by
+periodic status polling rather than hardware push notifications).
 
-```python
+A module's responsiveness is tracked defensively, since these modules are
+known to occasionally miss a status-query response without actually being
+gone: a module is marked unresponsive only after several consecutive
+inconclusive reads, and — separately — a *sticky* "has this module ever
+answered" flag means a module that's proven itself real is periodically
+re-probed rather than being written off permanently the first time it goes
+quiet. See `yx5200_recover_if_due()`/`yx5200_could_recover()` and
+`AUDIO_UART_CRASH_NOTES.md` for the reasoning and the failure mode this
+was built to avoid (a real module getting mistaken for absent hardware and
+never being tried again for the rest of the boot session).
+
+## LED Driver
+
+`components/leds/leds.c` drives NeoPixel strips via the RMT peripheral.
+Each configured strip has its own color-order mapping (e.g. GRB vs RGB) —
+the pattern/filter/effect pipeline above always works in a
+hardware-independent logical RGB representation; reordering into the
+physical channel order happens only at the final transmit step.
+
+## Networking
+
+* `wifi_manager.c` — station-mode connect/reconnect
+* `captive_portal.c` — fallback AP + DNS hijack for first-time WiFi setup,
+  including a live network rescan without tearing down the portal
+* `mdns_setup.c` — `<hostname>.local` registration
+* `ota_update.c` — firmware updates
+
+### OTA Updates
+
+This is one of the few subsystems that's **architecturally different**
+from the original MicroPython implementation, not just a line-for-line
+port. MicroPython ran interpreted `.py` source directly off the
+filesystem, so its updater could sync individual changed files from a git
+tree. A compiled ESP-IDF firmware image can't be patched file-by-file —
+the only sound equivalent is flashing a whole new firmware binary through
+ESP-IDF's OTA partition mechanism (`ota_0`/`ota_1`, see `partitions.csv`).
+
+So the C build's updater instead: queries the configured GitHub
+repository's **latest release** via the GitHub API, looks for a `.bin`
+asset, compares its version against the running firmware's build version,
+and — when the user confirms via Setup → Updates — downloads and flashes
+it via `esp_https_ota()`. `build_c_release.ps1` (see the
+[Building Guide](building.md)) is what produces the `.bin` a release
+should have attached.
+
+The repository is configurable in persistent storage:
+
+```json
 "system_settings": {
     "ota": {
         "repo_owner": "PeterDarley",
@@ -130,436 +188,11 @@ The repository source is configurable in persistent storage under:
 }
 ```
 
-### Tracked Files
-
-By default, the following paths are tracked for updates:
-- Directories: `lib/`, `web/`, `templates/`, `www/`
-- Root files: `boot.py`, `main.py`
-
-The following paths are explicitly excluded:
-- `.git/`, `.github/`, `copilot_working/`, `deployment/`, `external_resources/`
-- Upload scripts: `upload.ps1`, `repl.ps1`, `upload.sh`
-- Non-device files: `index.html`, `requirements.txt`, `lib/licence`
-
-### Submodule Support
-
-Submodule file tracking is **enabled by default**. The OTA updater uses incremental chunked processing to safely handle large repository trees:
-
-**How it works:**
-- Remote tree and local files are saved to newline-delimited snapshot files
-- Snapshot files are processed incrementally line-by-line
-- Main repository trees are walked iteratively (non-recursive) one tree level at a time
-- Submodule trees are walked iteratively (non-recursive) by fetching one tree level at a time
-- Each file's SHA is compared individually, then discarded
-- Temporary files are cleaned up after processing completes
-
-This approach is **stack-safer** on ESP32 because it avoids recursive operations in hot paths and maintains a smaller working set during processing.
-
-**To disable** submodule tracking (if you want to update submodules manually via git), add to persistent storage:
-```python
-"system_settings": {
-    "ota": {
-        "track_submodules": False
-    }
-}
-```
-
-### OTA Debug Logging
-
-To capture progress checkpoints during update checks, enable:
-
-```python
-"system_settings": {
-    "ota": {
-        "debug_logging": True
-    }
-}
-```
-
-When enabled, the OTA engine appends stage markers and `gc.mem_free()`/`gc.mem_alloc()` snapshots to `.ota_debug.log`. This helps identify the last successful phase before a crash or reboot.
-
-
-## Target Specification
-
-| Value | Meaning |
-|---|---|
-| `0` | Single LED index |
-| `[0, 2, 5]` | Explicit list of indices |
-| `"0-7"` | Inclusive range |
-| `"all"` | All LEDs |
-| `"named:range_name"` | Look up range in `named_ranges` (may reference other named ranges)
-
-Named ranges may include references to other named ranges using the `named:OtherRange`
-syntax in member lists (for example: `"engine": [0, "named:wing"]`). The lighting
-runtime expands these references recursively when resolving targets. The setup UI
-validates named-range edits and will reject circular references to prevent infinite
-recursion at runtime.
-
-## Colors
-
-Colors can be named strings or RGB tuples (`(255, 128, 0)`). Most patterns take two colors: `colors[0]` is the primary/on color and `colors[1]` is the secondary/off color.
-
-| Name | RGB | Description |
-|---|---|---|
-| `"white"` | (255, 255, 255) | Full-brightness white |
-| `"warm_white"` | (255, 220, 160) | Warm incandescent white |
-| `"cool_white"` | (180, 210, 255) | Cool daylight white |
-| `"dim_white"` | (64, 64, 64) | Low-level ambient white |
-| `"silver"` | (180, 180, 200) | Slightly cool silver-grey |
-| `"grey"` | (128, 128, 128) | Mid grey |
-| `"black"` | (0, 0, 0) | Off |
-| `"red"` | (255, 0, 0) | Pure red |
-| `"dark_red"` | (128, 0, 0) | Deep red |
-| `"orange"` | (255, 100, 0) | Orange |
-| `"amber"` | (255, 160, 0) | Amber / warm orange |
-| `"gold"` | (255, 200, 0) | Bright gold |
-| `"yellow"` | (255, 255, 0) | Yellow |
-| `"green"` | (0, 255, 0) | Pure green |
-| `"dark_green"` | (0, 128, 0) | Deep green |
-| `"lime"` | (128, 255, 0) | Yellow-green |
-| `"teal"` | (0, 180, 128) | Blue-green teal |
-| `"cyan"` | (0, 255, 255) | Cyan |
-| `"ice_blue"` | (80, 160, 255) | Light icy blue |
-| `"blue"` | (0, 0, 255) | Pure blue |
-| `"dark_blue"` | (0, 0, 128) | Deep blue |
-| `"indigo"` | (60, 0, 180) | Deep indigo |
-| `"violet"` | (180, 0, 255) | Bright violet |
-| `"purple"` | (128, 0, 128) | Mid purple |
-| `"magenta"` | (255, 0, 255) | Magenta |
-| `"pink"` | (255, 80, 150) | Hot pink |
-| `"fire"` | (255, 40, 0) | Deep orange-red flame |
-| `"plasma"` | (0, 200, 255) | Sci-fi plasma blue |
-| `"engine_glow"` | (100, 40, 255) | Purple engine exhaust glow |
-
----
-
-## Patterns
-
-### `solid`
-Sets all target LEDs to a fixed color. No animation.
-
-| Parameter | Description |
-|---|---|
-| `colors[0]` | The color to display |
-
----
-
-### `blink`
-Alternates between two colors symmetrically. The on-time and off-time are the same.
-
-| Parameter | Description |
-|---|---|
-| `duration` | Half-period in ticks. The effect shows `colors[0]` for this many ticks, then `colors[1]` for the same number of ticks. |
-| `frequency` | Optional override in blinks per second. If present, it takes precedence over `duration`. |
-| `colors[0]` | On color |
-| `colors[1]` | Off color |
-
----
-
-### `pulse`
-Like `blink` but with separate on-time and full-cycle timing, allowing asymmetric pulses.
-
-| Parameter | Description |
-|---|---|
-| `duration` | Number of ticks the on color is shown |
-| `period` | Full cycle length in ticks (`duration` + off-time) |
-| `colors[0]` | On color |
-| `colors[1]` | Off color |
-
----
-
-### `fade_in`
-Linearly interpolates from `colors[0]` to `colors[1]` over a set duration, then holds.
-
-| Parameter | Description |
-|---|---|
-| `duration` | Number of ticks for the full fade |
-| `colors[0]` | Start color |
-| `colors[1]` | End color |
-
----
-
-### `breathe`
-Uses a sine wave to smoothly oscillate between two colors, creating a breathing effect.
-
-| Parameter | Description |
-|---|---|
-| `duration` | Full cycle length in ticks |
-| `colors[0]` | Dim/off color |
-| `colors[1]` | Bright/on color |
-
----
-
-### `wave`
-A comet or comets sweep across the LEDs. Each peak is set to `colors[1]` for one tick, then fades back to `colors[0]` over `width` LEDs of travel.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `duration` | 40 | Full sweep length in ticks |
-| `width` | 5 | Fade trail length in LEDs |
-| `number` | 1 | Number of simultaneous peaks, evenly spaced |
-| `reverse` | `false` | If true, sweeps from last LED to first |
-| `colors[0]` | — | Background/trail-end color |
-| `colors[1]` | — | Peak color |
-
----
-
-### `cylon`
-Like `wave` but the peak bounces back and forth (forward sweep then reverse sweep).
-
-| Parameter | Default | Description |
-|---|---|---|
-| `duration` | 40 | One-way sweep length in ticks |
-| `width` | 5 | Fade trail length in LEDs |
-| `colors[0]` | — | Background/trail-end color |
-| `colors[1]` | — | Peak color |
-
----
-
-### `phaser_strip`
-Two waves start at opposite ends of the target range and converge on a randomly chosen meeting point, both arriving at the same tick. After meeting, the meeting point holds lit while trails fade, then resets.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `duration` | 40 | Total ticks for the wave convergence phase |
-| `width` | 5 | Fade trail length in LEDs |
-| `colors[0]` | — | Background/trail-end color |
-| `colors[1]` | — | Peak/meeting color |
-
----
-
-### `rainbow`
-Cycles hue over time and spreads it spatially across the strip, HSV-based. Ignores `colors` entirely.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `duration` | 80 | Ticks for one full hue cycle |
-| `number` | 1 | Number of rainbow repeats spread across the strip |
-| `saturation` | 1.0 | Color saturation (0.0 = white, 1.0 = fully saturated) |
-
----
-
-### `color_wipe`
-Progressively fills the target from the first LED to the last with `colors[0]`, then wipes back to `colors[1]` the same way.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `duration` | 40 | Ticks for one fill direction (full cycle is `duration * 2`) |
-| `colors[0]` | — | Fill color |
-| `colors[1]` | — | Background/wipe-back color |
-
----
-
-### `fire`
-Flickering flame simulation: each tick cools every LED slightly, diffuses heat toward the far end, and randomly sparks new heat near the base. Heat values map to a black→red→orange→yellow→white ramp. Ignores `colors` entirely.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `cooling` | 55 | How fast heat dissipates each tick; higher = shorter, choppier flames |
-| `sparking` | 120 | Chance (out of 255) per tick of a new spark near the base; higher = more active fire |
-| `duration` | 40 | Only used as the cadence for counting `cycles=` (fire itself has no natural cycle) |
-
----
-
-### `gradient`
-A spatial blend across two or more `colors`, evenly spread over the target. With `duration` set, the gradient scrolls along the strip over time instead of staying static.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `duration` | 0 | `0` = static gradient; `>0` = ticks for one full scroll cycle |
-| `colors` | — | Two or more colors; the gradient blends through them in order, wrapping back to the first |
-
----
-
-### `warp_pulse`
-A band of color expands outward from the center to both ends, then resets and repeats.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `width` | 4 | Half-width (in LEDs) of the expanding band's soft edge |
-| `period` | 40 | Ticks for one full expansion cycle |
-| `colors[0]` | — | Peak/band color |
-| `colors[1]` | — | Background color |
-
----
-
-### `theater_chase`
-Evenly spaced dots march along the strip, marquee-style.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `spacing` | 3 | LED spacing between dots (minimum 2) |
-| `width` | 1 | Dot width in LEDs |
-| `duration` | 6 | Ticks per step; lower = faster movement |
-| `reverse` | `false` | If true, dots march in the opposite direction |
-| `colors[0]` | — | Dot color |
-| `colors[1]` | — | Background color |
-
----
-
-### `heartbeat`
-An organic double-thump ("lub-dub") followed by a rest, looping.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `period` | 50 | Ticks per full heartbeat cycle (minimum 8) |
-| `colors[0]` | — | Thump/peak color |
-| `colors[1]` | — | Rest/background color |
-
----
-
-## Filters
-
-Filters are applied after the pattern has computed its LED list for the tick. Multiple filters can be chained in the `filters` list.
-
-In the effect editor UI, the displayed filter list is intentionally reversed relative to execution order: the top filter runs last.
-
-```python
-"filters": [
-    {"filter": "scintillate", "frequency": 20, "heat": 5}
-]
-```
-
----
-
-### `null`
-Passes the LED list through unchanged. Useful for testing or as a placeholder.
-
----
-
-### `sizzle`
-Computes a single random deviation from the first LED's current position toward its target color, then applies that same deviation uniformly to all LEDs. Creates a coordinated group flicker.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `frequency` | 40 | Updates per second |
-| `variation_percent` | 20 | Maximum random channel deviation as a percentage of each channel's current target value |
-| `heat` | 10 | Reserved for compatibility (not currently used by sizzle/scintillate math) |
-
----
-
-### `scintillate`
-Like `sizzle` but each LED is adjusted independently, creating a sparkling/twinkling effect where individual LEDs vary in different directions.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `frequency` | 40 | Updates per second |
-| `variation_percent` | 20 | Maximum random channel deviation as a percentage of each channel's current target value |
-| `heat` | 10 | Reserved for compatibility (not currently used by sizzle/scintillate math) |
-
-When editing legacy `sizzle` or `scintillate` filters that still store
-`variation` as 0..255 levels, the UI converts it to percentage using
-`variation / 255 * 100`. Saving stores only `variation_percent`.
-
----
-
-### `brightness`
-Multiplies each target RGB channel by a constant factor. Each resulting channel value is clamped to the inclusive integer range `0..255`.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `brightness` | 1.0 | Constant multiplier per channel (`0.5` = half brightness, `2.0` = double brightness) |
-
----
-
-### `spike`
-Periodically overrides LEDs with a spike color.
-
-Each spike lasts `duration` ± `heat` ticks. After a spike ends, the next spike
-is scheduled `period` ± `variation` ticks later. This keeps spikes separated by
-the configured period window instead of clustering when spikes are long.
-The first spike after an effect starts is scheduled from effect start using
-`period` (plus any subrange phase offset), without initial `variation` jitter.
-
-In the Setup UI filter editor, `duration` and `period` are entered with
-minutes/seconds/ticks controls and stored as total ticks.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `color` | `white` | Spike color (name or RGB tuple) |
-| `duration` | 5 | Spike length in ticks |
-| `period` | 40 | Delay before next spike (after previous spike ends) |
-| `variation` | 0 | Random ± tick offset applied to each period |
-| `heat` | 0 | Random ± tick offset applied to each spike duration |
-| `scope` | `all` | Grouping mode: `all`, `subranges`, or `leds` |
-
----
-
-### `dropout`
-Identical to `spike` but the override color is always black `(0, 0, 0)`.
-
-For `scope='subranges'`, if the target is an aggregate named range (a named
-range whose value is a list of component targets), each component is treated as
-its own group. This avoids accidental merging of adjacent component LEDs.
-Like `spike`, the first dropout after effect start uses `period` from the
-effect start time and does not apply initial `variation` jitter.
-Runtime scheduling state for `spike`/`dropout` is scoped per effect instance,
-so reusing the same named filter in different effects does not carry timing
-state across those effect boundaries.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `duration` | 5 | Dropout length in ticks |
-| `period` | 40 | Delay before next dropout (after previous dropout ends) |
-| `variation` | 0 | Random ± tick offset applied to each period |
-| `heat` | 0 | Random ± tick offset applied to each dropout duration |
-| `scope` | `all` | Grouping mode: `all`, `subranges`, or `leds` |
-
----
-
-### `afterglow`
-Leaves fading trails by blending each LED toward its own previous frame instead of switching instantly — each channel takes the brighter of the new target value and the decayed previous value, so trails only fade, they never dim something that just got brighter.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `decay` | 0.85 | Fraction (0.0-0.99) of the previous frame retained each tick; higher = longer trails |
-
----
-
-### `tint`
-Overlays a color like a lighting gel, via a multiplicative blend. Good for a droppable "red alert" wash over an existing effect.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `color` | `red` | Gel color (name or RGB tuple) |
-| `strength` | 0.5 | Blend amount (0.0 = no effect, 1.0 = fully gelled) |
-
----
-
-### `shimmer`
-A smooth brightness wave travels along the strip, dimming and brightening LEDs as it passes.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `wavelength` | 8 | LEDs per wave crest |
-| `speed` | 1.0 | Wave travel speed |
-| `depth` | 0.5 | Dimming amount at the troughs (0.0 = no dimming, 1.0 = fully dark at troughs) |
-
----
-
-### `hue_shift`
-Rotates every LED's color around the hue wheel, in HSV space.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `offset` | 0.0 | Fixed hue rotation (0.0-1.0, wraps around) |
-| `speed` | 0.0 | Additional rotation per tick; `0` leaves the shift static at `offset` |
-
----
-
-### `saturation`
-Scales color saturation in HSV space, leaving hue and brightness alone.
-
-| Parameter | Default | Description |
-|---|---|---|
-| `amount` | 1.0 | Saturation multiplier (0.0-2.0); `<1` drains toward gray (e.g. a "systems failing" cue), `>1` boosts, `1.0` is unchanged |
-
----
-
-### `vignette`
-Dims the ends of the target range so the middle is brightest, like a camera vignette (or the reverse, with `invert`).
-
-| Parameter | Default | Description |
-|---|---|---|
-| `falloff` | 0.5 | Dimming strength at the edges (0.0 = no dimming, 1.0 = edges fully dark) |
-| `invert` | `false` | If true, dims the middle and brightens the edges instead |
+## See Also
+
+* [Programming Guide](programming.md) — user-facing configuration
+  reference (patterns, filters, colors, scenes, sounds)
+* [Building Guide](building.md) — build/flash instructions
+* [Theming Guide](theming.md) — CSS theming system
+* [Hardware Reference](hardware.md) — wiring
+* [Storage Format Reference](settings_template.py) — full JSON schema
