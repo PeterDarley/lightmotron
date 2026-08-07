@@ -120,10 +120,77 @@ Once a play was attempted with nothing attached to respond, the driver got
 stuck believing a module was still playing forever, so every later call
 retried indefinitely. Fixed (same shape in C and Python) by tracking
 consecutive no-response reads per module; after 5 in a row the module is
-marked non-responsive and skipped by the fast paths, recovering
-automatically the moment a real response comes in. See
+marked non-responsive and skipped by the fast paths. See
 `components/audio/yx5200.c`/`audio_player.c`, `components/network/ip_announcement.c`,
 and the `lib/audio.py`/`lib/ip_announcement.py` mirrors.
+
+**Correction (2026-08-05):** the line above used to say this "recovers
+automatically the moment a real response comes in" — that was the *intent*
+(see `yx5200.h`'s doc comment on `responsive`), but not what the code
+actually did in C: `audio_player_play_file()`'s fast path skips any module
+with `responsive == false` outright, and nothing else in the normal
+playback flow ever calls `yx5200_query_status()` on it again, so there was
+no way back to `responsive == true` short of the manual health-check
+endpoint. Real symptom this caused: booting with the audio module
+genuinely attached and working, the IP announcement would play its first
+1-2 files, then the module would go quiet for about a second during a
+normal file-to-file transition (all 1 configured module, `no_response_streak`
+hits `NO_RESPONSE_THRESHOLD=5` within ~1s given `play_with_retry()`'s
+~100-200ms poll cadence), get marked "no module attached" even though it
+was fine, and every subsequent play attempt for the rest of the boot
+session silently skipped it — no crash, no error, just silence.
+
+Fixed by adding `yx5200_recover_if_due()` (`yx5200.c`/`.h`): when a module
+is unresponsive, `audio_player_play_file()` now re-probes it at most once
+every `REPROBE_INTERVAL_MS` (2000ms) instead of skipping it forever. Cheap
+enough not to add latency for genuinely-absent hardware (still skipped
+between reprobes), but frequent enough to recover well within
+`play_with_retry()`'s 10s-per-file retry budget. Not ported back to
+`lib/audio.py` — Python side is frozen, `c_project` is the only actively
+developed version.
+
+**Follow-up (2026-08-05, same day): the above fix alone didn't help — two
+more bugs in the same area, found by tracing why not.**
+
+User reflashed with the reprobe fix; got the *identical* log signature (3x
+"All 1 modules busy" then "no response after 5 attempts" at almost the
+same boot-relative timestamp) and reported a new symptom: "It sounds like
+it's playing the second file before the first is finishing." Traced both:
+
+1. **`note_no_response()` was forcing `is_playing = false`** the moment the
+   miss-streak crossed the threshold — conflating "hasn't answered a
+   status query in ~1s" with "confirmed stopped." For a module that's
+   simply busy decoding/playing and doesn't answer `CMD_QUERY_STATUS`
+   while busy (plausible for these clones), that's backwards: it frees the
+   module up while it's still audibly playing, so the next file's play
+   command cuts off/overlaps the current one. Fixed: no-response no longer
+   touches `is_playing` at all — a module marked unresponsive is already
+   fully skipped by `audio_player_play_file()`'s fast path regardless of
+   `is_playing`'s value, so leaving it alone doesn't reopen the original
+   "stuck busy forever" problem.
+2. **The reprobe fix from the same-day-earlier entry above was never
+   actually reached.** `ip_announcement.c`'s `play_with_retry()` bails out
+   the instant `audio_player_has_responsive_module()` reads false — which
+   happens the moment a module is marked unresponsive — so the retry loop
+   gave up almost immediately, well before `yx5200_recover_if_due()`'s
+   2-second cooldown ever elapsed a second time. Fixed by adding a sticky
+   `known_present` flag (set once, first time a module ever answers a
+   query, never cleared) and a new `yx5200_could_recover()` check
+   (`responsive || known_present`) that `audio_player_has_responsive_module()`
+   now uses instead of raw `responsive`. A module that's proven itself
+   real at some point is no longer treated the same as one that's never
+   answered at all — only the latter causes an early bail.
+
+Also added logging per user request ("add more debugging around playing
+sounds"): play-issued, query-outcome (inconclusive/no-frame/valid-frame),
+confirmed-stopped, module-selection, and busy/skip decisions are now all
+at `ESP_LOGI` (previously buried at `ESP_LOGD`, invisible unless
+`audio_debug_logging` is enabled in System Settings) — so a normal boot
+log capture now shows the full play/query lifecycle without needing to
+flip that setting first. TX/RX hex dumps (`log_hex()`) remain at `DEBUG`
+only, gated by `audio_debug_logging`, since those are high-volume.
+
+**Not yet reflashed/retested.**
 
 ### FreeRTOS stack-overflow watchpoint
 

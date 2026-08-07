@@ -54,10 +54,12 @@ cJSON *audio_player_check_health(void);
 bool audio_player_is_module_playing(int module_index);
 
 /**
- * True if at least one configured module has answered a status query
- * recently (see yx5200_is_responsive()). Lets callers that would otherwise
- * retry playback repeatedly (e.g. ip_announcement) skip straight to giving
- * up when nothing is physically attached.
+ * True if at least one configured module is currently responsive, or has
+ * ever answered a status query since boot (see yx5200_could_recover()).
+ * Lets callers that would otherwise retry playback repeatedly (e.g.
+ * ip_announcement) skip straight to giving up only when a module has
+ * *never* proven it's physically attached -- a module that's simply gone
+ * quiet temporarily after working before still counts as worth retrying.
  */
 bool audio_player_has_responsive_module(void);
 

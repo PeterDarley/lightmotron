@@ -96,28 +96,31 @@ int audio_player_play_file(int file_number, bool high_quality_preferred)
     bool any_candidate = false;
     bool any_responsive = false;
     for (int i = 0; i < module_count; i++) {
+        yx5200_recover_if_due(&modules[i]);
         if (!yx5200_is_responsive(&modules[i])) {
-            ESP_LOGD(TAG, "module %d uart=%d: not responsive, skipping", i, modules[i].uart_num);
+            ESP_LOGI(TAG, "module %d uart=%d: not responsive, skipping (for file %d)", i,
+                     modules[i].uart_num, file_number);
             continue;
         }
         any_responsive = true;
         if (!modules[i].is_playing) {
             candidate[i] = true;
         } else {
-            ESP_LOGD(TAG, "module %d uart=%d: is_playing=1, re-querying", i, modules[i].uart_num);
+            ESP_LOGI(TAG, "module %d uart=%d: is_playing=1 (file %d), re-querying for file %d", i,
+                     modules[i].uart_num, modules[i].current_file, file_number);
             yx5200_query_status(&modules[i]);
             candidate[i] = !modules[i].is_playing;
         }
-        ESP_LOGD(TAG, "module %d uart=%d: candidate=%d is_playing=%d", i, modules[i].uart_num,
+        ESP_LOGI(TAG, "module %d uart=%d: candidate=%d is_playing=%d", i, modules[i].uart_num,
                  candidate[i], modules[i].is_playing);
         any_candidate = any_candidate || candidate[i];
     }
 
     if (!any_candidate) {
         if (!any_responsive) {
-            ESP_LOGD(TAG, "No responsive audio modules");
+            ESP_LOGI(TAG, "No responsive audio modules (wanted file %d)", file_number);
         } else {
-            ESP_LOGW(TAG, "All %d modules busy", module_count);
+            ESP_LOGW(TAG, "All %d modules busy (wanted file %d)", module_count, file_number);
         }
         return -1;
     }
@@ -143,6 +146,8 @@ int audio_player_play_file(int file_number, bool high_quality_preferred)
     /* Ensure volume is current before playing. */
     yx5200_set_volume(&modules[module_idx], current_volume);
 
+    ESP_LOGI(TAG, "selected module %d (uart=%d) for file %d, hq_preferred=%d", module_idx,
+             modules[module_idx].uart_num, file_number, high_quality_preferred);
     esp_err_t ret = yx5200_play_file(&modules[module_idx], file_number);
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Failed to start playback on module %d", module_idx);
@@ -227,7 +232,14 @@ bool audio_player_is_module_playing(int module_index)
 bool audio_player_has_responsive_module(void)
 {
     for (int i = 0; i < module_count; i++) {
-        if (yx5200_is_responsive(&modules[i])) return true;
+        /* yx5200_could_recover(), not yx5200_is_responsive(): a module that
+         * played real audio earlier and has only just gone quiet (e.g.
+         * busy decoding, not physically gone) must not make callers like
+         * ip_announcement.c's play_with_retry() give up immediately -- that
+         * defeats yx5200_recover_if_due()'s periodic reprobe before it
+         * ever gets a chance to run. Only a module that has *never*
+         * answered should cause an early bail. */
+        if (yx5200_could_recover(&modules[i])) return true;
     }
     return false;
 }

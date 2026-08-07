@@ -47,6 +47,14 @@ static const char *TAG = "yx5200";
  * YX5200Player._no_response_threshold in lib/audio.py. */
 #define NO_RESPONSE_THRESHOLD 5
 
+/* How often to give an unresponsive module another chance once it's been
+ * marked dead. Short enough that a module which was falsely flagged during
+ * a brief real busy period (e.g. loading the next track) recovers within
+ * a single play_with_retry() window (ip_announcement.c retries for up to
+ * 10s); long enough that a genuinely-unplugged module doesn't add a ~100ms
+ * UART round-trip to every single play attempt. */
+#define REPROBE_INTERVAL_MS 2000
+
 static void build_frame(uint8_t *frame, uint8_t cmd, uint16_t param)
 {
     frame[0] = YX5200_START_BYTE;
@@ -148,6 +156,8 @@ esp_err_t yx5200_init(yx5200_t *player, uart_port_t uart_num, int tx_pin, int rx
     player->pending_stop_confirmations = 0;
     player->responsive = true;   /* Optimistic until proven otherwise - see yx5200_query_status() */
     player->no_response_streak = 0;
+    player->reprobe_after_ms = 0;
+    player->known_present = false;
 
     uart_config_t uart_config = {
         .baud_rate = 9600,
@@ -184,6 +194,9 @@ esp_err_t yx5200_init(yx5200_t *player, uart_port_t uart_num, int tx_pin, int rx
 esp_err_t yx5200_play_file(yx5200_t *player, int file_number)
 {
     if (!player || !player->initialized) return ESP_ERR_INVALID_STATE;
+
+    ESP_LOGI(TAG, "uart=%d: play file %d (previously %s, file %d)", player->uart_num, file_number,
+             player->is_playing ? "playing" : "idle", player->current_file);
 
     esp_err_t ret = send_command(player, CMD_PLAY_FILE, (uint16_t)file_number);
     if (ret == ESP_OK) {
@@ -235,7 +248,18 @@ static void note_no_response(yx5200_t *player)
         ESP_LOGW(TAG, "uart=%d: no response after %d attempts, assuming no module attached",
                  player->uart_num, player->no_response_streak);
         player->responsive = false;
-        player->is_playing = false;
+        /* Deliberately NOT forcing is_playing=false here. "No response"
+         * means "unknown", not "confirmed stopped" -- a module that's
+         * simply busy decoding/playing and ignoring status queries (a real
+         * characteristic of some YX5200 clones) looks identical, from
+         * here, to one that isn't physically there at all. Clearing
+         * is_playing on this transition used to let a still-playing
+         * module be mistaken for free the moment it next answered a
+         * query, cutting off/overlapping whatever it was still playing. A
+         * module marked unresponsive is already fully skipped by
+         * audio_player_play_file()'s fast path regardless of is_playing,
+         * so leaving the cached value alone here doesn't reopen "stuck
+         * busy forever" for a genuinely-absent module. */
         player->pending_stop_confirmations = 0;
     }
 }
@@ -246,6 +270,7 @@ static void note_no_response(yx5200_t *player)
 static void note_response_ok(yx5200_t *player)
 {
     player->no_response_streak = 0;
+    player->known_present = true;
     if (!player->responsive) {
         ESP_LOGI(TAG, "uart=%d: responding again", player->uart_num);
         player->responsive = true;
@@ -255,6 +280,27 @@ static void note_response_ok(yx5200_t *player)
 bool yx5200_is_responsive(const yx5200_t *player)
 {
     return player && player->responsive;
+}
+
+bool yx5200_could_recover(const yx5200_t *player)
+{
+    return player && (player->responsive || player->known_present);
+}
+
+void yx5200_recover_if_due(yx5200_t *player)
+{
+    if (!player || !player->initialized || player->responsive) {
+        return;
+    }
+
+    uint32_t now = esp_log_timestamp();
+    if (now < player->reprobe_after_ms) {
+        return;
+    }
+    player->reprobe_after_ms = now + REPROBE_INTERVAL_MS;
+
+    ESP_LOGI(TAG, "uart=%d: unresponsive, reprobing", player->uart_num);
+    yx5200_query_status(player);
 }
 
 esp_err_t yx5200_query_status(yx5200_t *player)
@@ -277,22 +323,27 @@ esp_err_t yx5200_query_status(yx5200_t *player)
     log_hex("RX", player->uart_num, response, len);
 
     if (len < 10) {
-        /* Inconclusive read - keep cached state, same as the Python driver. */
-        ESP_LOGD(TAG, "status inconclusive uart=%d keep_cached=%d", player->uart_num, player->is_playing);
+        /* Inconclusive read - keep cached state, same as the Python driver.
+         * Logged at INFO (not DEBUG) since this is exactly the evidence
+         * needed to tell "module genuinely silent" apart from "busy and
+         * slow to answer" without needing audio_debug_logging enabled. */
+        ESP_LOGI(TAG, "uart=%d: status inconclusive (%d bytes), keep_cached is_playing=%d streak=%d/%d",
+                 player->uart_num, len, player->is_playing, player->no_response_streak + 1, NO_RESPONSE_THRESHOLD);
         note_no_response(player);
         return ESP_OK;
     }
 
     uint8_t status_high = 0, status_low = 0;
     if (!find_response_frame(response, len, CMD_QUERY_STATUS, &status_high, &status_low)) {
-        ESP_LOGD(TAG, "status no valid frame uart=%d keep_cached=%d", player->uart_num, player->is_playing);
+        ESP_LOGI(TAG, "uart=%d: status no valid frame (%d bytes), keep_cached is_playing=%d streak=%d/%d",
+                 player->uart_num, len, player->is_playing, player->no_response_streak + 1, NO_RESPONSE_THRESHOLD);
         note_no_response(player);
         return ESP_OK;
     }
 
     note_response_ok(player);
     bool hw_playing = (status_low == STATUS_PLAYING) || (status_high == STATUS_PLAYING);
-    ESP_LOGD(TAG, "uart=%d valid frame: status_high=%02X status_low=%02X hw_playing=%d",
+    ESP_LOGI(TAG, "uart=%d: valid frame status_high=%02X status_low=%02X hw_playing=%d",
              player->uart_num, status_high, status_low, hw_playing);
 
     if (!hw_playing && player->is_playing) {
@@ -304,6 +355,10 @@ esp_err_t yx5200_query_status(yx5200_t *player)
         }
     } else {
         player->pending_stop_confirmations = 0;
+    }
+
+    if (player->is_playing && !hw_playing) {
+        ESP_LOGI(TAG, "uart=%d: file %d confirmed stopped", player->uart_num, player->current_file);
     }
 
     player->is_playing = hw_playing;
