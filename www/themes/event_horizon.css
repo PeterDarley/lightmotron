@@ -315,6 +315,23 @@ body {
     & .modal-footer { border-top-color: #6f3142; }
 }
 
+/* Bootstrap's default .btn-close is a dark X meant for a light background --
+   invisible against this theme's near-black modal-header. filter:invert()
+   alone read as too low-contrast here in practice, so this replaces the
+   icon outright with a recolored copy of Bootstrap's own close-icon SVG
+   path, filled with --eh-blue-hi (the theme's own bright accent, already
+   used for headings/hover states) instead of plain white, so it reads as
+   part of the theme rather than a generic override. A red glow
+   (drop-shadow, not box-shadow -- the icon itself is a background-image,
+   so only a filter-based shadow follows its actual X shape rather than
+   boxing the whole square hit-area), colored from --eh-blue, adds
+   contrast on top of that. */
+.btn-close {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23ff9fb0'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e");
+    filter: drop-shadow(0 0 4px rgba(204, 77, 101, 0.95)) drop-shadow(0 0 8px rgba(204, 77, 101, 0.55));
+    opacity: 1;
+}
+
 .list-group-item {
     background-color: #180f19;
     border-color: #6f3142;

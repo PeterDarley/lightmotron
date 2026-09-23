@@ -47,8 +47,16 @@ cJSON *json_deep_clone(const cJSON *obj);
 cJSON *json_read_file(const char *filepath);
 
 /**
- * Write a cJSON object to a file on LittleFS.
+ * Write a cJSON object to a file on LittleFS (temp file + atomic rename).
+ * Once json_writer_init() has run, the write is performed on a dedicated
+ * task pinned to core 0 and this call blocks until it completes.
  */
 esp_err_t json_write_file(const char *filepath, const cJSON *obj);
+
+/**
+ * Start the core-0 writer task used by json_write_file(). Call once at boot,
+ * after the data partition is mounted.
+ */
+esp_err_t json_writer_init(void);
 
 #endif /* JSON_HELPERS_H */

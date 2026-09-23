@@ -72,6 +72,7 @@ persistent_dict_t *persistent_dict_open(const char *filepath)
     pd->data = NULL;
     pd->loaded = false;
     pd->dirty = false;
+    pd->version = 0;
     pd->mutex = xSemaphoreCreateMutex();
     if (!pd->mutex) {
         ESP_LOGE(TAG, "Failed to create mutex for %s", filepath);
@@ -181,6 +182,10 @@ esp_err_t persistent_dict_save(persistent_dict_t *pd)
         return ESP_OK;
     }
 
+    /* Bump before writing: the in-memory tree is what consumers read, and
+     * it already holds the change whether or not the flash write succeeds. */
+    pd->version++;
+
     esp_err_t ret = json_write_file(pd->filepath, pd->data);
     if (ret == ESP_OK) {
         pd->dirty = false;
@@ -207,8 +212,14 @@ void persistent_dict_invalidate(persistent_dict_t *pd)
     }
     pd->loaded = false;
     pd->dirty = false;
+    pd->version++;
 
     xSemaphoreGive(pd->mutex);
+}
+
+uint32_t persistent_dict_version(const persistent_dict_t *pd)
+{
+    return pd ? pd->version : 0;
 }
 
 cJSON *persistent_dict_get_all(persistent_dict_t *pd)

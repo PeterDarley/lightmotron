@@ -7,13 +7,8 @@ instead — nothing here is required for that.
 ## Prerequisites
 
 * [ESP-IDF v6.0.2](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/get-started/) installed, targeting `esp32s3`.
-* A plain Windows Terminal / PowerShell window — **not** a VS Code
-  integrated terminal, and **not** git-bash / MSYS. Both corrupt the build
-  environment before `idf.py` ever runs:
-  * VS Code's Python extension auto-activates this repo's `venv`; stacking
-    the ESP-IDF profile script's own venv activation on top of that
-    corrupts `PATH` (observed truncated to ~1200 chars instead of the
-    expected 3000-5000+), which breaks `cmake`/`idf.py` resolution.
+* A plain Windows Terminal / PowerShell window — **not** git-bash / MSYS,
+  which corrupts the build environment before `idf.py` ever runs:
   * MSYS's environment (`MSYSTEM` etc.) leaks into a `powershell.exe`
     child process spawned from git-bash, and makes the ESP-IDF profile
     script's own Mingw/MSys detection treat its normal informational

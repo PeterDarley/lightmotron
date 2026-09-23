@@ -18,8 +18,8 @@ if (-not (Test-Path $cProjectDir)) {
 # Locate and dot-source the ESP-IDF PowerShell environment (adds idf.py etc.
 # to PATH for this process only).
 #
-# NOTE: run this script from a plain PowerShell window, not a VS Code
-# integrated terminal -- see c_project/BUILD_NOTES.md for why.
+# NOTE: run this script from PowerShell, not git-bash -- see
+# c_project/BUILD_NOTES.md for why.
 $idfProfileCandidates = @(
     'C:\Espressif\tools\Microsoft.v6.0.2.PowerShell_profile.ps1'
 )

@@ -1332,12 +1332,49 @@ http_response_t *view_setup(http_request_t *req)
 
 http_response_t *view_confirm(http_request_t *req)
 {
-    const char *action = request_get_form_field(req, "action");
-    const char *target = request_get_form_field(req, "target");
+    /* Generic delete-confirmation step, posted to by any "Delete" button
+     * that wants a second, in-modal confirmation beyond the browser's own
+     * hx-confirm popup (see templates/setup/models.html and
+     * templates/setup/led_picker.html for the two current callers). Was
+     * previously reading form fields ("action"/"target") that neither
+     * caller actually sends -- the real contract, matching what both
+     * templates submit, is object_type/object_name/action_path/cancel_url
+     * plus whatever extra identifying fields (e.g. models.html's "name",
+     * led_picker.html's "old_name"/"selected_leds") the real delete
+     * endpoint needs, forwarded through untouched. */
+    const char *object_type = request_get_form_field(req, "object_type");
+    const char *object_name = request_get_form_field(req, "object_name");
+    const char *action_path = request_get_form_field(req, "action_path");
+    const char *cancel_url = request_get_form_field(req, "cancel_url");
 
     cJSON *ctx = build_global_context();
-    if (action) cJSON_AddStringToObject(ctx, "action", action);
-    if (target) cJSON_AddStringToObject(ctx, "target", target);
+
+    char message[160];
+    snprintf(message, sizeof(message), "Delete %s '%s'? This cannot be undone.",
+             object_type ? object_type : "item", object_name ? object_name : "");
+    cJSON_AddStringToObject(ctx, "message", message);
+    cJSON_AddStringToObject(ctx, "action_url", action_path ? action_path : "");
+    cJSON_AddStringToObject(ctx, "cancel_url", cancel_url ? cancel_url : "");
+
+    /* Forward every other submitted field through as a hidden input in the
+     * confirmation form (see confirm_delete.html), so the eventual
+     * "Confirm Delete" submit carries whatever the real delete endpoint
+     * needs without this handler needing to know each caller's field
+     * names ahead of time. */
+    cJSON *fields = cJSON_CreateObject();
+    if (req->form_data) {
+        for (cJSON *item = req->form_data->child; item; item = item->next) {
+            if (!item->string || !cJSON_IsString(item)) continue;
+            if (strcmp(item->string, "object_type") == 0 ||
+                strcmp(item->string, "object_name") == 0 ||
+                strcmp(item->string, "action_path") == 0 ||
+                strcmp(item->string, "cancel_url") == 0) {
+                continue;
+            }
+            cJSON_AddStringToObject(fields, item->string, item->valuestring);
+        }
+    }
+    cJSON_AddItemToObject(ctx, "fields", fields);
 
     return webserver_render_response("setup/confirm_delete.html", ctx);
 }

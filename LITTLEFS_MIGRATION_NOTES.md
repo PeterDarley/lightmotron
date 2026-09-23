@@ -311,3 +311,38 @@ action policy. Sequence:
   specifically, or at minimum noting this as a required manual step after
   any clean re-fetch.
   **Not yet reflashed/tested.**
+
+- **2026-09-23**: DATA LOSS + more crashes. (1) The earlier "write directly,
+  skip tmp+rename" change was WRONG: esp_littlefs syncs at open and
+  fopen("w") truncates, so opening the real file commits an empty file
+  immediately; a crash before close (all our crashes are inside metadata
+  compaction) wiped lighting_settings.json. Restored tmp+rename, with no
+  remove() first (lfs_rename replaces the destination in one commit), and
+  json_read_file() now falls back to "<file>.tmp" if the real file is
+  unreadable. (2) Crash still happens inside lfs_dir_compact
+  (lfs_dir_traverse -> lfs_bd_read -> esp_flash_read), CPU1 stuck in
+  shared_intr_isr spinning on a spinlock while CPU0 waits in
+  spi_flash_op_block_func. Every one of the last three crashes came right
+  after a diagnostic ESP_LOGI that json_write_file() emitted immediately
+  before fopen/fclose/rename, so: removed those logs, and added
+  quiesce_console() (fflush + esp_rom_output_tx_wait_idle) before each
+  flash-touching step. Also raised CONFIG_LITTLEFS_CACHE_SIZE 1024 -> 4096
+  (one whole block) so compaction reads a block once instead of issuing
+  hundreds of small cache-disabling flash reads. Both untested on hardware
+  as of this entry. If it STILL crashes, next candidates: run all
+  persistent_dict saves from one dedicated task pinned to core 0; drop the
+  USB-serial-JTAG secondary console (CONFIG_ESP_CONSOLE_SECONDARY_*).
+- **2026-09-23 (later)**: Re-read the dumps against the IDF source. The
+  console-drain theory was wrong (EPC1 = `uart_hal_write_txfifo` is not
+  reliable -- window exceptions overwrite EPC1). Consistent pattern across 4
+  dumps: write runs on CPU1; CPU0 parked in `spi_flash_op_block_func:108`
+  (non-IRAM ints already masked); CPU1 at
+  `spi_flash_disable_interrupts_caches_and_other_cpu:173` (before masking
+  its own non-IRAM ints) is inside `shared_intr_isr`, at a DIFFERENT line
+  each time (467 lock / 472 call / 479 next / 482 exit) -> an interrupt
+  STORM on a shared vector on CPU1, not a lock deadlock. Mitigation:
+  all `json_write_file()` calls now run on a `json_writer` task pinned to
+  core 0 (queue + task notify; `json_writer_init()` from boot.c), so CPU1
+  is the parked core and its non-IRAM ints are masked first. Removed
+  quiesce_console(). Added `esp_intr_dump(NULL)` at end of boot to identify
+  which peripheral owns the storming shared vector on CPU1. Untested.

@@ -170,6 +170,13 @@ body {
     & .modal-title  { color: #e0e0e0; }
 }
 
+/* Bootstrap's default .btn-close is a dark X meant for a light background --
+   invisible against this theme's dark modal-header. */
+.btn-close {
+    filter: invert(1);
+    opacity: 0.9;
+}
+
 /* List groups */
 .list-group-item {
     background-color: #1e1e1e;

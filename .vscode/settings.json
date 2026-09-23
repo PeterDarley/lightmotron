@@ -12,5 +12,6 @@
         ]
       }
     }
-  }
+  },
+  "cmake.sourceDirectory": "C:/Development/lightmotron/c_project"
 }

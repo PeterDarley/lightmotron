@@ -41,10 +41,10 @@
                         Rename
                     </button>
                     <button class="btn btn-sm btn-outline-danger"
-                            hx-post="/confirm"
-                            hx-target="#modal-body"
-                            hx-swap="innerHTML"
-                            hx-vals='{"object_type": "Model", "object_name": "{{ name }}", "action_path": "/models", "name": "{{ name }}"}'
+                            hx-post="/models"
+                            hx-target="#models-manager"
+                            hx-swap="outerHTML"
+                            hx-vals='{"action": "delete", "name": "{{ name }}"}'
                             hx-confirm="Delete model '{{ name }}'?">
                         Delete
                     </button>

@@ -32,6 +32,11 @@ typedef struct {
     cJSON *data;
     bool loaded;
     bool dirty;
+    uint32_t version; /* Bumped by every persistent_dict_save() that had changes
+                       * to write, and by persistent_dict_invalidate(). Lets a
+                       * consumer holding derived state (e.g. the lighting
+                       * runtime's resolved jobs) notice the stored settings
+                       * changed without polling contents. */
     SemaphoreHandle_t mutex;
 } persistent_dict_t;
 
@@ -89,6 +94,13 @@ void persistent_dict_delete_key(persistent_dict_t *pd, const char *key);
  * persistent_dict_get()'s doc comment.
  */
 void persistent_dict_mark_dirty(persistent_dict_t *pd);
+
+/**
+ * Change counter: increases every time changes are saved (or the dict is
+ * invalidated/reloaded). Compare against a previously read value to detect
+ * that the contents changed. Cheap and lock-free (a plain 32-bit read).
+ */
+uint32_t persistent_dict_version(const persistent_dict_t *pd);
 
 /**
  * Check if a key exists.

@@ -1,5 +1,8 @@
 #include "json_helpers.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -94,12 +97,8 @@ cJSON *json_deep_clone(const cJSON *obj)
     return cJSON_Duplicate(obj, 1);
 }
 
-cJSON *json_read_file(const char *filepath)
+static cJSON *read_json_path(const char *filepath)
 {
-    if (!filepath) {
-        return NULL;
-    }
-
     FILE *f = fopen(filepath, "r");
     if (!f) {
         ESP_LOGD(TAG, "File not found: %s", filepath);
@@ -143,28 +142,45 @@ cJSON *json_read_file(const char *filepath)
     return json;
 }
 
-esp_err_t json_write_file(const char *filepath, const cJSON *obj)
+cJSON *json_read_file(const char *filepath)
 {
-    if (!filepath || !obj) {
-        return ESP_ERR_INVALID_ARG;
+    if (!filepath) {
+        return NULL;
     }
 
-    /* Writes directly to filepath -- no temp-file+rename dance. That
-     * pattern (write to "file.tmp", then rename over the real file) is a
-     * carryover from SPIFFS, which didn't guarantee a single file's
-     * writes were atomic. LittleFS already does: per its own design docs,
-     * a file's contents+attrs are committed atomically on sync/close, and
-     * a power-loss mid-write reverts to the file's previous committed
-     * state rather than leaving it torn. So the app-level atomicity the
-     * tmp+rename dance was providing is redundant here.
-     *
-     * It was also expensive: every "Interrupt wdt timeout on CPU1" panic
-     * in this investigation landed inside lfs_dir_splittingcompact, which
-     * only runs *during* a directory-metadata commit -- and the old
-     * tmp+rename version did 3 of those per save (create .tmp, remove old
-     * file, rename), instead of the 1 a direct write needs. Timing
-     * checkpoints kept (though there are fewer steps now) in case a
-     * single commit can still stall on its own. */
+    cJSON *json = read_json_path(filepath);
+    if (json) {
+        return json;
+    }
+
+    /* Crash recovery: json_write_file() writes "<file>.tmp" and only then
+     * renames it over the real file, so if the real file is missing or
+     * unreadable but a complete temp file is still around, that's the
+     * newest committed copy from a save that was interrupted between
+     * close and rename. */
+    char tmp_path[140];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", filepath);
+    json = read_json_path(tmp_path);
+    if (json) {
+        ESP_LOGW(TAG, "%s unreadable -- recovered from %s", filepath, tmp_path);
+    }
+    return json;
+}
+
+/* Does the actual write; always runs on core 0 once json_writer_init() has
+ * been called -- see json_write_file(). */
+static esp_err_t write_file_now(const char *filepath, const cJSON *obj)
+{
+    /* Write to "<file>.tmp" first, then rename over the real file. This
+     * is NOT redundant with LittleFS's own atomicity, contrary to an
+     * earlier version of this comment: esp_littlefs syncs at open, and
+     * fopen(path, "w") truncates, so opening the real file for writing
+     * commits an EMPTY file immediately -- any crash between open and
+     * close (and this codebase has had several, inside LittleFS metadata
+     * compaction) wipes the data. Writing to a temp file leaves the real
+     * one untouched until rename, which LittleFS performs as a single
+     * atomic commit that replaces the destination. No remove() first:
+     * that would open a window with no file at all. */
     uint32_t t_start = esp_log_timestamp();
 
     char *json_str = cJSON_PrintUnformatted(obj);
@@ -173,28 +189,113 @@ esp_err_t json_write_file(const char *filepath, const cJSON *obj)
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "write %s: t+%ums opening", filepath, (unsigned)(esp_log_timestamp() - t_start));
-    FILE *f = fopen(filepath, "w");
-    ESP_LOGI(TAG, "write %s: t+%ums opened (f=%p)", filepath, (unsigned)(esp_log_timestamp() - t_start), (void *)f);
+    char tmp_path[140];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", filepath);
+
+    FILE *f = fopen(tmp_path, "w");
     if (!f) {
-        ESP_LOGE(TAG, "Failed to open %s for writing", filepath);
+        ESP_LOGE(TAG, "Failed to open %s for writing", tmp_path);
         free(json_str);
         return ESP_FAIL;
     }
 
     size_t len = strlen(json_str);
-    ESP_LOGI(TAG, "write %s: t+%ums writing %u bytes", filepath, (unsigned)(esp_log_timestamp() - t_start), (unsigned)len);
     size_t written = fwrite(json_str, 1, len, f);
-    ESP_LOGI(TAG, "write %s: t+%ums fwrite done (%u/%u), closing", filepath,
-             (unsigned)(esp_log_timestamp() - t_start), (unsigned)written, (unsigned)len);
     fclose(f);
-    ESP_LOGI(TAG, "write %s: t+%ums closed/done", filepath, (unsigned)(esp_log_timestamp() - t_start));
     free(json_str);
 
     if (written != len) {
-        ESP_LOGE(TAG, "Write incomplete for %s (%d/%d)", filepath, (int)written, (int)len);
+        ESP_LOGE(TAG, "Write incomplete for %s (%d/%d)", tmp_path, (int)written, (int)len);
+        remove(tmp_path);
         return ESP_FAIL;
     }
 
+    if (rename(tmp_path, filepath) != 0) {
+        ESP_LOGE(TAG, "Failed to rename %s -> %s (old file left intact)", tmp_path, filepath);
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "wrote %s (%u bytes) in %ums on core %d", filepath, (unsigned)len,
+             (unsigned)(esp_log_timestamp() - t_start), (int)xPortGetCoreID());
+
     return ESP_OK;
+}
+
+/* ---------------------------------------------------------------------
+ * Core-0 writer task.
+ *
+ * Every "Interrupt wdt timeout on CPU1" panic during a settings save had the
+ * same shape: the write ran on CPU1, CPU0 was parked in
+ * spi_flash_op_block_func (with its non-IRAM interrupts already masked), and
+ * CPU1 -- still in spi_flash_disable_interrupts_caches_and_other_cpu, just
+ * before masking its OWN non-IRAM interrupts -- got stuck servicing a shared
+ * interrupt (shared_intr_isr) that re-fired continuously for the full 8s
+ * watchdog window. When a flash op runs on core 0 instead, core 1 is the one
+ * parked, and spi_flash_op_block_func masks core 1's non-IRAM interrupts
+ * before anything else, so whatever storms on core 1 can't run during the
+ * op. All saves are therefore funneled through one task pinned to core 0
+ * (which also serializes concurrent saves as a side benefit).
+ * ------------------------------------------------------------------- */
+
+#define WRITER_TASK_STACK 8192  /* ~2KB measured for the deepest LittleFS commit path; generous margin */
+
+typedef struct {
+    const char *filepath;
+    const cJSON *obj;
+    esp_err_t result;
+    TaskHandle_t caller;
+} write_request_t;
+
+static QueueHandle_t s_write_queue = NULL;
+static TaskHandle_t s_writer_task = NULL;
+
+static void writer_task(void *arg)
+{
+    (void)arg;
+    write_request_t *req;
+    for (;;) {
+        if (xQueueReceive(s_write_queue, &req, portMAX_DELAY) == pdTRUE) {
+            req->result = write_file_now(req->filepath, req->obj);
+            xTaskNotifyGive(req->caller);
+        }
+    }
+}
+
+esp_err_t json_writer_init(void)
+{
+    if (s_write_queue) return ESP_OK;
+
+    s_write_queue = xQueueCreate(4, sizeof(write_request_t *));
+    if (!s_write_queue) return ESP_ERR_NO_MEM;
+
+    if (xTaskCreatePinnedToCore(writer_task, "json_writer", WRITER_TASK_STACK, NULL, 5,
+                                &s_writer_task, 0) != pdPASS) {
+        vQueueDelete(s_write_queue);
+        s_write_queue = NULL;
+        return ESP_ERR_NO_MEM;
+    }
+    return ESP_OK;
+}
+
+esp_err_t json_write_file(const char *filepath, const cJSON *obj)
+{
+    if (!filepath || !obj) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Before json_writer_init() (boot-time default seeding, which runs from
+     * app_main -- itself pinned to core 0) write directly. */
+    if (!s_write_queue || xTaskGetCurrentTaskHandle() == s_writer_task) {
+        return write_file_now(filepath, obj);
+    }
+
+    write_request_t req = {
+        .filepath = filepath,
+        .obj = obj,
+        .result = ESP_FAIL,
+        .caller = xTaskGetCurrentTaskHandle(),
+    };
+    write_request_t *req_ptr = &req;
+    xQueueSend(s_write_queue, &req_ptr, portMAX_DELAY);
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    return req.result;
 }

@@ -48,11 +48,16 @@ assets never touches user settings. Key behaviors:
   mark the store dirty, so `persistent_dict_save()` silently no-ops and
   the change is lost on reboot. Code that needs to mutate a live-referenced
   tree in place must call `persistent_dict_mark_dirty()` before saving.
-* **Atomicity** — writes go straight to the target file (no
-  temp-file-then-rename dance); LittleFS itself guarantees a file's
-  contents are committed atomically on close/sync, so a power loss
-  mid-write reverts to the previous committed state rather than leaving a
-  torn file.
+* **Atomicity** — saves write `<file>.tmp` and then `rename()` it over the
+  real file (LittleFS replaces the destination in a single commit). Writing
+  the real file directly is *not* safe: opening it with `"w"` truncates and
+  commits an empty file immediately, so a crash before close loses the data.
+  Reads fall back to `<file>.tmp` if the real file is unreadable.
+* **Writer task** — all saves are funneled through one task pinned to core 0
+  (`json_writer_init()`), which serializes them and keeps the flash-cache
+  lockout off core 1 (see `LITTLEFS_MIGRATION_NOTES.md`).
+* **Change counter** — `persistent_dict_version()` increments on every save;
+  the lighting runtime uses it to refresh running jobs when settings change.
 * **Thread safety** — each `persistent_dict_t` has its own FreeRTOS mutex.
 
 ## Lighting Subsystem
@@ -98,6 +103,15 @@ tick and the LED's **current color** from the previous tick; differences
 are calculated against the target but applied to the current color. This
 makes filter order not affect the final result — chaining `[a, b]` produces
 the same output as `[b, a]`.
+
+A running job holds a resolved copy of its scene entry, effect, filters and
+colors, taken when the scene starts. To make edits apply without restarting
+anything, `lighting_process_tick()` compares the lighting store's change
+counter (`persistent_dict_version()`, bumped by every save) each tick; when it
+moves, every running job is re-resolved from the current settings and the new
+*definition* is merged into the live job while its *runtime* state (start tick,
+finished flag, `after` dependency state, and the per-filter animation state for
+filters whose type at that position is unchanged) is kept.
 
 Scene auto-completion applies only when every effect in a scene has an
 explicit `cycles` limit and all of them have finished; a scene with any

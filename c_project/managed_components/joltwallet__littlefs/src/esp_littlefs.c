@@ -375,6 +375,15 @@ esp_err_t esp_littlefs_gc(const char* partition_label){
 
     esp_littlefs_t *efs = _efs[index];
     sem_take(efs);
+    /* lfs_fs_gc() only compacts metadata pairs fuller than compact_thresh,
+     * which defaults to ~88% of block_size -- so at boot it usually finds
+     * nothing to do, and the compaction instead happens inside whichever
+     * write later fills the block (long, cache-disabled, and the site of
+     * repeated interrupt-watchdog crashes). littlefs asserts
+     * compact_thresh >= block_size/2, so that's the lowest allowed: it
+     * compacts every pair that's more than half full (and any not already
+     * erased/clean) now, at boot, instead. Only affects lfs_fs_gc(). */
+    efs->cfg.compact_thresh = efs->cfg.block_size / 2;
     int lfs_err = lfs_fs_gc(efs->fs);
     sem_give(efs);
 

@@ -6,21 +6,22 @@
 # ESP-IDF C port: this builds (if needed) and flashes pre-built binaries
 # rather than copying source files to a running interpreter.
 #
-# Default action is APP-ONLY flashing (idf.py app-flash): writes just the
-# app binary, touching neither the bootloader/partition table nor either
-# SPIFFS partition. This is safe to run any time you've only changed C
-# source -- it can never wipe the "data" partition (settings, scenes,
-# effects, colors, sounds, WiFi credentials, ...), because it doesn't
-# write to it at all.
+# Default action auto-detects whether webassets need including, rather
+# than requiring you to remember -Full: it compares every file under
+# www/ and templates/ against the timestamp of the last successful full
+# flash (recorded in c_project/build/.last_full_flash_utc) and
+# automatically upgrades to a full flash if anything's newer, or if no
+# record of a previous full flash exists at all (e.g. first-ever flash of
+# a blank board). Otherwise it does an app-only flash (idf.py app-flash):
+# writes just the app binary, touching neither the bootloader/partition
+# table nor either SPIFFS partition.
 #
-# Pass -Full when you've also changed something under www/ or templates/
-# (the "webassets" partition needs rebuilding+rewriting to pick that up),
-# for a first-ever flash of a blank board, or after a partition table
-# change. -Full still never touches "data" -- only "webassets" is part of
-# the default flash target (see main/CMakeLists.txt's
-# spiffs_create_partition_image(webassets ...)) -- but a partition table
-# change specifically (not just a -Full flash) can still invalidate
-# "data"'s existing contents; back up via the Status page first if in doubt.
+# Pass -Full to force including bootloader+partition-table+app+webassets
+# regardless of the auto-detection above -- e.g. after a partition table
+# change, which the timestamp check can't see coming. Neither app-flash
+# nor -Full ever touches the "data" partition (settings, scenes, effects,
+# colors, sounds, WiFi credentials, ...), because neither writes to it at
+# all -- that's true regardless of which path runs.
 $ErrorActionPreference = 'Stop'
 
 $cProjectDir = Join-Path $PSScriptRoot 'c_project'
@@ -29,13 +30,13 @@ if (-not (Test-Path $cProjectDir)) {
     exit 1
 }
 
-# Parse arguments: optional port, -Force for a full clean rebuild, -Full for
-# bootloader+partition-table+app+webassets (instead of the app-only
-# default), -Erase to wipe the ENTIRE flash first, -Monitor to attach the
-# serial monitor after flashing.
+# Parse arguments: optional port, -Force for a full clean rebuild, -Full to
+# force bootloader+partition-table+app+webassets (overriding the
+# auto-detection below), -Erase to wipe the ENTIRE flash first, -Monitor to
+# attach the serial monitor after flashing.
 #
-# -Erase note: neither the default app-flash nor -Full ever touches the
-# "data" (settings/scenes/etc.) or "nvs" partitions -- that's intentional so
+# -Erase note: neither app-flash nor -Full ever touches the "data"
+# (settings/scenes/etc.) or "nvs" partitions -- that's intentional so
 # deploys don't wipe user settings. But it also means a bad or stale value
 # persisted in "data" survives every reflash. If a board misbehaves in a way
 # a normal reflash won't clear (e.g. it was migrated from the old single-
@@ -61,14 +62,45 @@ if (-not $port) { $port = 'COM3' }
 # flash whenever -Erase is used.
 if ($eraseFlash) { $fullFlash = $true }
 
+# Auto-detect whether webassets need including, so a plain run never
+# silently skips a www/templates change just because -Full wasn't
+# remembered (the actual bug this replaced: a CSS-only fix built cleanly
+# but the device kept serving the pre-fix asset because app-flash was run
+# out of habit). Only runs when -Full/-Erase weren't already given
+# explicitly on the command line.
+$markerFile = Join-Path $cProjectDir 'build\.last_full_flash_utc'
+if (-not $fullFlash) {
+    $lastFullFlash = $null
+    if (Test-Path $markerFile) {
+        try {
+            $lastFullFlash = [datetime](Get-Content $markerFile -Raw).Trim()
+        } catch {
+            $lastFullFlash = $null
+        }
+    }
+
+    if (-not $lastFullFlash) {
+        Write-Output "No record of a previous full flash -- including webassets (-Full behavior) to be safe."
+        $fullFlash = $true
+    } else {
+        $webDirs = @((Join-Path $PSScriptRoot 'www'), (Join-Path $PSScriptRoot 'templates')) |
+            Where-Object { Test-Path $_ }
+        $newestWebFile = $webDirs |
+            ForEach-Object { Get-ChildItem -Path $_ -Recurse -File } |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+
+        if ($newestWebFile -and $newestWebFile.LastWriteTimeUtc -gt $lastFullFlash) {
+            Write-Output "Detected a change under www/ or templates/ ($($newestWebFile.FullName), $($newestWebFile.LastWriteTimeUtc.ToString('u'))) since the last full flash ($($lastFullFlash.ToString('u'))) -- including webassets (-Full behavior)."
+            $fullFlash = $true
+        }
+    }
+}
+
 # Locate and dot-source the ESP-IDF PowerShell environment (adds idf.py etc.
 # to PATH for this process only).
 #
-# NOTE: run this script from a plain PowerShell window, not a VS Code
-# integrated terminal. VS Code's Python extension auto-activates this
-# repo's venv, and stacking the ESP-IDF profile's own venv activation on
-# top of that corrupts PATH (see c_project/BUILD_NOTES.md for details).
-# Likewise, don't invoke this script from git-bash -- MSYS's environment
+# NOTE: don't invoke this script from git-bash -- MSYS's environment
 # leaks into child PowerShell processes and makes the ESP-IDF profile
 # script treat its own informational Mingw/MSys warning as fatal.
 $idfProfileCandidates = @(
@@ -113,6 +145,11 @@ try {
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Build/flash failed. See output above."
         exit 1
+    }
+
+    if ($fullFlash) {
+        New-Item -ItemType Directory -Force -Path (Split-Path $markerFile) | Out-Null
+        (Get-Date).ToUniversalTime().ToString('o') | Set-Content -Path $markerFile -Encoding utf8 -NoNewline
     }
 }
 finally {

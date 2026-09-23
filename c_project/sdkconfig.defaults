@@ -95,7 +95,14 @@ CONFIG_ESP_INT_WDT_TIMEOUT_MS=8000
 # total number of individual flash-access calls. Pure runtime tuning, not
 # an on-disk format change -- safe to adjust without reformatting.
 CONFIG_LITTLEFS_LOOKAHEAD_SIZE=512
-CONFIG_LITTLEFS_CACHE_SIZE=1024
+CONFIG_LITTLEFS_CACHE_SIZE=4096
+# 4096 = one whole flash block (block_size must be a multiple of cache_size,
+# so this is the maximum). Metadata compaction (lfs_dir_compact ->
+# lfs_dir_traverse) reads a directory block tag-by-tag; with a smaller cache
+# every few tags miss and become another esp_flash_read, each of which
+# disables the caches/interrupts on BOTH cores (IPC handshake) -- hundreds
+# of them per compaction, and every recent crash was inside one. With a
+# block-sized cache the block is read from flash once and traversed from RAM.
 
 # Task Watchdog
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=30

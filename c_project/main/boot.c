@@ -20,6 +20,8 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_littlefs.h"
+#include "esp_intr_alloc.h"
+#include "json_helpers.h"
 #include "nvs_flash.h"
 #include "cJSON.h"
 #include "freertos/FreeRTOS.h"
@@ -316,6 +318,15 @@ esp_err_t boot_init(void)
     ESP_LOGI(TAG, "webassets LittleFS gc: %s (%ums)", esp_err_to_name(ret),
              (unsigned)(esp_log_timestamp() - gc_start));
 
+    /* Route every later settings save through a task pinned to core 0 --
+     * see json_helpers.c's writer-task comment for the crash this avoids.
+     * Boot-time seeding below runs from app_main (core 0) either way. */
+    ret = json_writer_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start JSON writer task (%s) -- saves will run on the caller's core",
+                 esp_err_to_name(ret));
+    }
+
     /* Seed defaults */
     ret = boot_seed_defaults();
     if (ret != ESP_OK) {
@@ -477,5 +488,12 @@ esp_err_t boot_init(void)
     ESP_LOGI(TAG, "Animation started");
 
     ESP_LOGI(TAG, "Boot complete");
+
+    /* Diagnostic: print every allocated interrupt (CPU, shared/IRAM flags,
+     * owning source) once all drivers are up. The settings-save watchdog
+     * crashes were a shared interrupt storming on CPU1; this table shows
+     * which peripheral owns that shared vector. */
+    esp_intr_dump(NULL);
+
     return ESP_OK;
 }

@@ -403,43 +403,66 @@ static void update_scene_settings_from_form(http_request_t *req, cJSON *model, c
     cJSON *scenes_dict = cJSON_GetObjectItem(model, "scenes");
     cJSON *sounds_dict = cJSON_GetObjectItem(model, "sounds");
 
-    cJSON *kills_list = cJSON_CreateArray();
-    csv_tokens_filtered(request_get_form_field(req, "kills"), scenes_dict, kills_list);
-
-    cJSON *trig_list = cJSON_CreateArray();
-    csv_tokens_filtered(request_get_form_field(req, "trigger_scenes_on_completion"), scenes_dict, trig_list);
-
-    const char *scene_sound = request_get_form_field(req, "scene_sound");
-
-    cJSON *stop_start_list = cJSON_CreateArray();
-    csv_tokens_filtered(request_get_form_field(req, "stop_sounds_on_start"), sounds_dict, stop_start_list);
-
-    cJSON *stop_end_list = cJSON_CreateArray();
-    csv_tokens_filtered(request_get_form_field(req, "stop_sounds_on_end"), sounds_dict, stop_end_list);
-
     cJSON *scene_settings = cJSON_GetObjectItem(model, "scene_settings");
     if (!scene_settings) { scene_settings = cJSON_CreateObject(); cJSON_AddItemToObject(model, "scene_settings", scene_settings); }
     cJSON *meta = cJSON_GetObjectItem(scene_settings, scene_name);
     if (!meta) { meta = cJSON_CreateObject(); cJSON_AddItemToObject(scene_settings, scene_name, meta); }
 
-    cJSON_DeleteItemFromObject(meta, "kills");
-    if (cJSON_GetArraySize(kills_list) > 0) cJSON_AddItemToObject(meta, "kills", kills_list);
-    else cJSON_Delete(kills_list);
+    /* This modal's kills/sound/stop-on-start/stop-on-end controls are each
+     * their own independent <form>, submitted via its own htmx POST to this
+     * same "update_scene_settings" action -- and each POST body only ever
+     * contains its own field(s), not the others' current values (kills'
+     * form, for instance, never includes "stop_sounds_on_end"). Only
+     * rebuild a given sub-setting when its field actually arrived in *this*
+     * POST -- request_get_form_field() returns NULL for a field absent
+     * from the submitted form, vs. a real empty string for a field that
+     * was submitted empty/cleared -- so saving one control can't wipe the
+     * others. Same defensive shape as set_active_on_boot_from_form() below,
+     * and specifically needed here since trigger_scenes_on_completion (its
+     * own add/remove endpoints, not part of this form at all) was
+     * previously getting cleared as a side effect of saving kills. */
 
-    cJSON_DeleteItemFromObject(meta, "trigger_scenes_on_completion");
-    if (cJSON_GetArraySize(trig_list) > 0) cJSON_AddItemToObject(meta, "trigger_scenes_on_completion", trig_list);
-    else cJSON_Delete(trig_list);
+    const char *kills_field = request_get_form_field(req, "kills");
+    if (kills_field) {
+        cJSON *kills_list = cJSON_CreateArray();
+        csv_tokens_filtered(kills_field, scenes_dict, kills_list);
+        cJSON_DeleteItemFromObject(meta, "kills");
+        if (cJSON_GetArraySize(kills_list) > 0) cJSON_AddItemToObject(meta, "kills", kills_list);
+        else cJSON_Delete(kills_list);
+    }
 
-    cJSON_DeleteItemFromObject(meta, "sound");
-    if (scene_sound && scene_sound[0]) cJSON_AddStringToObject(meta, "sound", scene_sound);
+    const char *trig_field = request_get_form_field(req, "trigger_scenes_on_completion");
+    if (trig_field) {
+        cJSON *trig_list = cJSON_CreateArray();
+        csv_tokens_filtered(trig_field, scenes_dict, trig_list);
+        cJSON_DeleteItemFromObject(meta, "trigger_scenes_on_completion");
+        if (cJSON_GetArraySize(trig_list) > 0) cJSON_AddItemToObject(meta, "trigger_scenes_on_completion", trig_list);
+        else cJSON_Delete(trig_list);
+    }
 
-    cJSON_DeleteItemFromObject(meta, "stop_sounds_on_start");
-    if (cJSON_GetArraySize(stop_start_list) > 0) cJSON_AddItemToObject(meta, "stop_sounds_on_start", stop_start_list);
-    else cJSON_Delete(stop_start_list);
+    const char *scene_sound = request_get_form_field(req, "scene_sound");
+    if (scene_sound) {
+        cJSON_DeleteItemFromObject(meta, "sound");
+        if (scene_sound[0]) cJSON_AddStringToObject(meta, "sound", scene_sound);
+    }
 
-    cJSON_DeleteItemFromObject(meta, "stop_sounds_on_end");
-    if (cJSON_GetArraySize(stop_end_list) > 0) cJSON_AddItemToObject(meta, "stop_sounds_on_end", stop_end_list);
-    else cJSON_Delete(stop_end_list);
+    const char *stop_start_field = request_get_form_field(req, "stop_sounds_on_start");
+    if (stop_start_field) {
+        cJSON *stop_start_list = cJSON_CreateArray();
+        csv_tokens_filtered(stop_start_field, sounds_dict, stop_start_list);
+        cJSON_DeleteItemFromObject(meta, "stop_sounds_on_start");
+        if (cJSON_GetArraySize(stop_start_list) > 0) cJSON_AddItemToObject(meta, "stop_sounds_on_start", stop_start_list);
+        else cJSON_Delete(stop_start_list);
+    }
+
+    const char *stop_end_field = request_get_form_field(req, "stop_sounds_on_end");
+    if (stop_end_field) {
+        cJSON *stop_end_list = cJSON_CreateArray();
+        csv_tokens_filtered(stop_end_field, sounds_dict, stop_end_list);
+        cJSON_DeleteItemFromObject(meta, "stop_sounds_on_end");
+        if (cJSON_GetArraySize(stop_end_list) > 0) cJSON_AddItemToObject(meta, "stop_sounds_on_end", stop_end_list);
+        else cJSON_Delete(stop_end_list);
+    }
 }
 
 /* Handles the "active on boot" toggle as its own isolated action (rather

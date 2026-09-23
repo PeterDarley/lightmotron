@@ -164,6 +164,158 @@ static const char *resolve_scene_name(const cJSON *model, const char *scene_name
 }
 
 /**
+ * Resolve one scene job entry (a named-effect reference plus overrides, or an
+ * inline effect) into `job`. Shared by scene activation and by the live
+ * refresh of running jobs below, so both build a job identically.
+ */
+static void resolve_job_entry(const cJSON *job_entry, const cJSON *effects_dict,
+                              const cJSON *filters_dict, active_job_t *job)
+{
+    /* Check if this references a named effect or is inline */
+    const char *effect_ref = json_get_string(job_entry, "effect", NULL);
+    if (effect_ref && effects_dict) {
+        cJSON *effect_def = cJSON_GetObjectItem(effects_dict, effect_ref);
+        if (effect_def) {
+            effect_resolve(effect_def, filters_dict, job);
+        }
+        /* Override with inline params */
+        const char *target = json_get_string(job_entry, "target", NULL);
+        if (target) {
+            job->target_count = target_spec_resolve(target, job->target_indices, MAX_LEDS);
+        }
+        int cycles = json_get_int(job_entry, "cycles", -1);
+        if (cycles >= 0) job->cycles = cycles;
+
+        const char *after = json_get_string(job_entry, "after", NULL);
+        if (after) strncpy(job->after, after, sizeof(job->after) - 1);
+        job->inherit_target = json_get_bool(job_entry, "inherit_target", false);
+    } else {
+        effect_resolve_inline(job_entry, filters_dict, job);
+    }
+
+    /* Set after effect_resolve()/effect_resolve_inline() -- both start
+     * with memset(job, 0, sizeof(*job)), which would otherwise wipe this
+     * right back out. Other jobs' "after" dependency lookups match on
+     * this name (strcmp against scene->jobs[d].name), so it must survive
+     * job resolution intact. */
+    strncpy(job->name, job_entry->string, sizeof(job->name) - 1);
+}
+
+/* ---------------------------------------------------------------------
+ * Live refresh of running jobs
+ *
+ * A running job holds a *resolved copy* of its scene entry, effect, filters
+ * and colors, made when the scene started. Editing any of those in the Setup
+ * UI only changes the stored settings, so without this a running scene kept
+ * using its old copy until restarted. lighting_process_tick() compares the
+ * lighting store's change counter (persistent_dict_version) every tick and,
+ * when it moved, re-resolves every running job from the current settings and
+ * merges the new *definition* into the live job -- keeping its *runtime*
+ * state (start tick, finished flag, dependency state, per-filter animation
+ * state) so nothing restarts.
+ * ------------------------------------------------------------------- */
+
+static active_job_t refresh_tmp;      /* scratch; only used with lighting_mutex held */
+static persistent_dict_t *s_lighting_store_cached = NULL;
+static uint32_t s_seen_settings_version = 0;
+
+static void merge_job_definition(active_job_t *job, active_job_t *fresh)
+{
+    /* Filters: the old cJSON params are always replaced. Per-filter runtime
+     * state (spike/dropout timing, sizzle/scintillate deviations) carries over
+     * when the filter at the same position is still the same type, so a
+     * parameter tweak doesn't reset the animation. A dropout's cached_params
+     * is derived from params, so it's dropped to be rebuilt from the new ones. */
+    for (int f = 0; f < job->filter_count; f++) {
+        filter_state_t *old_state = &job->filters[f].state;
+        if (job->filters[f].params) {
+            cJSON_Delete(job->filters[f].params);
+            job->filters[f].params = NULL;
+        }
+        if (old_state->cached_params) {
+            cJSON_Delete(old_state->cached_params);
+            old_state->cached_params = NULL;
+        }
+
+        bool carry = f < fresh->filter_count &&
+                     strcmp(job->filters[f].filter_name, fresh->filters[f].filter_name) == 0;
+        if (carry) {
+            fresh->filters[f].state = *old_state; /* takes over per_led_deviation too */
+        } else if (old_state->per_led_deviation) {
+            free(old_state->per_led_deviation);
+            old_state->per_led_deviation = NULL;
+        }
+    }
+    memcpy(job->filters, fresh->filters, sizeof(job->filters));
+    job->filter_count = fresh->filter_count;
+
+    strncpy(job->pattern_name, fresh->pattern_name, sizeof(job->pattern_name) - 1);
+    job->pattern_name[sizeof(job->pattern_name) - 1] = '\0';
+    memcpy(job->colors, fresh->colors, sizeof(job->colors));
+    job->color_count = fresh->color_count;
+    job->duration = fresh->duration;
+    job->cycles = fresh->cycles;
+    job->period = fresh->period;
+    job->width = fresh->width;
+    job->number = fresh->number;
+    job->reverse = fresh->reverse;
+    job->saturation = fresh->saturation;
+    job->cooling = fresh->cooling;
+    job->sparking = fresh->sparking;
+    job->spacing = fresh->spacing;
+
+    /* A job that already adopted its predecessor's target at runtime
+     * (inherit_target) keeps that; otherwise take the freshly resolved one
+     * (covers edits to named ranges too). */
+    if (!(job->inherit_target && !job->after_pending)) {
+        memcpy(job->target_indices, fresh->target_indices, sizeof(job->target_indices));
+        job->target_count = fresh->target_count;
+    }
+    /* Untouched on purpose: name, after, after_pending, start_tick, finished,
+     * cycles_completed, retained_* (all runtime/identity state). */
+}
+
+/* Called with lighting_mutex held. */
+static void refresh_running_jobs_locked(void)
+{
+    cJSON *model = get_current_model_object();
+    if (!model) return;
+
+    cJSON *scenes = cJSON_GetObjectItem(model, "scenes");
+    cJSON *effects_dict = cJSON_GetObjectItem(model, "effects");
+    cJSON *filters_dict = cJSON_GetObjectItem(model, "filters");
+    if (!scenes) return;
+
+    int refreshed = 0;
+    for (int s = 0; s < active_scene_count; s++) {
+        active_scene_t *scene = &active_scenes[s];
+        if (!scene->active) continue;
+
+        cJSON *scene_def = cJSON_GetObjectItem(scenes, scene->name);
+        if (!scene_def || !cJSON_IsObject(scene_def)) continue; /* deleted/renamed: keep running as-is */
+
+        for (int j = 0; j < scene->job_count; j++) {
+            active_job_t *job = &scene->jobs[j];
+            if (job->finished) continue;
+
+            cJSON *entry = cJSON_GetObjectItem(scene_def, job->name);
+            if (!entry) continue; /* job removed/renamed: keep running as-is */
+
+            memset(&refresh_tmp, 0, sizeof(refresh_tmp));
+            resolve_job_entry(entry, effects_dict, filters_dict, &refresh_tmp);
+            if (refresh_tmp.pattern_name[0] == '\0') continue; /* effect no longer resolvable */
+
+            merge_job_definition(job, &refresh_tmp);
+            refreshed++;
+        }
+    }
+
+    if (refreshed > 0) {
+        ESP_LOGI(TAG, "Settings changed: refreshed %d running job(s) in place", refreshed);
+    }
+}
+
+/**
  * Load a scene from storage and activate it. Pass NULL for scene_name to
  * resolve the model's default (or first) scene.
  */
@@ -260,34 +412,7 @@ static esp_err_t activate_scene(const char *scene_name)
     while (job_entry && job_idx < MAX_JOBS_PER_SCENE) {
         active_job_t *job = &scene->jobs[job_idx];
 
-        /* Check if this references a named effect or is inline */
-        const char *effect_ref = json_get_string(job_entry, "effect", NULL);
-        if (effect_ref && effects_dict) {
-            cJSON *effect_def = cJSON_GetObjectItem(effects_dict, effect_ref);
-            if (effect_def) {
-                effect_resolve(effect_def, filters_dict, job);
-            }
-            /* Override with inline params */
-            const char *target = json_get_string(job_entry, "target", NULL);
-            if (target) {
-                job->target_count = target_spec_resolve(target, job->target_indices, MAX_LEDS);
-            }
-            int cycles = json_get_int(job_entry, "cycles", -1);
-            if (cycles >= 0) job->cycles = cycles;
-
-            const char *after = json_get_string(job_entry, "after", NULL);
-            if (after) strncpy(job->after, after, sizeof(job->after) - 1);
-            job->inherit_target = json_get_bool(job_entry, "inherit_target", false);
-        } else {
-            effect_resolve_inline(job_entry, filters_dict, job);
-        }
-
-        /* Set after effect_resolve()/effect_resolve_inline() -- both start
-         * with memset(job, 0, sizeof(*job)), which would otherwise wipe this
-         * right back out. Other jobs' "after" dependency lookups match on
-         * this name (strcmp against scene->jobs[d].name), so it must survive
-         * job resolution intact. */
-        strncpy(job->name, job_entry->string, sizeof(job->name) - 1);
+        resolve_job_entry(job_entry, effects_dict, filters_dict, job);
 
         /* Non-"after" jobs start counting from this scene's activation tick,
          * matching Lighting.set_scene()/add_scene() tracking scene start
@@ -331,6 +456,15 @@ void lighting_process_tick(uint32_t tick)
     int pending_trigger_count = 0;
 
     xSemaphoreTake(lighting_mutex, portMAX_DELAY);
+
+    /* Pick up saved edits to scenes/effects/filters/colors/ranges without
+     * restarting anything -- see "Live refresh of running jobs" above. */
+    if (!s_lighting_store_cached) s_lighting_store_cached = open_lighting_store();
+    uint32_t settings_version = persistent_dict_version(s_lighting_store_cached);
+    if (settings_version != s_seen_settings_version) {
+        s_seen_settings_version = settings_version;
+        refresh_running_jobs_locked();
+    }
 
     for (int s = 0; s < active_scene_count; s++) {
         active_scene_t *scene = &active_scenes[s];

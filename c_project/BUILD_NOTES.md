@@ -10,13 +10,11 @@ aren't rediscovered from scratch if something regresses.
 
 ## Environment
 
-- Build **only** from a plain Windows Terminal/PowerShell window that is
-  NOT a VS Code integrated terminal. VS Code's Python extension
-  auto-activates this repo's `venv`, and the ESP-IDF profile script's own
-  venv activation stacks on top of it, corrupting `PATH` (observed at
-  ~1247 chars instead of the expected 3000-5000+), which breaks
-  `cmake`/`idf.py` resolution.
-- Similarly, do **not** shell out to `powershell.exe` from a git-bash /
+- (Historical: builds used to break in a VS Code integrated terminal because
+  VS Code auto-activated a repo-local Python `venv` that stacked with the
+  ESP-IDF profile's own and corrupted `PATH`. That `venv` has since been
+  removed along with the rest of the Python tooling.)
+- Do **not** shell out to `powershell.exe` from a git-bash /
   MSYS shell to run `idf.py`. MSYS's environment (`MSYSTEM` etc.) leaks
   into the child PowerShell process and makes the ESP-IDF profile
   script's own Mingw/MSys detection treat its normal informational

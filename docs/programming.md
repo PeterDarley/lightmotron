@@ -63,6 +63,9 @@ configuration. Each card opens a dialog to manage that category.
 Once configured, use the **Home** page to start/stop animation playback,
 view active scenes, and trigger immediate scene changes.
 
+Edits to scenes, effects, filters, custom colors and named ranges take effect
+on scenes that are already running, right away, without restarting them.
+
 ## Effects Reference
 
 Quick summary of every built-in pattern:

@@ -1,4 +1,0 @@
-esptool
-mpremote
-playwright
-littlefs-python
