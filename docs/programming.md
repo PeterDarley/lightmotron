@@ -63,6 +63,12 @@ configuration. Each card opens a dialog to manage that category.
 Once configured, use the **Home** page to start/stop animation playback,
 view active scenes, and trigger immediate scene changes.
 
+The Home page always has a built-in **All Dark** button (in the Immediate
+section). It isn't a stored scene and never appears in the scene list: pressing
+it stops every running scene and sets every LED to 0, 0, 0. Nothing is left
+running, so the LEDs stay off until you start another scene. (A scene you name
+"All Dark" yourself would be shadowed by this button.)
+
 Edits to scenes, effects, filters, custom colors and named ranges take effect
 on scenes that are already running, right away, without restarting them.
 
@@ -436,25 +442,35 @@ switch between them instead of reconfiguring from scratch.
 ## Sounds & Soundscapes
 
 **Sounds** map a name you choose to an MP3 file number on the SD card in
-one of your audio modules. Once created, a sound can:
+one of your audio modules. A sound has just three settings besides its
+name and file number:
 
-* **Loop** — automatically restart when playback ends, repeating
-  indefinitely until stopped manually.
-* **Stop other sounds** — specify which other sounds get stopped when this
-  one starts, useful for enforcing mutually exclusive playback (e.g. muting
-  background music when an alert plays).
-* **Chain** — automatically start a different sound when this one ends,
-  for sequences like intro → main → outro with no further input needed.
+* **High Quality** — prefer a high-quality-flagged audio module when
+  playing it.
 * **Show on Home** — appear as a button on the Home page for manual
-  triggering, and be marked as **high quality** for preferential playback
-  on a high-quality-flagged audio module.
+  triggering.
+
+Looping, repeating and sequencing sounds (intro → main → outro, background
+loops, and so on) are done with soundscapes, not on the sound itself.
+Scenes can also stop sounds when they start or end (see [Scenes](#scenes)).
 
 **Soundscapes** are ordered groups of sound entries that play in sequence.
-Each entry can independently repeat: with repeat disabled it plays once,
+Each entry has a **name** you choose (shown in the soundscape list and the
+entry editor; renaming keeps its place in the order). Each entry can
+independently repeat: with repeat disabled it plays once,
 with repeat enabled and a count of `0` it repeats forever, and with repeat
 enabled and a positive count it repeats that many additional times.
 Soundscape progression only advances when the active entry actually
 finishes — unrelated sounds ending elsewhere don't affect it.
+
+A repeating entry can also have a **Minimum Loop Time**, in ticks (40 ticks =
+1 second). Each repeat then starts no sooner than that long after the
+previous one *started*, so a short sound can be spaced out (for example, a
+ping every 10 seconds). When the countdown ends the sound plays if a sound
+module is free; if none is, it keeps waiting until one is. If the sound is
+longer than the minimum, the next repeat simply starts as soon as it ends.
+A minimum loop time of 0 means no countdown at all: repeats start as soon as
+the sound finishes.
 
 ## Scenes
 

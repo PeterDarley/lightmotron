@@ -321,6 +321,29 @@ function openSetupModal(title) {
     document.querySelector('#setup-modal .modal-content').dataset.section = title.toLowerCase().replace(/\s+/g, '-');
 }
 
+// Refresh a single summary card as soon as a change is saved. The server adds
+// `HX-Trigger: {"summaryRefresh":"<section>"}` to successful POST responses
+// for these sections (see routes.c), which htmx dispatches as this event.
+var SUMMARY_CARDS = {
+    models: ['/models/summary', '#models-summary'],
+    named_range: ['/named_range/summary', '#named-ranges-summary'],
+    custom_colors: ['/custom_colors/summary', '#custom-colors-summary'],
+    scenes: ['/scenes/summary', '#scenes-summary'],
+    effects: ['/effects/summary', '#effects-summary'],
+    filters: ['/filters/summary', '#filters-summary'],
+    sounds: ['/sounds/summary', '#sounds-summary'],
+    soundscapes: ['/soundscapes/summary', '#soundscapes-summary'],
+    system_settings: ['/system_settings/summary', '#system-settings-summary'],
+    updates: ['/updates/summary', '#updates-summary']
+};
+document.body.addEventListener('summaryRefresh', function (evt) {
+    var key = evt.detail && (evt.detail.value || evt.detail);
+    var card = SUMMARY_CARDS[key];
+    if (card && document.querySelector(card[1])) {
+        htmx.ajax('GET', card[0], {target: card[1], swap: 'innerHTML'});
+    }
+});
+
 // Refresh summary cards when modal closes
 document.getElementById('setup-modal').addEventListener('hidden.bs.modal', function () {
     htmx.ajax('GET', '/named_range/summary', {target: '#named-ranges-summary', swap: 'innerHTML'});

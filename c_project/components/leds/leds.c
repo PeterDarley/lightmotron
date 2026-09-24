@@ -408,6 +408,10 @@ esp_err_t leds_init(const strip_config_t *configs, int count)
     }
 
     ESP_LOGI(TAG, "LEDs initialized: %d strips, %d total LEDs", num_strips, total_leds);
+    for (int s = 0; s < num_strips; s++) {
+        ESP_LOGI(TAG, "  strip %d: pin %d, %d LEDs, %d bytes/LED, brightness curve %s", s, strips[s].pin,
+                 strips[s].num_leds, strips[s].bpp, g_brightness_curve ? "on" : "off");
+    }
     return ESP_OK;
 }
 
@@ -580,7 +584,12 @@ esp_err_t leds_show(void)
         };
         esp_err_t tx_ret = rmt_transmit(strips[s].rmt_channel, strips[s].encoder, tx_buf, num * bpp, &tx_config);
         if (tx_ret == ESP_OK) {
-            tx_ret = rmt_tx_wait_all_done(strips[s].rmt_channel, portMAX_DELAY);
+            /* Bounded wait: a transmit whose completion interrupt never
+             * arrives used to block the animation task here forever, which
+             * silently froze every animation (scenes still "activate", sounds
+             * still play, the Start button still looks lit). A 40Hz frame is
+             * ~1ms of wire time for these strips, so 200ms is generous. */
+            tx_ret = rmt_tx_wait_all_done(strips[s].rmt_channel, pdMS_TO_TICKS(200));
         }
         if (tx_ret != ESP_OK) {
             static uint32_t transmit_fail_count = 0;

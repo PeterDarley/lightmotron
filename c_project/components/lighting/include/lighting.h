@@ -162,6 +162,16 @@ int lighting_get_active_scenes(char names[][64], int max_count);
 void lighting_clear_scenes(void);
 
 /**
+ * The built-in "All Dark" pseudo scene (not stored in the scene list): stops
+ * every running scene and sets every LED to 0,0,0. Nothing is left running,
+ * so the LEDs stay dark until another scene is started.
+ */
+void lighting_all_dark(void);
+
+/** Name the Home page uses for the All Dark pseudo scene button. */
+#define LIGHTING_ALL_DARK_NAME "All Dark"
+
+/**
  * Get the logical color buffer (current LED state).
  */
 rgb_t *lighting_get_logical_colors(void);

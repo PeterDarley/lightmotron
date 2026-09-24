@@ -16,7 +16,7 @@
                 <th>Soundscape</th>
                 <th class="text-center" style="width: 80px;">Entries</th>
                 <th class="text-center" style="width: 120px;">Repeats</th>
-                <th>Sounds</th>
+                <th>Entry names</th>
                 <th style="width: 140px;"></th>
             </tr>
         </thead>
@@ -36,7 +36,7 @@
                     <span class="text-muted">none</span>
                     {% endif %}
                 </td>
-                <td class="small text-muted">{{ soundscape.sounds_preview }}</td>
+                <td class="small text-muted">{{ soundscape.entries_preview }}</td>
                 <td class="text-end">
                     <button class="btn btn-sm btn-outline-primary me-1"
                             hx-get="/soundscapes/edit?soundscape={{ soundscape.name }}"

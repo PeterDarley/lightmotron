@@ -49,6 +49,39 @@ static bool is_enabled_setting(const char *value)
     return false;
 }
 
+/* Entry names are used as JSON keys and end up in URLs and in hx-vals JSON
+ * embedded in HTML attributes, so characters that would break any of those are
+ * replaced. Returns false if nothing usable is left. */
+static bool sanitize_entry_name(const char *in, char *out, size_t outsz)
+{
+    if (!in) { out[0] = '\0'; return false; }
+    while (*in == ' ') in++;
+    size_t j = 0;
+    for (; *in && j + 1 < outsz; in++) {
+        unsigned char c = (unsigned char)*in;
+        bool bad = (c < 0x20) || strchr("\"'&<>%#?\\/{}", c) != NULL;
+        out[j++] = bad ? '-' : (char)c;
+    }
+    while (j > 0 && out[j - 1] == ' ') j--;
+    out[j] = '\0';
+    return j > 0;
+}
+
+/* Makes `name` unique among the soundscape's existing entry keys by appending
+ * " 2", " 3", ... (`skip` is the entry being renamed, allowed to keep its own
+ * name). */
+static void make_entry_name_unique(cJSON *soundscape, char *name, size_t namesz, const cJSON *skip)
+{
+    char base[64];
+    strncpy(base, name, sizeof(base) - 1);
+    base[sizeof(base) - 1] = '\0';
+    for (int n = 2;; n++) {
+        cJSON *existing = cJSON_GetObjectItem(soundscape, name);
+        if (!existing || existing == skip) return;
+        snprintf(name, namesz, "%.55s %d", base, n);
+    }
+}
+
 static cJSON *get_soundscapes_dict(bool create_if_missing)
 {
     cJSON *model = lighting_get_settings();
@@ -110,11 +143,25 @@ void add_soundscapes_context(cJSON *ctx, bool include_active)
         int entry_total = (raw_entries && cJSON_IsObject(raw_entries)) ? cJSON_GetArraySize(raw_entries) : 0;
         const char **sound_names = entry_total > 0 ? calloc(entry_total, sizeof(char *)) : NULL;
         int sound_count = 0;
+        char entries_preview[200];
+        entries_preview[0] = '\0';
 
         if (raw_entries && cJSON_IsObject(raw_entries)) {
             for (cJSON *entry = raw_entries->child; entry; entry = entry->next) {
                 if (!cJSON_IsObject(entry)) continue;
                 entry_count++;
+
+                /* "name (Sound)" for the first two entries, in playing order. */
+                if (entry_count <= 2 && entry->string) {
+                    if (entry_count > 1) strncat(entries_preview, ", ", sizeof(entries_preview) - strlen(entries_preview) - 1);
+                    strncat(entries_preview, entry->string, sizeof(entries_preview) - strlen(entries_preview) - 1);
+                    const char *entry_sound_title = json_get_string(entry, "sound", "");
+                    if (entry_sound_title[0]) {
+                        strncat(entries_preview, " (", sizeof(entries_preview) - strlen(entries_preview) - 1);
+                        strncat(entries_preview, entry_sound_title, sizeof(entries_preview) - strlen(entries_preview) - 1);
+                        strncat(entries_preview, ")", sizeof(entries_preview) - strlen(entries_preview) - 1);
+                    }
+                }
 
                 const char *sound_title = json_get_string(entry, "sound", "");
                 if (sound_title[0] && sound_names) {
@@ -159,8 +206,16 @@ void add_soundscapes_context(cJSON *ctx, bool include_active)
         if (preview_shown == 0) strncpy(preview, "-", sizeof(preview) - 1);
         free(sound_names);
 
+        if (entry_count > 2) {
+            char more[16];
+            snprintf(more, sizeof(more), " +%d", entry_count - 2);
+            strncat(entries_preview, more, sizeof(entries_preview) - strlen(entries_preview) - 1);
+        }
+        if (entries_preview[0] == '\0') strncpy(entries_preview, "-", sizeof(entries_preview) - 1);
+
         cJSON *row = cJSON_CreateObject();
         cJSON_AddStringToObject(row, "name", names[i]);
+        cJSON_AddStringToObject(row, "entries_preview", entries_preview);
         cJSON_AddNumberToObject(row, "entry_count", entry_count);
         cJSON_AddNumberToObject(row, "infinite_repeat_count", infinite_repeat_count);
         cJSON_AddNumberToObject(row, "finite_repeat_count", finite_repeat_count);
@@ -320,6 +375,10 @@ static cJSON *build_soundscape_edit_context(const char *soundscape_name, cJSON *
             cJSON_AddBoolToObject(entry_ctx, "repeat_enabled", repeat_enabled);
             cJSON_AddStringToObject(entry_ctx, "repeat_mode_label", repeat_mode_label);
             cJSON_AddStringToObject(entry_ctx, "after", json_get_string(entry, "after", ""));
+            int min_loop_ticks = json_get_int(entry, "min_loop_ticks", 0);
+            if (min_loop_ticks < 0) min_loop_ticks = 0;
+            cJSON_AddNumberToObject(entry_ctx, "min_loop_ticks", min_loop_ticks);
+            cJSON_AddBoolToObject(entry_ctx, "has_min_loop", min_loop_ticks > 0);
             cJSON_AddItemToArray(entries, cJSON_Duplicate(entry_ctx, 1));
 
             if (edit_entry_name && edit_entry_name[0] && strcmp(entry_name, edit_entry_name) == 0) {
@@ -374,16 +433,21 @@ http_response_t *view_soundscape_edit(http_request_t *req)
         bool repeat_enabled = is_enabled_setting(request_get_form_field(req, "entry_repeat_enabled"));
         int repeat_count = parse_non_negative_int(entry_repeat);
 
+        int min_loop_ticks = parse_non_negative_int(request_get_form_field(req, "entry_min_loop"));
+
         if (entry_sound && entry_sound[0] && soundscape_name && soundscape_name[0] && soundscape) {
-            int entry_num = cJSON_GetArraySize(soundscape) + 1;
-            char entry_name[32];
-            snprintf(entry_name, sizeof(entry_name), "entry%d", entry_num);
+            /* Name comes from the form; blank falls back to "entryN". */
+            char entry_name[64];
+            if (!sanitize_entry_name(request_get_form_field(req, "entry_name"), entry_name, sizeof(entry_name))) {
+                snprintf(entry_name, sizeof(entry_name), "entry%d", cJSON_GetArraySize(soundscape) + 1);
+            }
+            make_entry_name_unique(soundscape, entry_name, sizeof(entry_name), NULL);
 
             cJSON *entry = cJSON_CreateObject();
             cJSON_AddStringToObject(entry, "sound", entry_sound);
             cJSON_AddBoolToObject(entry, "repeat_enabled", repeat_enabled);
             cJSON_AddNumberToObject(entry, "repeat", repeat_count);
-            cJSON_DeleteItemFromObject(soundscape, entry_name);
+            if (min_loop_ticks > 0) cJSON_AddNumberToObject(entry, "min_loop_ticks", min_loop_ticks);
             cJSON_AddItemToObject(soundscape, entry_name, entry);
             persistent_dict_mark_dirty(store); persistent_dict_save(store);
         }
@@ -409,6 +473,33 @@ http_response_t *view_soundscape_edit(http_request_t *req)
                 cJSON_AddBoolToObject(entry, "repeat_enabled", repeat_enabled);
                 cJSON_DeleteItemFromObject(entry, "repeat");
                 cJSON_AddNumberToObject(entry, "repeat", repeat_count);
+
+                /* 0 (or blank) = no minimum loop time: drop the key entirely. */
+                int min_loop_ticks = parse_non_negative_int(request_get_form_field(req, "entry_min_loop"));
+                cJSON_DeleteItemFromObject(entry, "min_loop_ticks");
+                if (min_loop_ticks > 0) cJSON_AddNumberToObject(entry, "min_loop_ticks", min_loop_ticks);
+
+                /* Rename: swap the key in place so the entry keeps its
+                 * position (playing order), and repoint any "after" that
+                 * referenced the old name. */
+                char new_name[64];
+                if (sanitize_entry_name(request_get_form_field(req, "new_entry_name"), new_name, sizeof(new_name)) &&
+                    strcmp(new_name, entry_name) != 0) {
+                    make_entry_name_unique(soundscape, new_name, sizeof(new_name), entry);
+                    size_t len = strlen(new_name);
+                    char *key = cJSON_malloc(len + 1);
+                    if (key) {
+                        memcpy(key, new_name, len + 1);
+                        for (cJSON *other = soundscape->child; other; other = other->next) {
+                            if (cJSON_IsObject(other) && strcmp(json_get_string(other, "after", ""), entry_name) == 0) {
+                                cJSON_DeleteItemFromObject(other, "after");
+                                cJSON_AddStringToObject(other, "after", new_name);
+                            }
+                        }
+                        cJSON_free(entry->string);
+                        entry->string = key;
+                    }
+                }
                 persistent_dict_mark_dirty(store); persistent_dict_save(store);
             }
         }

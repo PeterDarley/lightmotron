@@ -19,6 +19,54 @@ static int frame_interval_ms = 25; /* 40Hz default */
 static animation_stop_cb_t stop_callbacks[MAX_STOP_CALLBACKS];
 static int stop_callback_count = 0;
 
+/* Which step the animation task is in right now, for the stall monitor:
+ * 0 = waiting for next frame, 1 = lighting_process_tick(), 2 = leds_show(). */
+static volatile int animation_stage = 0;
+static TaskHandle_t monitor_task_handle = NULL;
+
+/* Logs when the animation task stops advancing (the Start button is just a
+ * flag -- it stays lit even if the task is wedged), and where it's stuck. */
+static void animation_monitor_task(void *arg)
+{
+    (void)arg;
+    uint32_t last_tick = tick_counter;
+    int quiet_seconds = 0;
+
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        quiet_seconds += 2;
+
+        if (running && !paused && tick_counter == last_tick) {
+            ESP_LOGW(TAG, "animation STALLED: tick stuck at %u, stuck in %s",
+                     (unsigned)tick_counter,
+                     animation_stage == 1 ? "lighting_process_tick()" :
+                     animation_stage == 2 ? "leds_show()" : "vTaskDelayUntil (should be impossible)");
+        } else if (running && !paused && quiet_seconds >= 10) {
+            /* What's actually being sent to the strip right now: how many
+             * LEDs are non-black in the frame buffer and the first one. */
+            int lit = 0, first = -1;
+            rgb_t first_color = {0, 0, 0};
+            int total = leds_total_count();
+            for (int i = 0; i < total; i++) {
+                rgb_t p = leds_get_pixel(i);
+                if (p.r || p.g || p.b) {
+                    if (lit == 0) { first = i; first_color = p; }
+                    lit++;
+                }
+            }
+            if (lit > 0) {
+                ESP_LOGI(TAG, "animation running: tick=%u, %d/%d LEDs lit, first=[%d](%u,%u,%u)",
+                         (unsigned)tick_counter, lit, total, first,
+                         first_color.r, first_color.g, first_color.b);
+            } else {
+                ESP_LOGI(TAG, "animation running: tick=%u, all %d LEDs black", (unsigned)tick_counter, total);
+            }
+            quiet_seconds = 0;
+        }
+        last_tick = tick_counter;
+    }
+}
+
 static void animation_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Animation task started (interval=%dms)", frame_interval_ms);
@@ -27,8 +75,11 @@ static void animation_task(void *pvParameters)
 
     while (running) {
         if (!paused) {
+            animation_stage = 1;
             lighting_process_tick(tick_counter);
+            animation_stage = 2;
             leds_show();
+            animation_stage = 0;
             tick_counter++;
         }
 
@@ -56,6 +107,11 @@ esp_err_t animation_start(void)
     running = true;
     paused = false;
     tick_counter = 0;
+
+    if (!monitor_task_handle) {
+        xTaskCreatePinnedToCore(animation_monitor_task, "anim_monitor", 3072, NULL, 1,
+                                &monitor_task_handle, 1);
+    }
 
     /* 8192, not the original 4096: lighting_process_tick() can reach
      * activate_scene() (via a scene's trigger_scenes_on_completion, once a

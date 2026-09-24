@@ -170,6 +170,15 @@ http_response_t *view_set_scene(http_request_t *req)
     const char *action = request_get_form_field(req, "action");
     if (!action) action = "set";
 
+    /* Built-in "All Dark" pseudo scene: handled here, never looked up in
+     * (or stored with) the model's scenes. */
+    if (scene && strcmp(scene, LIGHTING_ALL_DARK_NAME) == 0) {
+        lighting_all_dark();
+        cJSON *dark_ctx = build_global_context();
+        add_scenes_context(dark_ctx);
+        return render("scenes/scene_panel.html", dark_ctx);
+    }
+
     cJSON *model = lighting_get_settings();
     cJSON *scenes_dict = model ? cJSON_GetObjectItem(model, "scenes") : NULL;
 

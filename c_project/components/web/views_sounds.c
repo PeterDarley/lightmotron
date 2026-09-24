@@ -135,8 +135,6 @@ http_response_t *view_sounds(http_request_t *req)
                 cJSON_AddNumberToObject(sound, "file", 1);
                 cJSON_AddBoolToObject(sound, "high_quality", false);
                 cJSON_AddBoolToObject(sound, "show_on_home", true);
-                cJSON_AddNumberToObject(sound, "loop_count", 0);
-                cJSON_AddNullToObject(sound, "chain_next");
                 cJSON_AddItemToObject(sounds, sound_title, sound);
                 persistent_dict_mark_dirty(store); persistent_dict_save(store);
             }
@@ -177,22 +175,6 @@ http_response_t *view_sound_edit(http_request_t *req)
         cJSON_AddNumberToObject(ctx, "sound_file", json_get_int(sound, "file", 1));
         cJSON_AddBoolToObject(ctx, "sound_high_quality", json_get_bool(sound, "high_quality", false));
         cJSON_AddBoolToObject(ctx, "sound_show_on_home", json_get_bool(sound, "show_on_home", true));
-        cJSON_AddNumberToObject(ctx, "sound_loop_count", json_get_int(sound, "loop_count", 0));
-        const char *chain_next = json_get_string(sound, "chain_next", NULL);
-        if (chain_next) cJSON_AddStringToObject(ctx, "sound_chain_next", chain_next);
-        else cJSON_AddNullToObject(ctx, "sound_chain_next");
-
-        int total = sounds ? cJSON_GetArraySize(sounds) : 0;
-        const char **names = total > 0 ? calloc(total, sizeof(char *)) : NULL;
-        int count = 0;
-        if (names) {
-            for (cJSON *item = sounds->child; item; item = item->next) names[count++] = item->string;
-            qsort(names, count, sizeof(char *), cmp_str);
-        }
-        cJSON *available = cJSON_CreateArray();
-        for (int i = 0; i < count; i++) cJSON_AddItemToArray(available, cJSON_CreateString(names[i]));
-        free(names);
-        cJSON_AddItemToObject(ctx, "available_sounds", available);
 
         return webserver_render_response("setup/sound_edit.html", ctx);
     }
@@ -209,8 +191,6 @@ http_response_t *view_sound_edit(http_request_t *req)
             const char *file = request_get_form_field(req, "sound_file");
             const char *high_quality = request_get_form_field(req, "sound_high_quality");
             const char *show_on_home = request_get_form_field(req, "sound_show_on_home");
-            const char *loop_count = request_get_form_field(req, "sound_loop_count");
-            const char *chain_next = request_get_form_field(req, "sound_chain_next");
 
             cJSON_DeleteItemFromObject(sound, "file");
             cJSON_AddNumberToObject(sound, "file", file ? atoi(file) : 1);
@@ -221,12 +201,10 @@ http_response_t *view_sound_edit(http_request_t *req)
             cJSON_DeleteItemFromObject(sound, "show_on_home");
             cJSON_AddBoolToObject(sound, "show_on_home", show_on_home && strcmp(show_on_home, "1") == 0);
 
+            /* Looping/chaining moved to soundscapes; strip any values left
+             * over from before so they can't act with no way to see them. */
             cJSON_DeleteItemFromObject(sound, "loop_count");
-            cJSON_AddNumberToObject(sound, "loop_count", loop_count ? atoi(loop_count) : 0);
-
             cJSON_DeleteItemFromObject(sound, "chain_next");
-            if (chain_next && chain_next[0]) cJSON_AddStringToObject(sound, "chain_next", chain_next);
-            else cJSON_AddNullToObject(sound, "chain_next");
 
             if (strcmp(old_sound_title, sound_title) != 0) {
                 if (!cJSON_GetObjectItem(sounds, sound_title)) {

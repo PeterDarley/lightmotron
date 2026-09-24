@@ -66,6 +66,10 @@ graph TB
 - The **resistor** (470Ω recommended) sits between the logic level converter output and the neopixel DIN to protect against signal issues
 - The **logic level converter** bridges the 3.3V ESP32 signal to the 5V neopixel requirements
 
+## Note: Polarity on the Large LED Strips
+
+On the large LED strips used in this particular setup, the **arrows printed on the strip point toward the negative (GND) side of the power connection**. Don't assume the arrow side is positive: check the polarity before plugging in, since reversed power can stop a strip lighting or draw abnormal current.
+
 ## Component Details
 
 | Component | Purpose |

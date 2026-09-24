@@ -4,6 +4,7 @@
 #include "json_helpers.h"
 #include "cJSON.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -40,6 +41,22 @@ static char active_soundscape[MAX_TITLE_LEN] = "";
  * repeat_enabled(bool), repeat_infinite(bool), repeat_remaining(number).
  * Mirrors SoundManager._soundscape_state in lib/sounds.py. */
 static cJSON *soundscape_state = NULL;
+
+/* Minimum-loop-time support (soundscape entries with "min_loop_ticks" > 0).
+ * One tick is one animation frame, 25ms (40Hz), the unit used everywhere else
+ * in this project. soundscape_waiting is true while the active soundscape is
+ * only waiting for a countdown/retry -- the poll task uses it to know it has
+ * to re-check even though no sound just ended. */
+#define SOUNDSCAPE_TICK_MS 25
+#define SOUNDSCAPE_RETRY_MS 500
+static bool soundscape_waiting = false;
+static int64_t soundscape_retry_at_ms = 0;
+static bool soundscape_advancing = false;
+
+static int64_t now_ms(void)
+{
+    return esp_timer_get_time() / 1000;
+}
 
 /* Shared by get_sounds_dict()/get_soundscapes_dict(): both walk the same
  * store -> models -> current_model path and only differ in which child key
@@ -164,8 +181,9 @@ esp_err_t sound_manager_play(const char *title, int loop_count_override)
         return ESP_ERR_NOT_FOUND;
     }
 
-    int loop_count = (loop_count_override > 0) ? loop_count_override
-                     : json_get_int(sound, "loop_count", 0);
+    /* Looping is configured on soundscape entries, not on the sound itself
+     * (a stored "loop_count" on a sound is ignored). */
+    int loop_count = (loop_count_override > 0) ? loop_count_override : 0;
 
     return start_sound_playback(title, sound, loop_count, NULL);
 }
@@ -330,7 +348,8 @@ int sound_manager_get_playing_module(const char *title)
 /* Replace (or create) the state object tracked for a soundscape entry. */
 static void set_entry_state(const char *entry_name, bool started, bool complete,
                              const char *title, int module_idx,
-                             bool repeat_enabled, bool repeat_infinite, int repeat_remaining)
+                             bool repeat_enabled, bool repeat_infinite, int repeat_remaining,
+                             int64_t started_ms)
 {
     xSemaphoreTake(sound_mutex, portMAX_DELAY);
     if (!soundscape_state) soundscape_state = cJSON_CreateObject();
@@ -343,6 +362,7 @@ static void set_entry_state(const char *entry_name, bool started, bool complete,
     cJSON_AddBoolToObject(st, "repeat_enabled", repeat_enabled);
     cJSON_AddBoolToObject(st, "repeat_infinite", repeat_infinite);
     cJSON_AddNumberToObject(st, "repeat_remaining", repeat_remaining);
+    cJSON_AddNumberToObject(st, "started_ms", (double)started_ms); /* when the sound last started, for min_loop_ticks */
 
     cJSON_DeleteItemFromObject(soundscape_state, entry_name);
     cJSON_AddItemToObject(soundscape_state, entry_name, st);
@@ -366,6 +386,10 @@ static void mark_entry_complete(const char *entry_name)
  * SoundManager._play_next_soundscape_entry in lib/sounds.py. */
 static bool play_next_soundscape_entry(const char *soundscape_name)
 {
+    /* Re-set below only if this call ends up waiting on a min_loop_ticks
+     * countdown or a busy-hardware retry. */
+    soundscape_waiting = false;
+
     cJSON *soundscape = get_soundscape_by_name(soundscape_name);
     if (!soundscape) {
         xSemaphoreTake(sound_mutex, portMAX_DELAY);
@@ -403,7 +427,7 @@ static bool play_next_soundscape_entry(const char *soundscape_name)
             bool repeat_infinite = repeat_enabled && repeat_count == 0;
 
             if (sound_title[0] == '\0') {
-                set_entry_state(entry_name, true, true, "", -1, false, false, 0);
+                set_entry_state(entry_name, true, true, "", -1, false, false, 0, 0);
                 continue;
             }
 
@@ -411,12 +435,12 @@ static bool play_next_soundscape_entry(const char *soundscape_name)
             int module_idx = -1;
             if (!sound || start_sound_playback(sound_title, sound, 0, &module_idx) != ESP_OK) {
                 ESP_LOGW(TAG, "soundscape: failed to play entry='%s' sound='%s'", entry_name, sound_title);
-                set_entry_state(entry_name, true, true, "", -1, false, false, 0);
+                set_entry_state(entry_name, true, true, "", -1, false, false, 0, 0);
                 continue;
             }
 
             set_entry_state(entry_name, true, false, sound_title, module_idx,
-                             repeat_enabled, repeat_infinite, repeat_count);
+                             repeat_enabled, repeat_infinite, repeat_count, now_ms());
             ESP_LOGI(TAG, "soundscape: playing entry='%s' sound='%s' repeat_enabled=%d infinite=%d count=%d",
                      entry_name, sound_title, repeat_enabled, repeat_infinite, repeat_count);
             return true;
@@ -430,6 +454,7 @@ static bool play_next_soundscape_entry(const char *soundscape_name)
         bool repeat_enabled = st && cJSON_IsTrue(cJSON_GetObjectItem(st, "repeat_enabled"));
         bool repeat_infinite = st && cJSON_IsTrue(cJSON_GetObjectItem(st, "repeat_infinite"));
         int repeat_remaining = st ? json_get_int(st, "repeat_remaining", 0) : 0;
+        double last_started_ms = st ? json_get_double(st, "started_ms", 0.0) : 0.0;
         char sound_title[MAX_TITLE_LEN] = "";
         if (st) strncpy(sound_title, json_get_string(st, "title", ""), sizeof(sound_title) - 1);
         xSemaphoreGive(sound_mutex);
@@ -440,17 +465,44 @@ static bool play_next_soundscape_entry(const char *soundscape_name)
         }
 
         if (repeat_infinite || repeat_remaining > 0) {
+            /* Minimum loop time: the next play may not start until this many
+             * ticks after the previous one *started*. 0 = no countdown, repeat
+             * as soon as the sound ends (the original behavior). Read live from
+             * the entry so edits apply without restarting the soundscape. This
+             * entry keeps the soundscape's turn while it waits -- later entries
+             * don't start until it's done repeating, same as without a timer. */
+            int min_loop_ticks = json_get_int(entry, "min_loop_ticks", 0);
+            bool has_min_loop = min_loop_ticks > 0;
+            if (has_min_loop) {
+                int64_t due_ms = (int64_t)last_started_ms + (int64_t)min_loop_ticks * SOUNDSCAPE_TICK_MS;
+                int64_t now = now_ms();
+                if (now < due_ms || now < soundscape_retry_at_ms) {
+                    soundscape_waiting = true; /* still counting down (or backing off a busy retry) */
+                    return true;
+                }
+            }
+
             cJSON *sound = get_sound_by_title(sound_title);
             int module_idx = -1;
             if (!sound || start_sound_playback(sound_title, sound, 0, &module_idx) != ESP_OK) {
+                if (sound && has_min_loop) {
+                    /* Countdown is done but no module is free (another sound
+                     * is still using the hardware): wait for it and try
+                     * again shortly instead of giving up on the entry. */
+                    soundscape_retry_at_ms = now_ms() + SOUNDSCAPE_RETRY_MS;
+                    soundscape_waiting = true;
+                    return true;
+                }
                 ESP_LOGW(TAG, "soundscape: failed to repeat entry='%s'", entry_name);
                 mark_entry_complete(entry_name);
                 continue;
             }
+            soundscape_retry_at_ms = 0;
 
             xSemaphoreTake(sound_mutex, portMAX_DELAY);
             cJSON *st2 = cJSON_GetObjectItem(soundscape_state, entry_name);
             if (st2) {
+                cJSON_ReplaceItemInObject(st2, "started_ms", cJSON_CreateNumber((double)now_ms()));
                 cJSON_ReplaceItemInObject(st2, "module_idx", cJSON_CreateNumber(module_idx));
                 if (!repeat_infinite) {
                     int remaining = repeat_remaining - 1;
@@ -482,9 +534,37 @@ static bool play_next_soundscape_entry(const char *soundscape_name)
     return false;
 }
 
+/* Advance the active soundscape (if any) once, unless another task is already
+ * doing so -- the poll task (countdown/retry) and the web status self-heal in
+ * sound_manager_get_active_soundscape() could otherwise both decide it's time
+ * and start the same repeat twice. */
+static void advance_active_soundscape(void)
+{
+    char name_copy[MAX_TITLE_LEN];
+
+    xSemaphoreTake(sound_mutex, portMAX_DELAY);
+    if (soundscape_advancing || active_soundscape[0] == '\0') {
+        xSemaphoreGive(sound_mutex);
+        return;
+    }
+    soundscape_advancing = true;
+    strncpy(name_copy, active_soundscape, sizeof(name_copy) - 1);
+    name_copy[sizeof(name_copy) - 1] = '\0';
+    xSemaphoreGive(sound_mutex);
+
+    play_next_soundscape_entry(name_copy);
+
+    xSemaphoreTake(sound_mutex, portMAX_DELAY);
+    soundscape_advancing = false;
+    xSemaphoreGive(sound_mutex);
+}
+
 esp_err_t sound_manager_play_soundscape(const char *name)
 {
     if (!name || !initialized) return ESP_ERR_INVALID_STATE;
+
+    soundscape_waiting = false;
+    soundscape_retry_at_ms = 0;
 
     cJSON *soundscape = get_soundscape_by_name(name);
     if (!soundscape) {
@@ -524,10 +604,7 @@ const char *sound_manager_get_active_soundscape(void)
     xSemaphoreGive(sound_mutex);
 
     if (!any_playing) {
-        char name_copy[MAX_TITLE_LEN];
-        strncpy(name_copy, active_soundscape, sizeof(name_copy) - 1);
-        name_copy[sizeof(name_copy) - 1] = '\0';
-        play_next_soundscape_entry(name_copy);
+        advance_active_soundscape();
     }
 
     return active_soundscape;
@@ -599,22 +676,8 @@ static void handle_sound_ended(const char *title, int module_idx, int file_numbe
         }
     }
 
-    /* Chain to the configured next sound, if any. */
-    cJSON *sound = get_sound_by_title(title);
-    if (sound) {
-        const char *chain_next = json_get_string(sound, "chain_next", NULL);
-        if (chain_next && chain_next[0] != '\0') {
-            ESP_LOGI(TAG, "sound: chain from '%s' to '%s'", title, chain_next);
-            char chain_next_copy[MAX_TITLE_LEN];
-            strncpy(chain_next_copy, chain_next, sizeof(chain_next_copy) - 1);
-            chain_next_copy[sizeof(chain_next_copy) - 1] = '\0';
-            if (sound_manager_play(chain_next_copy, 0) != ESP_OK) {
-                ESP_LOGW(TAG, "sound: chain failed from '%s' to '%s'", title, chain_next_copy);
-            }
-            return;
-        }
-    }
-
+    /* Sequencing/chaining is done by soundscapes -- sounds no longer chain on
+     * their own. */
     ESP_LOGD(TAG, "sound: ended title='%s' module=%d", title, module_idx);
 }
 
@@ -652,6 +715,13 @@ static void poll_task(void *arg)
         for (int i = 0; i < ended_count; i++) {
             handle_sound_ended(ended[i].title, ended[i].module_index,
                                 ended[i].file_number, ended[i].loops_remaining);
+        }
+
+        /* A soundscape entry waiting out its min_loop_ticks countdown (or
+         * retrying for a free module) has no sound-ended event to wake it, so
+         * re-check it here every poll. */
+        if (soundscape_waiting) {
+            advance_active_soundscape();
         }
     }
 }

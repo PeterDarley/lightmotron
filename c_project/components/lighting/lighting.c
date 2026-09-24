@@ -814,6 +814,24 @@ void lighting_clear_scenes(void)
     xSemaphoreGive(lighting_mutex);
 }
 
+void lighting_all_dark(void)
+{
+    xSemaphoreTake(lighting_mutex, portMAX_DELAY);
+    for (int i = 0; i < active_scene_count; i++) {
+        for (int j = 0; j < active_scenes[i].job_count; j++) {
+            free_job_filters(&active_scenes[i].jobs[j]);
+        }
+        active_scenes[i].active = false;
+    }
+    active_scene_count = 0;
+    /* Scenes only ever write the LEDs they target, and the tick loop pushes
+     * logical_colors to the strip every tick regardless of what's running --
+     * so with nothing running, zeroing this leaves every LED off. */
+    memset(logical_colors, 0, sizeof(logical_colors));
+    xSemaphoreGive(lighting_mutex);
+    ESP_LOGI(TAG, "All Dark: cleared all running scenes, LEDs set to 0,0,0");
+}
+
 rgb_t *lighting_get_logical_colors(void)
 {
     return logical_colors;

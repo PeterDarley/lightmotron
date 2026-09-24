@@ -47,31 +47,6 @@
             <br><small class="text-muted">Display this sound as a button on the home page</small>
         </div>
 
-        <div class="border-top pt-3 mt-3">
-            <h6 class="mb-3">Playback Options</h6>
-
-            <div class="mb-3">
-                <label for="sound-loop-input" class="form-label">Loop Count</label>
-                <input type="number" class="form-control" id="sound-loop-input" name="sound_loop_count"
-                       value="{{ sound_loop_count }}"
-                       min="0" max="100" style="max-width: 200px;">
-                <small class="text-muted">Number of times to loop (0 = no loop, play once; 1 = play twice total, etc.)</small>
-            </div>
-
-            <div class="mb-3">
-                <label for="sound-chain-input" class="form-label">Chain to Next Sound</label>
-                <select class="form-select" id="sound-chain-input" name="sound_chain_next" style="max-width: 300px;">
-                    <option value="">None - stop after playing</option>
-                    {% for other_sound in available_sounds %}
-                        {% if other_sound != sound_title %}
-                        <option value="{{ other_sound }}"{% if other_sound == sound_chain_next %} selected{% endif %}>{{ other_sound }}</option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
-                <small class="text-muted">Play another sound automatically when this one finishes</small>
-            </div>
-        </div>
-
         <div class="d-flex gap-2 mt-4">
             <button type="submit" class="btn btn-primary">
                 Save Sound
