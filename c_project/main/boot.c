@@ -82,19 +82,31 @@ esp_err_t boot_seed_defaults(void)
 
     /* Seed neopixels */
     if (!persistent_dict_get(sys_settings, "neopixels")) {
+        static const int strip_pins[] = DEFAULT_NEOPIXEL_PINS;
         cJSON *neopixels = cJSON_CreateArray();
-        cJSON *strip = cJSON_CreateObject();
-        cJSON_AddNumberToObject(strip, "pin", DEFAULT_NEOPIXEL_PIN);
-        cJSON_AddNumberToObject(strip, "num", DEFAULT_NEOPIXEL_NUM);
-        cJSON_AddStringToObject(strip, "color_order", DEFAULT_NEOPIXEL_COLOR_ORDER);
-        cJSON_AddBoolToObject(strip, "brightness_curve", DEFAULT_NEOPIXEL_BRIGHTNESS_CURVE);
-        cJSON_AddItemToArray(neopixels, strip);
+        for (size_t i = 0; i < sizeof(strip_pins) / sizeof(strip_pins[0]); i++) {
+            cJSON *strip = cJSON_CreateObject();
+            cJSON_AddNumberToObject(strip, "pin", strip_pins[i]);
+            cJSON_AddNumberToObject(strip, "num", DEFAULT_NEOPIXEL_NUM);
+            cJSON_AddStringToObject(strip, "color_order", DEFAULT_NEOPIXEL_COLOR_ORDER);
+            cJSON_AddBoolToObject(strip, "brightness_curve", DEFAULT_NEOPIXEL_BRIGHTNESS_CURVE);
+            cJSON_AddItemToArray(neopixels, strip);
+        }
         persistent_dict_set(sys_settings, "neopixels", neopixels);
     }
 
-    /* Seed audio_players (empty array) */
+    /* Seed audio_players with the default YX5200 wiring */
     if (!persistent_dict_get(sys_settings, "audio_players")) {
+        static const int player_defaults[][3] = DEFAULT_AUDIO_PLAYERS;
         cJSON *players = cJSON_CreateArray();
+        for (size_t i = 0; i < sizeof(player_defaults) / sizeof(player_defaults[0]); i++) {
+            cJSON *player = cJSON_CreateObject();
+            cJSON_AddNumberToObject(player, "uart", player_defaults[i][0]);
+            cJSON_AddNumberToObject(player, "tx_pin", player_defaults[i][1]);
+            cJSON_AddNumberToObject(player, "rx_pin", player_defaults[i][2]);
+            cJSON_AddBoolToObject(player, "high_quality", false);
+            cJSON_AddItemToArray(players, player);
+        }
         persistent_dict_set(sys_settings, "audio_players", players);
     }
 

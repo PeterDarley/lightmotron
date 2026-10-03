@@ -184,8 +184,12 @@ function addStripRow() {
     var options = COLOR_ORDERS.map(function(o) {
         return '<option value="' + o + '"' + (o === 'GRB' ? ' selected' : '') + '>' + o + '</option>';
     }).join('');
+    // Default pins for strips 1-4 (level converter channels LV1..LV4).
+    var DEFAULT_STRIP_PINS = [4, 7, 15, 16];
+    var nextPin = DEFAULT_STRIP_PINS[tbody.querySelectorAll('tr').length];
+    if (nextPin === undefined) nextPin = 4;
     var row = '<tr>' +
-        '<td class="ps-0"><input type="number" class="form-control form-control-sm" name="strip_pin" value="4" min="0" max="48" required></td>' +
+        '<td class="ps-0"><input type="number" class="form-control form-control-sm" name="strip_pin" value="' + nextPin + '" min="0" max="48" required></td>' +
         '<td><input type="number" class="form-control form-control-sm" name="strip_num" value="30" min="1" max="2048" required></td>' +
         '<td><select class="form-select form-select-sm" name="strip_order">' + options + '</select></td>' +
         '<td class="text-center align-middle"><input class="form-check-input" type="checkbox" name="strip_brightness_curve" value="1" checked></td>' +
@@ -218,10 +222,13 @@ function addSegmentRow() {
 
 function addAudioRow() {
     var tbody = document.getElementById('audio-tbody');
+    // Default {uart, tx, rx} for modules 1 and 2; later rows fall back to 1/10/11.
+    var DEFAULT_AUDIO = [[1, 6, 5], [2, 17, 18]];
+    var d = DEFAULT_AUDIO[tbody.querySelectorAll('tr').length] || [1, 10, 11];
     var row = '<tr>' +
-        '<td class="ps-0"><input type="number" class="form-control form-control-sm" name="audio_uart" value="1" min="0" max="2"></td>' +
-        '<td><input type="number" class="form-control form-control-sm" name="audio_tx_pin" value="10" min="1" max="48"></td>' +
-        '<td><input type="number" class="form-control form-control-sm" name="audio_rx_pin" value="11" min="1" max="48"></td>' +
+        '<td class="ps-0"><input type="number" class="form-control form-control-sm" name="audio_uart" value="' + d[0] + '" min="0" max="2"></td>' +
+        '<td><input type="number" class="form-control form-control-sm" name="audio_tx_pin" value="' + d[1] + '" min="1" max="48"></td>' +
+        '<td><input type="number" class="form-control form-control-sm" name="audio_rx_pin" value="' + d[2] + '" min="1" max="48"></td>' +
         '<td class="text-center align-middle"><input class="form-check-input" type="checkbox" name="audio_high_quality" value="1"></td>' +
         '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()">✕</button></td>' +
         '</tr>';

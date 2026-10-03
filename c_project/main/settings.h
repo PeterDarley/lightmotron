@@ -22,8 +22,11 @@
 #define DEFAULT_PIN_SCL 22
 #define DEFAULT_PIN_SDA 21
 
-/* NeoPixel defaults */
+/* NeoPixel defaults. Strips 1-4 map to the four channels of the level
+ * converter (LV1..LV4); pins avoid the ESP32-S3 strapping, USB, console and
+ * octal-PSRAM GPIOs and the audio UART pins below. */
 #define DEFAULT_NEOPIXEL_PIN 4
+#define DEFAULT_NEOPIXEL_PINS {4, 7, 15, 16}
 #define DEFAULT_NEOPIXEL_NUM 144
 #define DEFAULT_NEOPIXEL_COLOR_ORDER "GRB"
 #define DEFAULT_NEOPIXEL_BRIGHTNESS_CURVE true
@@ -37,6 +40,9 @@
 /* Audio defaults */
 #define DEFAULT_AUDIO_RESET_ON_BOOT true
 #define DEFAULT_AUDIO_DEBUG_LOGGING false
+/* Default YX5200 module wiring: {uart, tx_pin (-> module RX), rx_pin (<- module TX)}.
+ * UART0 is the console, so modules use UART1 and UART2. */
+#define DEFAULT_AUDIO_PLAYERS {{1, 6, 5}, {2, 17, 18}}
 #define MAX_AUDIO_PLAYERS 3
 
 /* Animation defaults */

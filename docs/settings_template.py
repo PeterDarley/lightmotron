@@ -90,6 +90,8 @@ optional; built-in firmware defaults are used when a key is absent.
         # NeoPixel LED strip configuration (one or more strips).
         # Each entry supports independent pin, pixel count, color order,
         # and brightness-curve setting.
+        # Firmware defaults on a fresh device: four strips on GPIO 4, 7, 15
+        # and 16 (see docs/hardware.md); only the first is shown below.
         "neopixels": [
             {
                 "pin":              4,      # GPIO pin connected to DIN
@@ -114,12 +116,20 @@ optional; built-in firmware defaults are used when a key is absent.
         # Audio player configuration (YX5200/DFPlayer MP3 modules).
         # Up to 3 modules can be configured on separate UARTs.
         # Each module connects to its own RX/TX pin pair.
+        # Firmware defaults on a fresh device: module 1 = UART1, TX 6 / RX 5;
+        # module 2 = UART2, TX 17 / RX 18 (see docs/hardware.md).
         "audio_players": [
             {
                 "uart":         1,          # UART number (0, 1, or 2)
-                "tx_pin":      10,          # GPIO pin connected to RX of YX5200
-                "rx_pin":      11,          # GPIO pin connected to TX of YX5200
+                "tx_pin":       6,          # GPIO pin connected to RX of YX5200
+                "rx_pin":       5,          # GPIO pin connected to TX of YX5200
                 "high_quality": false       # whether to prefer this module for HQ sounds
+            },
+            {
+                "uart":         2,
+                "tx_pin":      17,
+                "rx_pin":      18,
+                "high_quality": false
             }
             # ... up to 3 total entries
         ],
