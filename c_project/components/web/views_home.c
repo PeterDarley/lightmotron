@@ -3,6 +3,7 @@
 #include "template_engine.h"
 #include "persistent_dict.h"
 #include "lighting.h"
+#include "leds.h"
 #include "animation.h"
 #include "sound_manager.h"
 #include "comms.h"
@@ -150,12 +151,40 @@ static void add_animation_context(cJSON *ctx)
     cJSON_AddBoolToObject(ctx, "animation_stopped", !running);
 }
 
+/* POST /brightness: sets the global LED brightness multiplier (0-100%) and
+ * stores it in system settings so it's restored at boot (boot.c). Applied to
+ * every colour value at output time in leds_show(), so it scales everything
+ * regardless of scene or effect. No swap; the slider just needs the request
+ * to succeed. */
+http_response_t *view_brightness(http_request_t *req)
+{
+    const char *value = request_get_form_field(req, "brightness");
+    if (value && value[0]) {
+        char *end = NULL;
+        long percent = strtol(value, &end, 10);
+        if (end != value) {
+            if (percent < 0) percent = 0;
+            if (percent > 100) percent = 100;
+            leds_set_brightness((float)percent / 100.0f);
+
+            persistent_dict_t *store = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
+            if (store) {
+                persistent_dict_set(store, "brightness", cJSON_CreateNumber((double)percent));
+                persistent_dict_save(store);
+            }
+        }
+    }
+    return response_create(204, "text/plain", "");
+}
+
 http_response_t *view_home(http_request_t *req)
 {
     (void)req;
     cJSON *ctx = build_global_context();
     cJSON_AddStringToObject(ctx, "message", "Lighting");
     cJSON_AddStringToObject(ctx, "page_title", "Home");
+    cJSON_AddNumberToObject(ctx, "brightness_percent",
+                            (double)(leds_get_brightness() * 100.0f + 0.5f));
     add_scenes_context(ctx);
     add_animation_context(ctx);
     /* Mirrors HomeView.get()'s context.update(_soundscapes_context(include_active=True))

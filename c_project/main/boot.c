@@ -110,6 +110,18 @@ esp_err_t boot_seed_defaults(void)
         persistent_dict_set(sys_settings, "audio_players", players);
     }
 
+    /* Seed the power supply rating (amps) */
+    if (!persistent_dict_get(sys_settings, "power_supply_amps")) {
+        cJSON *val = cJSON_CreateNumber(DEFAULT_POWER_SUPPLY_AMPS);
+        persistent_dict_set(sys_settings, "power_supply_amps", val);
+    }
+
+    /* Seed home-page brightness (percent; the slider's default) */
+    if (!persistent_dict_get(sys_settings, "brightness")) {
+        cJSON *val = cJSON_CreateNumber(DEFAULT_BRIGHTNESS_PERCENT);
+        persistent_dict_set(sys_settings, "brightness", val);
+    }
+
     /* Seed audio flags */
     if (!persistent_dict_get(sys_settings, "audio_reset_on_boot")) {
         cJSON *val = cJSON_CreateBool(DEFAULT_AUDIO_RESET_ON_BOOT);
@@ -249,6 +261,16 @@ static void start_ip_flash_sequence(const char *ip_address)
     }
 }
 
+/* Save hook: reports the estimated peak LED draw after any save to the
+ * lighting or system settings. */
+static void on_settings_saved(const char *filepath)
+{
+    if (strcmp(filepath, STORAGE_LIGHTING_SETTINGS_FILE) == 0 ||
+        strcmp(filepath, STORAGE_SYSTEM_SETTINGS_FILE) == 0) {
+        lighting_report_power_estimate();
+    }
+}
+
 esp_err_t boot_init(void)
 {
     esp_err_t ret;
@@ -345,6 +367,11 @@ esp_err_t boot_init(void)
         return ret;
     }
 
+    /* Re-check the peak LED draw whenever a setting that feeds into it is
+     * saved: scenes, effects, filters, colours, named ranges, models, LED
+     * strips, brightness and the power supply rating. */
+    persistent_dict_set_save_hook(on_settings_saved);
+
     /* Read WiFi credentials */
     persistent_dict_t *sys_settings = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
     cJSON *wifi_obj = persistent_dict_get(sys_settings, "wifi");
@@ -440,6 +467,13 @@ esp_err_t boot_init(void)
         ESP_LOGI(TAG, "LEDs initialized");
     }
 
+    /* Restore the home-page brightness slider (0-100). */
+    cJSON *brightness = persistent_dict_get(sys_settings, "brightness");
+    if (cJSON_IsNumber(brightness)) {
+        leds_set_brightness((float)brightness->valuedouble / 100.0f);
+        ESP_LOGI(TAG, "Brightness restored to %d%%", (int)brightness->valuedouble);
+    }
+
     /* Billboard (MAX7219 scrolling matrix) support is retained in
      * components/billboard/ for reference but is deliberately not
      * activated -- it's cruft from an old hardware configuration, not part
@@ -494,6 +528,9 @@ esp_err_t boot_init(void)
      * to an arbitrary single scene if none are marked -- matches
      * Lighting.__init__()'s boot-scene activation in lib/lighting/lighting.py. */
     lighting_activate_boot_scenes();
+
+    /* Cache the peak-draw estimate for the status page. */
+    lighting_update_power_estimate();
 
     /* Start animation */
     animation_start();

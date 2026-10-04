@@ -1006,3 +1006,91 @@ esp_err_t lighting_rename_model(const char *old_name, const char *new_name)
     persistent_dict_mark_dirty(lighting_store);
     return persistent_dict_save(lighting_store);
 }
+
+/* Estimated worst-case LED current across all saved scenes, in amps (LEDs
+ * only, not the system allowance). For each LED, takes the brightest colour
+ * any scene's job drives onto it (channel sum, scaled by the brightness
+ * multiplier), then sums the per-LED draw. Full white on one pixel is
+ * 3 x 20mA = 60mA, so a channel value of 255 is 20mA. */
+#define PER_CHANNEL_AMPS 0.02f
+
+static uint16_t peak_channel_sum[MAX_LEDS];
+static active_job_t estimate_job;
+
+float lighting_estimate_led_amps(void)
+{
+    cJSON *model = get_current_model_object();
+    cJSON *scenes = model ? cJSON_GetObjectItem(model, "scenes") : NULL;
+    cJSON *effects_dict = model ? cJSON_GetObjectItem(model, "effects") : NULL;
+    cJSON *filters_dict = model ? cJSON_GetObjectItem(model, "filters") : NULL;
+    int total = leds_total_count();
+    if (!scenes || total <= 0) return 0.0f;
+    if (total > MAX_LEDS) total = MAX_LEDS;
+
+    memset(peak_channel_sum, 0, sizeof(peak_channel_sum));
+
+    for (cJSON *scene_def = scenes->child; scene_def; scene_def = scene_def->next) {
+        if (!cJSON_IsObject(scene_def)) continue;
+        for (cJSON *entry = scene_def->child; entry; entry = entry->next) {
+            memset(&estimate_job, 0, sizeof(estimate_job));
+            resolve_job_entry(entry, effects_dict, filters_dict, &estimate_job);
+            if (estimate_job.pattern_name[0] == '\0') continue;
+
+            int job_peak = 0;
+            for (int c = 0; c < estimate_job.color_count; c++) {
+                int sum = estimate_job.colors[c].r + estimate_job.colors[c].g + estimate_job.colors[c].b;
+                if (sum > job_peak) job_peak = sum;
+            }
+            for (int t = 0; t < estimate_job.target_count; t++) {
+                int idx = estimate_job.target_indices[t];
+                if (idx >= 0 && idx < total && job_peak > peak_channel_sum[idx]) {
+                    peak_channel_sum[idx] = (uint16_t)job_peak;
+                }
+            }
+        }
+    }
+
+    /* Always assumes 100% brightness, whatever the home-page slider is set to,
+     * so the figure is the worst case for the supply. */
+    const float scale = 1.0f;
+    float amps = 0.0f;
+    for (int i = 0; i < total; i++) {
+        amps += (float)peak_channel_sum[i] * scale * PER_CHANNEL_AMPS / 255.0f;
+    }
+    return amps;
+}
+
+/* Cached result of the last estimate. The estimate walks every scene, so it
+ * only runs when a setting that feeds it is saved (or once at boot); the
+ * status page reads these values instead of recalculating. */
+static float cached_led_amps = 0.0f;
+static float cached_supply_amps = DEFAULT_POWER_SUPPLY_AMPS;
+
+void lighting_update_power_estimate(void)
+{
+    cached_led_amps = lighting_estimate_led_amps();
+    cached_supply_amps = DEFAULT_POWER_SUPPLY_AMPS;
+    persistent_dict_t *sys = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
+    cJSON *supply = sys ? persistent_dict_get(sys, "power_supply_amps") : NULL;
+    if (cJSON_IsNumber(supply)) cached_supply_amps = (float)supply->valuedouble;
+}
+
+float lighting_get_cached_led_amps(void) { return cached_led_amps; }
+float lighting_get_cached_supply_amps(void) { return cached_supply_amps; }
+
+/* Called on every save to the lighting or system settings. Refreshes the
+ * cache, then logs the estimated peak draw (LEDs plus the 0.5A system
+ * allowance) and checks it against the configured supply. */
+void lighting_report_power_estimate(void)
+{
+    lighting_update_power_estimate();
+    const float system_amps = 0.5f;
+    float total_amps = cached_led_amps + system_amps;
+
+    ESP_LOGI(TAG, "Estimated peak draw: LEDs %.2fA + system %.2fA = %.2fA (supply %.2fA)",
+             cached_led_amps, system_amps, total_amps, cached_supply_amps);
+    if (total_amps > cached_supply_amps) {
+        ESP_LOGW(TAG, "Estimated peak draw %.2fA exceeds the %.2fA supply setting",
+                 total_amps, cached_supply_amps);
+    }
+}

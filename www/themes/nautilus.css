@@ -1,0 +1,417 @@
+/* =========================================================
+   Nautilus theme for Lightmotron
+   Copper and verdigris on deep sea-green-black, with riveted
+   edges on cards, modals and panels.
+   Font: Merisk (www/themes/fonts/Merisk.ttf)
+   ========================================================= */
+
+@font-face {
+    font-family: 'Merisk';
+    src: url('/themes/fonts/Merisk.ttf') format('truetype');
+    font-display: swap;
+}
+
+:root {
+    --nautilus-copper: #b87333;
+    --nautilus-copper-light: #d89a5c;
+    --nautilus-copper-dark: #6e3f1d;
+    --nautilus-verdigris: #43b3ae;
+    --nautilus-verdigris-dark: #2a6f6b;
+    --nautilus-ink: #0e1716;
+    --nautilus-panel: #13211f;
+    --nautilus-panel-head: #1a2d2a;
+    --nautilus-text: #d9ece8;
+    --nautilus-muted: #8fa8a2;
+
+    --effect-optional-bg: #1a1714;
+    --effect-optional-border: #6e3f1d;
+    --effect-slider-track: #4a2c17;
+    --effect-slider-track-focus: #b87333;
+    --effect-slider-thumb: #b87333;
+    --effect-slider-thumb-border: #6e3f1d;
+    --effect-slider-thumb-ring: rgba(184, 115, 51, 0.35);
+}
+
+body {
+    font-family: 'Merisk', sans-serif;
+    background-color: var(--nautilus-ink);
+    background-image: radial-gradient(ellipse at top, #15302c 0%, var(--nautilus-ink) 70%);
+    background-attachment: fixed;
+    color: var(--nautilus-text);
+}
+
+h1, h2, h3, h4, h5, h6,
+.navbar-brand,
+.card-header,
+.modal-title {
+    color: var(--nautilus-copper-light);
+    letter-spacing: 0.04em;
+}
+
+.navbar {
+    background: linear-gradient(180deg, #1d3733, #0f1f1c) !important;
+    border-bottom: 2px solid var(--nautilus-copper-dark);
+
+    & .navbar-brand { color: var(--nautilus-copper-light) !important; }
+    & .nav-link { color: var(--nautilus-muted) !important; }
+    & .nav-link:hover,
+    & .nav-link.active { color: var(--nautilus-copper-light) !important; }
+}
+
+/* ---- Riveted panels -------------------------------------------------
+   Each rivet is an SVG tile used as a border image, so the rivets run
+   round the edge and turn the corners cleanly. */
+.card,
+.modal-content,
+.theme-home-section {
+    /* A domed rivet: highlight top-left, shadowed bottom-right. */
+    --rivet-dot: radial-gradient(circle at 35% 30%, #ffe0b8 0, #e8a86a 1.2px, #b87333 2.4px, #6e3f1d 3.8px, transparent 4.4px);
+    position: relative;
+    background-color: var(--nautilus-panel);
+    border: 1px solid var(--nautilus-copper-dark);
+    box-shadow: 0 0 0 1px var(--nautilus-copper), 0 6px 18px rgba(0, 0, 0, 0.5);
+    color: var(--nautilus-text);
+}
+
+/* Inner padding for the rivets' strip: the card body, modal body and
+ * panel body keep the content clear of the rivet rows and columns. */
+.card > .card-body,
+.modal-content > .modal-body {
+    padding: 26px;
+}
+
+
+/* Rivets: ::before carries the top and bottom rows, ::after the left and
+ * right columns. "space" spreads the dots evenly along each edge, so the
+ * rows and columns meet at the corners. */
+.card::before,
+.modal-content::before,
+.theme-home-section::before,
+.card::after,
+.modal-content::after,
+.theme-home-section::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    /* Drop shadow gives each rivet a raised 3D edge. */
+    filter: drop-shadow(1px 2px 1.5px rgba(0, 0, 0, 0.75));
+}
+
+/* The columns stop short of the corners, so the row and column rivets
+ * never sit on the same spot. */
+.card::after,
+.modal-content::after,
+.theme-home-section::after {
+    top: 15px;
+    bottom: 15px;
+}
+
+.card::before,
+.modal-content::before,
+.theme-home-section::before {
+    background-image: var(--rivet-dot), var(--rivet-dot);
+    background-size: 18px 14px, 18px 14px;
+    background-position: top, bottom;
+    background-repeat: space no-repeat, space no-repeat;
+}
+
+.card::after,
+.modal-content::after,
+.theme-home-section::after {
+    background-image: var(--rivet-dot), var(--rivet-dot);
+    background-size: 14px 18px, 14px 18px;
+    background-position: left, right;
+    background-repeat: no-repeat space, no-repeat space;
+}
+
+.card {
+    border-radius: 0;
+    background-color: var(--nautilus-panel);
+
+    & .card-header {
+        background: var(--nautilus-panel-head);
+        border-bottom: 1px solid var(--nautilus-copper-dark);
+    }
+    & .card-body { background-color: transparent; color: var(--nautilus-text); }
+}
+
+.modal-content {
+    background-color: var(--nautilus-panel);
+    border-radius: 0;
+
+    & .modal-header,
+    & .modal-footer { border-color: var(--nautilus-copper-dark); }
+}
+
+/* ---- Controls --------------------------------------------------------- */
+.btn-primary {
+    background: linear-gradient(180deg, #d89a5c, var(--nautilus-copper));
+    border-color: var(--nautilus-copper-dark);
+    color: #120a05;
+}
+.btn-primary:hover { background: var(--nautilus-copper-light); border-color: var(--nautilus-copper); color: #120a05; }
+
+.btn-outline-primary,
+.btn-outline-secondary {
+    border-color: var(--nautilus-copper);
+    color: var(--nautilus-copper-light);
+}
+.btn-outline-primary:hover,
+.btn-outline-secondary:hover {
+    background-color: var(--nautilus-copper);
+    border-color: var(--nautilus-copper-light);
+    color: #120a05;
+}
+
+.form-control,
+.form-select {
+    background-color: #0b1514;
+    border-color: var(--nautilus-copper-dark);
+    color: var(--nautilus-text);
+}
+.form-control:focus,
+.form-select:focus {
+    background-color: #0b1514;
+    border-color: var(--nautilus-copper);
+    box-shadow: 0 0 0 0.2rem rgba(184, 115, 51, 0.3);
+    color: var(--nautilus-text);
+}
+
+.table {
+    color: var(--nautilus-text);
+    --bs-table-border-color: var(--nautilus-copper-dark);
+    --bs-table-hover-bg: rgba(184, 115, 51, 0.1);
+}
+
+.badge.bg-secondary { background-color: var(--nautilus-copper-dark) !important; }
+
+.text-muted { color: #b59a84 !important; }
+
+a { color: var(--nautilus-copper-light); }
+a:hover { color: #f0c08a; }
+
+.btn-close { filter: invert(1) sepia(1) saturate(3) hue-rotate(-20deg); }
+
+/* ---- Light copper panels ------------------------------------------------
+ * Cards, modals and panels get a light copper body, with dark text. Their
+ * headers keep the original dark panel colour. Lists and other white parts
+ * of the settings modals use light verdigris. */
+:root {
+    --nautilus-copper-light-bg: #e9c49a;
+    --nautilus-verdigris-light-bg: #bfe6e1;
+    --nautilus-dark-text: #2a1607;
+}
+
+.card,
+.modal-content,
+.theme-home-section {
+    background-color: var(--nautilus-copper-light-bg);
+    color: var(--nautilus-dark-text);
+}
+
+.card > .card-header,
+.modal-content > .modal-header,
+.modal-content > .modal-footer {
+    background: var(--nautilus-panel-head);
+    color: var(--nautilus-copper-light);
+}
+
+.card > .card-body,
+.card > .card-body,
+.modal-content > .modal-body,
+.card .card-body {
+    background-color: transparent;
+    color: var(--nautilus-dark-text);
+}
+
+.card-header,
+.modal-header {
+    border-bottom-color: var(--nautilus-copper-dark);
+}
+
+.card h1, .card h2, .card h3, .card h4, .card h5, .card h6,
+.modal-content h1, .modal-content h2, .modal-content h3,
+.modal-content h4, .modal-content h5, .modal-content h6,
+.theme-home-section h1, .theme-home-section h2, .theme-home-section h3,
+.theme-home-section h4, .theme-home-section h5, .theme-home-section h6 {
+    color: var(--nautilus-dark-text);
+}
+
+.list-group-item,
+.table,
+.table > :not(caption) > * > * {
+    background-color: var(--nautilus-verdigris-light-bg);
+    color: var(--nautilus-dark-text);
+    border-color: var(--nautilus-verdigris-dark);
+}
+
+.list-group-item .text-muted,
+.table .text-muted,
+.card .text-muted,
+.modal-content .text-muted {
+    color: #5a3a22 !important;
+}
+
+.list-group-item .btn-outline-primary,
+.list-group-item .btn-outline-secondary,
+.table .btn-outline-primary,
+.table .btn-outline-secondary {
+    background-color: transparent;
+}
+
+/* ---- Scrollbars and rivets ----------------------------------------------
+ * Scrolling areas sit above the rivet layer, so their scrollbars aren't
+ * covered by rivets. Scrollbars are copper. */
+.modal-body,
+.card-body {
+    position: relative;
+    z-index: 1;
+}
+
+.modal-body,
+.card-body,
+.modal-dialog-scrollable .modal-body {
+    scrollbar-color: var(--nautilus-copper) #1a2d2a;
+    scrollbar-width: thin;
+}
+
+.modal-body::-webkit-scrollbar,
+.card-body::-webkit-scrollbar {
+    width: 12px;
+}
+.modal-body::-webkit-scrollbar-track,
+.card-body::-webkit-scrollbar-track {
+    background: #1a2d2a;
+}
+.modal-body::-webkit-scrollbar-thumb,
+.card-body::-webkit-scrollbar-thumb {
+    background: linear-gradient(90deg, #d89a5c, var(--nautilus-copper-dark));
+    border-radius: 6px;
+    border: 2px solid #1a2d2a;
+}
+
+/* ---- Darker copper panels and visible warning buttons ------------------ */
+:root {
+    --nautilus-copper-light-bg: #c08a57;
+}
+
+/* Warning-style buttons (such as All Dark) were yellow outlines that
+ * disappeared on the copper panels. They get a dark fill and bright text. */
+.btn-outline-warning {
+    background-color: #2a1a0e;
+    border-color: #d89a5c;
+    color: #ffd27a;
+}
+.btn-outline-warning:hover,
+.btn-outline-warning:focus {
+    background-color: #3d2611;
+    border-color: #ffd27a;
+    color: #fff0c2;
+}
+
+/* ---- Verdigris titles and buttons ----------------------------------------
+ * Panel titles use a light verdigris. Primary buttons are verdigris. */
+:root {
+    --nautilus-verdigris-title: #8ee6dc;
+}
+
+.card-header,
+.card-header h1, .card-header h2, .card-header h3,
+.card-header h4, .card-header h5, .card-header h6,
+.modal-header .modal-title,
+.card h1, .card h2, .card h3, .card h4, .card h5, .card h6,
+.modal-content h1, .modal-content h2, .modal-content h3,
+.modal-content h4, .modal-content h5, .modal-content h6,
+.theme-home-section h1, .theme-home-section h2, .theme-home-section h3,
+.theme-home-section h4, .theme-home-section h5, .theme-home-section h6 {
+    color: var(--nautilus-verdigris-title);
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, #5fd1c6, var(--nautilus-verdigris-dark));
+    border-color: var(--nautilus-verdigris-dark);
+    color: #04100e;
+}
+.btn-primary:hover {
+    background: linear-gradient(180deg, #8ee6dc, var(--nautilus-verdigris));
+    border-color: var(--nautilus-verdigris);
+    color: #04100e;
+}
+
+/* ---- Outline buttons on light panels ------------------------------------
+ * Outline buttons were see-through, so on the light copper panels their
+ * text and borders faded. Inside panels they get a dark fill, keeping
+ * their own colours. */
+.card .btn-outline-primary,
+.card .btn-outline-secondary,
+.card .btn-outline-success,
+.card .btn-outline-danger,
+.card .btn-outline-info,
+.card .btn-outline-warning,
+.modal-content .btn-outline-primary,
+.modal-content .btn-outline-secondary,
+.modal-content .btn-outline-success,
+.modal-content .btn-outline-danger,
+.modal-content .btn-outline-info,
+.modal-content .btn-outline-warning,
+.theme-home-section .btn-outline-primary,
+.theme-home-section .btn-outline-secondary,
+.theme-home-section .btn-outline-success,
+.theme-home-section .btn-outline-danger,
+.theme-home-section .btn-outline-info,
+.theme-home-section .btn-outline-warning {
+    background-color: #1c140e;
+}
+
+.card .btn-outline-success,
+.modal-content .btn-outline-success,
+.theme-home-section .btn-outline-success {
+    border-color: #3fbf5a;
+    color: #7ee89a;
+}
+
+.card .btn-outline-info,
+.modal-content .btn-outline-info,
+.theme-home-section .btn-outline-info {
+    border-color: var(--nautilus-verdigris);
+    color: var(--nautilus-verdigris-title);
+}
+
+.card .btn-outline-danger,
+.modal-content .btn-outline-danger,
+.theme-home-section .btn-outline-danger {
+    border-color: #ff5a6e;
+    color: #ff8a9a;
+}
+
+/* Muted labels on the home-page sections (such as "Active Scenes") were too
+ * pale on the copper panels. */
+.theme-home-section .text-muted,
+.theme-home-section .theme-active-scene-label,
+.theme-home-section .theme-animation-label,
+.theme-home-section .theme-soundscapes-label {
+    color: #4a2a12 !important;
+}
+
+/* ---- Sliders match the verdigris buttons ------------------------------- */
+.form-range::-webkit-slider-runnable-track {
+    background: linear-gradient(90deg, var(--nautilus-verdigris-dark), #2a4a46);
+    border-radius: 4px;
+}
+.form-range::-moz-range-track {
+    background: linear-gradient(90deg, var(--nautilus-verdigris-dark), #2a4a46);
+    border-radius: 4px;
+}
+.form-range::-webkit-slider-thumb {
+    background: linear-gradient(180deg, #5fd1c6, var(--nautilus-verdigris-dark));
+    border: 2px solid #04100e;
+}
+.form-range::-moz-range-thumb {
+    background: linear-gradient(180deg, #5fd1c6, var(--nautilus-verdigris-dark));
+    border: 2px solid #04100e;
+}
+.form-range:focus::-webkit-slider-thumb {
+    box-shadow: 0 0 0 0.25rem rgba(67, 179, 174, 0.35);
+}

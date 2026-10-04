@@ -140,6 +140,19 @@
             Changes to hostname or WiFi credentials take effect on the next reboot.
         </div>
 
+        <h6 class="mb-3">Power Supply</h6>
+        <div class="row g-2 mb-3">
+            <div class="col-sm-6">
+                <label class="form-label form-label-sm">Supply rating (amps)</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" class="form-control" name="power_supply_amps"
+                           value="{{ ss_power_supply_amps }}" min="0.5" max="200" step="0.5">
+                    <span class="input-group-text">A</span>
+                </div>
+                <div class="form-text">Used to check the estimated peak LED draw when a scene is saved (the console shows the result). Includes 0.5A for the controller and audio.</div>
+            </div>
+        </div>
+
         <h6 class="mb-3">Audio Players (YX5200 MP3 Modules)</h6>
         <div class="mb-2">
             <table class="table table-sm table-borderless mb-2" id="audio-table">

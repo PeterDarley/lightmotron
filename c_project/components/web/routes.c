@@ -84,6 +84,7 @@ void routes_register_all(void)
     /* Home & general */
     webserver_add_route(HTTP_METHOD_GET, "/", view_home);
     webserver_add_route(HTTP_METHOD_POST, "/set_scene", view_set_scene);
+    webserver_add_route(HTTP_METHOD_POST, "/brightness", view_brightness);
     webserver_add_route(HTTP_METHOD_GET, "/scenes/panel/status", view_scene_panel_status);
     webserver_add_route(HTTP_METHOD_POST, "/animation", view_animation);
     webserver_add_route(HTTP_METHOD_GET, "/storage", view_storage);

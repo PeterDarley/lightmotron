@@ -161,6 +161,32 @@ int lighting_get_active_scenes(char names[][64], int max_count);
  */
 void lighting_clear_scenes(void);
 
+/* Default power supply rating in amps (System Settings → Power Supply). */
+#define DEFAULT_POWER_SUPPLY_AMPS 3
+
+/**
+ * Worst-case LED current across all saved scenes, in amps (LEDs only).
+ */
+float lighting_estimate_led_amps(void);
+
+/**
+ * Logs the estimated peak draw (LEDs + 0.5A system) against the configured
+ * power supply. Called on every scene save.
+ */
+void lighting_report_power_estimate(void);
+
+/**
+ * Recalculates the cached peak-draw estimate (no logging).
+ */
+void lighting_update_power_estimate(void);
+
+/**
+ * Cached LED peak draw (amps) and power supply rating (amps), from the last
+ * update. Cheap to call; the status page reads these.
+ */
+float lighting_get_cached_led_amps(void);
+float lighting_get_cached_supply_amps(void);
+
 /**
  * The built-in "All Dark" pseudo scene (not stored in the scene list): stops
  * every running scene and sets every LED to 0,0,0. Nothing is left running,

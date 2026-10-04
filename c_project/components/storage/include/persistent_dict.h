@@ -113,6 +113,13 @@ bool persistent_dict_has_key(persistent_dict_t *pd, const char *key);
 esp_err_t persistent_dict_save(persistent_dict_t *pd);
 
 /**
+ * Called after a store's file has been written successfully, with the file
+ * path. Runs outside the store's mutex. Registering NULL removes the hook.
+ */
+typedef void (*persistent_dict_save_hook_t)(const char *filepath);
+void persistent_dict_set_save_hook(persistent_dict_save_hook_t hook);
+
+/**
  * Force reload from disk on next access.
  */
 void persistent_dict_invalidate(persistent_dict_t *pd);

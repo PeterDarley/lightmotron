@@ -45,6 +45,9 @@
 #define DEFAULT_AUDIO_PLAYERS {{1, 6, 5}, {2, 17, 18}}
 #define MAX_AUDIO_PLAYERS 3
 
+/* Home-page LED brightness slider (percent of full output) */
+#define DEFAULT_BRIGHTNESS_PERCENT 100
+
 /* Animation defaults */
 #define DEFAULT_FRAME_INTERVAL_MS 25
 

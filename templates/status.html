@@ -80,6 +80,20 @@
             </div>
         </div>
 
+        <div class="col dashboard-card-col">
+            <div class="card setup-card status-card h-100">
+                <div class="card-header">Power</div>
+                <div class="card-body">
+                    <table class="table table-sm status-table mb-0">
+                        <tr><th>LED peak</th><td>{{ power_led_amps }}</td></tr>
+                        <tr><th>With system</th><td class="{{ power_class }}">{{ power_total_amps }}</td></tr>
+                        <tr><th>Supply rating</th><td>{{ power_supply_amps }}</td></tr>
+                        <tr><th>Supply used</th><td class="{{ power_class }}">{{ power_percent }}</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         {% if audio_health %}
         <div class="col dashboard-card-col">
             <div class="card setup-card status-card h-100">

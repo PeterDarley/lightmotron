@@ -169,6 +169,13 @@ bool persistent_dict_has_key(persistent_dict_t *pd, const char *key)
     return result;
 }
 
+static persistent_dict_save_hook_t save_hook = NULL;
+
+void persistent_dict_set_save_hook(persistent_dict_save_hook_t hook)
+{
+    save_hook = hook;
+}
+
 esp_err_t persistent_dict_save(persistent_dict_t *pd)
 {
     if (!pd) {
@@ -195,6 +202,11 @@ esp_err_t persistent_dict_save(persistent_dict_t *pd)
     }
 
     xSemaphoreGive(pd->mutex);
+
+    /* Outside the store's mutex, so the hook can open and read other stores. */
+    if (ret == ESP_OK && save_hook) {
+        save_hook(pd->filepath);
+    }
     return ret;
 }
 

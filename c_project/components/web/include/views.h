@@ -14,6 +14,7 @@
 
 /* Home & general views */
 http_response_t *view_home(http_request_t *req);
+http_response_t *view_brightness(http_request_t *req);
 http_response_t *view_set_scene(http_request_t *req);
 http_response_t *view_scene_panel_status(http_request_t *req);
 http_response_t *view_animation(http_request_t *req);

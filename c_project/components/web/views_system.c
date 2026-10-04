@@ -496,6 +496,11 @@ static void add_system_settings_context(cJSON *ctx)
 
     cJSON_AddStringToObject(ctx, "ss_wifi_ssid", json_get_string(wifi, "ssid", ""));
     cJSON_AddStringToObject(ctx, "ss_hostname", hostname);
+    {
+        cJSON *psu = store ? persistent_dict_get(store, "power_supply_amps") : NULL;
+        cJSON_AddNumberToObject(ctx, "ss_power_supply_amps",
+                                cJSON_IsNumber(psu) ? psu->valuedouble : DEFAULT_POWER_SUPPLY_AMPS);
+    }
     free(hostname);
     if (wifi) cJSON_Delete(wifi);
 
@@ -713,6 +718,9 @@ http_response_t *view_system_settings(http_request_t *req)
         persistent_dict_set(store, "hostname", cJSON_CreateString(hostname));
         persistent_dict_set(store, "neopixels", strips);
         persistent_dict_set(store, "audio_players", audio_players);
+        const char *psu_in = request_get_form_field(req, "power_supply_amps");
+        double psu_amps = psu_in ? atof(psu_in) : 0.0;
+        if (psu_amps > 0.0) persistent_dict_set(store, "power_supply_amps", cJSON_CreateNumber(psu_amps));
         persistent_dict_mark_dirty(store); persistent_dict_save(store);
     } else {
         cJSON_Delete(strips);
@@ -1280,6 +1288,24 @@ http_response_t *view_status(http_request_t *req)
     cJSON_AddStringToObject(ctx, "restore_class", restore_class);
 
     add_audio_health_context(ctx);
+
+    /* Estimated peak LED draw, from the cache (refreshed on settings saves). */
+    {
+        float led_amps = lighting_get_cached_led_amps();
+        float supply_amps = lighting_get_cached_supply_amps();
+        float total_amps = led_amps + 0.5f;
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.2f A", led_amps);
+        cJSON_AddStringToObject(ctx, "power_led_amps", buf);
+        snprintf(buf, sizeof(buf), "%.2f A", total_amps);
+        cJSON_AddStringToObject(ctx, "power_total_amps", buf);
+        snprintf(buf, sizeof(buf), "%.2f A", supply_amps);
+        cJSON_AddStringToObject(ctx, "power_supply_amps", buf);
+        cJSON_AddStringToObject(ctx, "power_class", total_amps > supply_amps ? "text-danger" : "");
+        int percent = supply_amps > 0.0f ? (int)(total_amps / supply_amps * 100.0f + 0.5f) : 0;
+        snprintf(buf, sizeof(buf), "%d%%", percent);
+        cJSON_AddStringToObject(ctx, "power_percent", buf);
+    }
 
     cJSON_AddStringToObject(ctx, "page_title", "Status");
 
