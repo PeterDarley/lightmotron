@@ -105,6 +105,7 @@ void routes_register_all(void)
     webserver_add_route(HTTP_METHOD_POST, "/named_range/remove_subrange", view_named_range_remove_subrange_refresh);
     webserver_add_route(HTTP_METHOD_GET, "/named_range/summary", view_named_range_summary);
     webserver_add_route(HTTP_METHOD_GET, "/named_range/reorder", view_named_range_reorder);
+    webserver_add_route(HTTP_METHOD_GET, "/named_range/close", view_named_range_close);
     webserver_add_route(HTTP_METHOD_POST, "/named_range/reorder", view_named_range_reorder_refresh);
 
     /* Custom colors. CustomColorsView has both get() and post() in Python. */

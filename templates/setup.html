@@ -346,6 +346,11 @@ document.body.addEventListener('summaryRefresh', function (evt) {
 
 // Refresh summary cards when modal closes
 document.getElementById('setup-modal').addEventListener('hidden.bs.modal', function () {
+    // Resume the animation if the named-range picker paused it (no-op otherwise).
+    console.log('[setup-modal] closed, calling /named_range/close');
+    fetch('/named_range/close')
+        .then(function (r) { console.log('[setup-modal] /named_range/close status', r.status); })
+        .catch(function (e) { console.error('[setup-modal] /named_range/close failed', e); });
     htmx.ajax('GET', '/named_range/summary', {target: '#named-ranges-summary', swap: 'innerHTML'});
     htmx.ajax('GET', '/custom_colors/summary', {target: '#custom-colors-summary', swap: 'innerHTML'});
     htmx.ajax('GET', '/scenes/summary', {target: '#scenes-summary', swap: 'innerHTML'});

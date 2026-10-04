@@ -6,3 +6,8 @@ ThinkTank.code-workspace
 .playwright-mcp/
 copilot_working/
 .upload_manifest.json
+
+# KiCad: local backup history (nested repos), view state, lock files
+hardware/**/.history/
+hardware/**/*.kicad_prl
+hardware/**/*.lck

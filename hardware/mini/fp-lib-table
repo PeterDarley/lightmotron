@@ -1,4 +1,4 @@
 (fp_lib_table
   (version 7)
-  (lib (name "local")(type "KiCad")(uri "${KIPRJMOD}/local.pretty")(options "")(descr "Project-local custom footprints"))
+  (lib (name "local")(type "KiCad")(uri "${KIPRJMOD}/../lib/local.pretty")(options "")(descr "Shared custom footprints for the lightmotron hardware projects"))
 )

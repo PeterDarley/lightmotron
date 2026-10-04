@@ -26,6 +26,9 @@
 static cJSON *g_selected_leds = NULL;         /* array, lazily created */
 static char g_editing_range_name[64] = "";
 static bool g_has_editing_range_name = false;
+/* True while the picker has paused the animation and not yet resumed it
+ * (by saving, or by the setup modal closing). */
+static bool g_picker_paused_animation = false;
 
 static cJSON *selected_leds(void)
 {
@@ -200,6 +203,13 @@ static char *summarize_led_list(const int *led_indices, int count)
     segments[seg_count].start = start;
     segments[seg_count].end = end;
     seg_count++;
+
+    /* Show ranges 1-based to match the LED picker's labels; the stored
+     * indices stay 0-based. */
+    for (int i = 0; i < seg_count; i++) {
+        segments[i].start += 1;
+        segments[i].end += 1;
+    }
 
     char *result = malloc(128);
     if (seg_count == 1) {
@@ -391,6 +401,8 @@ static cJSON *build_led_list(cJSON *tokens)
         }
         cJSON *entry = cJSON_CreateObject();
         cJSON_AddNumberToObject(entry, "index", i);
+        /* Stored/internal indices are 0-based; the picker shows them 1-based. */
+        cJSON_AddNumberToObject(entry, "display_index", i + 1);
         cJSON_AddStringToObject(entry, "css_class", selected ? "btn-warning" : "btn-outline-secondary");
         cJSON_AddItemToArray(list, entry);
     }
@@ -887,7 +899,10 @@ http_response_t *view_named_range(http_request_t *req)
             set_selected_leds(cJSON_CreateArray());
         }
 
-        if (animation_is_running()) animation_pause();
+        if (animation_is_running()) {
+            animation_pause();
+            g_picker_paused_animation = true;
+        }
 
         leds_clear();
         apply_led_identify(selected_leds());
@@ -946,12 +961,31 @@ http_response_t *view_named_range(http_request_t *req)
     set_selected_leds(cJSON_CreateArray());
 
     animation_resume();
+    g_picker_paused_animation = false;
     leds_clear();
     leds_show();
 
     cJSON *ctx = build_named_range_context("name");
     cJSON_AddStringToObject(ctx, "page_title", "Named Ranges");
     return webserver_render_response("setup/led_picker.html", ctx);
+}
+
+/* GET /named_range/close: called when the setup modal is dismissed. If the
+ * picker paused the animation and nothing saved it, resume it here and drop
+ * the LED selection preview. A no-op otherwise. */
+http_response_t *view_named_range_close(http_request_t *req)
+{
+    (void)req;
+    if (g_picker_paused_animation) {
+        g_picker_paused_animation = false;
+        g_has_editing_range_name = false;
+        g_editing_range_name[0] = '\0';
+        set_selected_leds(cJSON_CreateArray());
+        animation_resume();
+        leds_clear();
+        leds_show();
+    }
+    return response_create(204, "text/plain", "");
 }
 
 http_response_t *view_named_range_set(http_request_t *req)
