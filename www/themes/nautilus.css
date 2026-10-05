@@ -415,3 +415,50 @@ a:hover { color: #f0c08a; }
 .form-range:focus::-webkit-slider-thumb {
     box-shadow: 0 0 0 0.25rem rgba(67, 179, 174, 0.35);
 }
+
+/* ---- Outline button hover on light panels ---------------------------------
+ * Bootstrap's hover colours replaced the dark fill, so text could turn dark
+ * on dark. Inside panels the hover, focus and active states keep a dark fill
+ * with bright text. */
+.card .btn-outline-primary:hover, .card .btn-outline-primary:focus, .card .btn-outline-primary:active,
+.card .btn-outline-secondary:hover, .card .btn-outline-secondary:focus, .card .btn-outline-secondary:active,
+.modal-content .btn-outline-primary:hover, .modal-content .btn-outline-primary:focus, .modal-content .btn-outline-primary:active,
+.modal-content .btn-outline-secondary:hover, .modal-content .btn-outline-secondary:focus, .modal-content .btn-outline-secondary:active,
+.theme-home-section .btn-outline-primary:hover, .theme-home-section .btn-outline-primary:focus, .theme-home-section .btn-outline-primary:active,
+.theme-home-section .btn-outline-secondary:hover, .theme-home-section .btn-outline-secondary:focus, .theme-home-section .btn-outline-secondary:active {
+    background-color: #3d2611 !important;
+    color: #ffe0b8 !important;
+    border-color: #ffd27a !important;
+}
+
+.card .btn-outline-warning:hover, .card .btn-outline-warning:focus, .card .btn-outline-warning:active,
+.modal-content .btn-outline-warning:hover, .modal-content .btn-outline-warning:focus, .modal-content .btn-outline-warning:active,
+.theme-home-section .btn-outline-warning:hover, .theme-home-section .btn-outline-warning:focus, .theme-home-section .btn-outline-warning:active {
+    background-color: #3d2611 !important;
+    color: #fff0c2 !important;
+    border-color: #ffd27a !important;
+}
+
+.card .btn-outline-success:hover, .card .btn-outline-success:focus, .card .btn-outline-success:active,
+.modal-content .btn-outline-success:hover, .modal-content .btn-outline-success:focus, .modal-content .btn-outline-success:active,
+.theme-home-section .btn-outline-success:hover, .theme-home-section .btn-outline-success:focus, .theme-home-section .btn-outline-success:active {
+    background-color: #0f2a1a !important;
+    color: #b8f5cb !important;
+    border-color: #7ee89a !important;
+}
+
+.card .btn-outline-danger:hover, .card .btn-outline-danger:focus, .card .btn-outline-danger:active,
+.modal-content .btn-outline-danger:hover, .modal-content .btn-outline-danger:focus, .modal-content .btn-outline-danger:active,
+.theme-home-section .btn-outline-danger:hover, .theme-home-section .btn-outline-danger:focus, .theme-home-section .btn-outline-danger:active {
+    background-color: #2e0e14 !important;
+    color: #ffb3bd !important;
+    border-color: #ff8a9a !important;
+}
+
+.card .btn-outline-info:hover, .card .btn-outline-info:focus, .card .btn-outline-info:active,
+.modal-content .btn-outline-info:hover, .modal-content .btn-outline-info:focus, .modal-content .btn-outline-info:active,
+.theme-home-section .btn-outline-info:hover, .theme-home-section .btn-outline-info:focus, .theme-home-section .btn-outline-info:active {
+    background-color: #0f2624 !important;
+    color: #c4f3ec !important;
+    border-color: var(--nautilus-verdigris-title) !important;
+}

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Ship's wheel for the Nautilus theme: copper wheel on a white disc.
+       Heavy strokes so it still reads at tab size (about 16px). -->
+  <circle cx="50" cy="50" r="49" fill="#ffffff"/>
+  <circle cx="50" cy="50" r="36" fill="none" stroke="#b87333" stroke-width="9"/>
+  <g stroke="#b87333" stroke-width="8">
+    <line x1="62" y1="50" x2="90" y2="50"/>
+    <line x1="58.49" y1="58.49" x2="78.28" y2="78.28"/>
+    <line x1="50" y1="62" x2="50" y2="90"/>
+    <line x1="41.51" y1="58.49" x2="21.72" y2="78.28"/>
+    <line x1="38" y1="50" x2="10" y2="50"/>
+    <line x1="41.51" y1="41.51" x2="21.72" y2="21.72"/>
+    <line x1="50" y1="38" x2="50" y2="10"/>
+    <line x1="58.49" y1="41.51" x2="78.28" y2="21.72"/>
+  </g>
+  <g fill="#b87333">
+    <circle cx="94" cy="50" r="5"/>
+    <circle cx="81.1" cy="81.1" r="5"/>
+    <circle cx="50" cy="94" r="5"/>
+    <circle cx="18.9" cy="81.1" r="5"/>
+    <circle cx="6" cy="50" r="5"/>
+    <circle cx="18.9" cy="18.9" r="5"/>
+    <circle cx="50" cy="6" r="5"/>
+    <circle cx="81.1" cy="18.9" r="5"/>
+  </g>
+  <circle cx="50" cy="50" r="13" fill="#b87333"/>
+  <circle cx="50" cy="50" r="5" fill="#ffffff"/>
+</svg>

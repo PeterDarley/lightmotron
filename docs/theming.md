@@ -14,6 +14,29 @@ Because Bootstrap is loaded first, then `app.css`, then your theme file, your ru
 without needing `!important` for most properties. The load order is managed by
 `templates/base/imports.html` via a context variable injected on every page.
 
+## Favicon (browser tab icon)
+
+A theme can set its own tab icon. Put an SVG next to the theme's stylesheet, with the
+same name:
+
+- `www/themes/my_theme.css` + `www/themes/my_theme.svg` → the tab shows `my_theme.svg`.
+- No matching `.svg` → the default icon, `www/favicon.svg`, is used.
+
+The icon is chosen when a page is rendered (`favicon_href` in the context, set by
+`components/web/context_processors.c`; linked in `templates/base/base_head.html`), so
+switching themes changes the icon on the next page load. Browsers cache icons, so a
+hard refresh may be needed to see a change.
+
+Icons are SVG and are shipped with the firmware: they're in `www/themes/`, and the
+theme upload form only accepts `.css` and font files. The built-in examples are:
+
+| Theme | Icon | Description |
+|---|---|---|
+| `lcars.css` | `lcars.svg` | A copy of the default icon |
+| `nautilus.css` | `nautilus.svg` | Ship's wheel: copper wheel, verdigris handles |
+
+Keep icons simple. The tab shows them at about 16px, so fine detail won't be visible.
+
 ---
 
 ## Class reference
