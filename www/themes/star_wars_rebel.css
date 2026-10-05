@@ -188,7 +188,7 @@ body {
 }
 
 /* ---- Home page ---- */
-.theme-animation-panel {
+.theme-system-panel {
     background-color: var(--sw-panel-alt);
     border-color: var(--sw-border);
     box-shadow: 0 0 16px rgba(0,140,180,0.15);

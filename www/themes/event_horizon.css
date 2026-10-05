@@ -119,7 +119,7 @@ body {
     color: var(--eh-text);
 }
 
-.theme-animation-panel {
+.theme-system-panel {
     background: linear-gradient(140deg, #2a161f 0%, #20121b 55%, #170d15 100%);
     border-color: #7f374b;
     box-shadow:

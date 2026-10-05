@@ -475,3 +475,9 @@ a:hover { color: #f0c08a; }
 .theme-home-section .theme-section-heading {
     color: #1d5552 !important;
 }
+
+/* The System accordion puts its body one level deeper than other cards, so
+ * it gets the same inner padding here. */
+.theme-system-panel .accordion-collapse > .card-body {
+    padding: 26px;
+}

@@ -250,3 +250,66 @@
     min-width: 14rem;
     max-width: 24rem;
 }
+
+/* ---- System accordion (home page) -------------------------------------------
+ * The accordion takes the colours of the card it sits in, so each theme's card
+ * header and text colours apply. The chevron is a mask filled with the current
+ * text colour, so it shows up on every theme without per-theme rules. */
+.theme-system-panel .accordion {
+    --bs-accordion-bg: transparent;
+    --bs-accordion-border-width: 0;
+    --bs-accordion-btn-bg: transparent;
+    --bs-accordion-active-bg: transparent;
+    --bs-accordion-btn-color: inherit;
+    --bs-accordion-active-color: inherit;
+    --bs-accordion-btn-focus-box-shadow: none;
+    --bs-accordion-btn-focus-border-color: transparent;
+}
+
+.theme-system-toggle {
+    width: 100%;
+    border-radius: 0;
+    text-align: left;
+    font-weight: inherit;
+    font-family: inherit;
+}
+
+.theme-system-toggle::after {
+    background-image: none;
+    background-color: currentColor;
+    width: 1.1rem;
+    height: 1.1rem;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.theme-brightness-label {
+    min-width: 6rem;
+}
+
+/* Bootstrap makes .accordion-button positioned, which paints it over the
+ * card's own pseudo-element decorations (such as Nautilus rivets). Unpositioned,
+ * the header sits under them like the card-header on other cards. */
+.theme-system-panel .accordion-button {
+    position: static;
+}
+
+/* Slider rows on the home page: a fixed label column and slider width, so the
+ * Brightness and Volume sliders line up. */
+.theme-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.theme-slider-row > label {
+    width: 6.5rem;
+    flex: none;
+    margin-bottom: 0;
+}
+.theme-slider-row > .form-range {
+    width: 280px;
+    flex: none;
+}
+.theme-slider-row > .small {
+    min-width: 4rem;
+}

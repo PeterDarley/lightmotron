@@ -168,7 +168,7 @@ body {
 /* ---- Home page ---- */
 .theme-page { padding-top: 1rem; }
 
-.theme-animation-panel {
+.theme-system-panel {
     background: var(--lcars-peach);
     border-radius: var(--lcars-r-out) 0 0 0 !important;
     position: relative;
@@ -322,12 +322,12 @@ body {
     margin-top: 0.5rem;
 }
 
-.theme-animation-panel .theme-animation-label,
-.theme-animation-panel .theme-animation-label.text-muted {
+.theme-system-panel .theme-animation-label,
+.theme-system-panel .theme-animation-label.text-muted {
     color: #000000 !important;
 }
 
-.theme-section-heading {
+.theme-home-subsection > .theme-section-heading {
     position: absolute;
     left: 0;
     top: 0;
@@ -683,13 +683,69 @@ body {
 }
 
 /* ---- Swoop labels must stay black (override muted/small card-body rules) ---- */
-.theme-animation-panel .card-body .theme-animation-label,
-.theme-animation-panel .card-body .theme-animation-label.text-muted,
-.theme-animation-panel .card-body .theme-animation-label.small,
+.theme-system-panel .card-body .theme-animation-label,
+.theme-system-panel .card-body .theme-animation-label.text-muted,
+.theme-system-panel .card-body .theme-animation-label.small,
 .theme-sounds-panel .card-body .theme-sounds-label,
 .theme-sounds-panel .card-body .theme-sounds-label.text-muted,
 .theme-sounds-panel .card-body .theme-sounds-label.small,
 .theme-active-scene-panel .theme-active-scene-label,
 .theme-home-subsection .theme-section-heading {
+    color: #000000 !important;
+}
+
+/* ---- System accordion ------------------------------------------------------
+ * The accordion's header is a bar across the card's top edge (not the
+ * absolute label bar), and its body sits once inside the frame: no double
+ * offset from the generic card-body rules. */
+.card.theme-system-panel > .accordion > .accordion-item {
+    background: transparent;
+    border: none;
+}
+.card.theme-system-panel .accordion-button.theme-system-toggle {
+    position: relative;
+    top: auto;
+    left: auto;
+    bottom: auto;
+    width: 100%;
+    height: var(--lcars-bar-w);
+    margin-left: var(--lcars-label-w);
+    width: calc(100% - var(--lcars-label-w));
+    display: flex;
+    align-items: center;
+    padding: 0 1rem 0 1.5rem;
+    background: transparent;
+    color: var(--lcars-bg);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.85rem;
+    border: none;
+    z-index: 2;
+}
+.card.theme-system-panel .accordion-button.theme-system-toggle::after {
+    margin-left: auto;
+    background-color: var(--lcars-bg);
+}
+.card.theme-system-panel > .accordion > .accordion-item > .accordion-collapse > .card-body {
+    margin-top: 0;
+    margin-left: var(--lcars-label-w);
+    background: var(--lcars-panel);
+    border-top-left-radius: var(--lcars-r-in);
+    padding: 1rem 1rem 1rem 1.5rem;
+}
+
+/* Subsection headings elsewhere (System, Volume, setup pages) stay in the flow
+ * of the card; only the scene subsections use the label-bar style above. */
+.theme-section-heading {
+    position: static;
+    color: var(--lcars-bg) !important;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+.theme-system-panel .theme-section-heading {
     color: #000000 !important;
 }

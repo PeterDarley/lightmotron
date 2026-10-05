@@ -217,7 +217,7 @@ body {
 }
 
 /* ---- Home page panels ---- */
-.theme-animation-panel {
+.theme-system-panel {
     background: linear-gradient(135deg, var(--kli-panel-alt) 0%, var(--kli-panel) 100%);
     border: 3px solid var(--kli-frame);
     clip-path: polygon(1.5rem 0, 100% 0, 100% 100%, 0 100%, 0 1.5rem);

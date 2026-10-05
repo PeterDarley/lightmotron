@@ -50,7 +50,7 @@ body {
 }
 
 /* Home page */
-.theme-animation-panel { background-color: #2a0000; border-color: #6a0000; }
+.theme-system-panel { background-color: #2a0000; border-color: #6a0000; }
 
 .theme-animation-label,
 .theme-active-scene-label { color: #c07070 !important; }
