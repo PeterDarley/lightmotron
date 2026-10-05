@@ -313,3 +313,9 @@
 .theme-slider-row > .small {
     min-width: 4rem;
 }
+
+/* Column label for themes that draw the Active Scenes label in a side column
+ * (LCARS). Hidden everywhere else, where the card header carries the title. */
+.theme-scene-column-label {
+    display: none;
+}

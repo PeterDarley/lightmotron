@@ -749,3 +749,180 @@ body {
 .theme-system-panel .theme-section-heading {
     color: #000000 !important;
 }
+
+/* ---- Active Scenes: one header ---------------------------------------------
+ * The card already draws the frame and the "Active Scenes" label bar. The
+ * inner panel used to draw a second frame and bar, so it's flattened here and
+ * the scene names sit as plain text in the card body. */
+.theme-scenes-panel > .card-body > .theme-active-scene-panel {
+    background: transparent;
+    border-radius: 0;
+    padding-left: 0;
+    overflow: visible;
+}
+.theme-scenes-panel > .card-body > .theme-active-scene-panel::after {
+    display: none;
+}
+.theme-scenes-panel > .card-body > .theme-active-scene-panel > * {
+    padding-left: 0;
+    padding-right: 0;
+}
+.theme-scenes-panel .theme-scene-name {
+    padding-top: 0;
+    font-size: 1.6rem;
+    color: var(--lcars-orange);
+}
+
+/* ---- Active Scenes: subbars in the label column -----------------------------
+ * "Active Scenes" moves up into the top bar, and the Ongoing and Immediate
+ * subbars take the left label column below it, so the whole column reads as
+ * one bar. The buttons keep their position in the panel. */
+.theme-scenes-panel > .card-header {
+    top: 0;
+    bottom: auto;
+    height: var(--lcars-bar-w);
+    align-items: center;
+    padding-bottom: 0;
+    white-space: nowrap;
+}
+
+.theme-scenes-panel .theme-scene-buttons > .theme-home-subsection {
+    position: relative;
+    margin-left: calc(-1 * var(--lcars-label-w));
+    padding-left: 0;
+    min-height: 3.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.theme-scenes-panel .theme-home-subsection > .theme-section-actions {
+    padding-left: calc(var(--lcars-label-w) + 1.5rem);
+    margin-left: 0;
+}
+
+.theme-scenes-panel .theme-home-subsection > .theme-section-heading {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--lcars-label-w);
+    height: auto;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 0 0.6rem 0.5rem 1rem;
+    margin: 0;
+    z-index: 2;
+}
+
+/* ---- Active Scenes: subbars continue the side bar -----------------------
+ * The subbars now start at the card's left edge (the card-body's own padding
+ * is part of the offset), so they line up with the side bar. The side bar
+ * stops above the first subbar, and the subbars run to the bottom edge, so
+ * the column reads as one piece. */
+.theme-scenes-panel > .card-body {
+    padding-bottom: 0;
+}
+.theme-scenes-panel .theme-scene-buttons > .theme-home-subsection {
+    margin-left: calc(-1 * (var(--lcars-label-w) + 1.5rem));
+}
+.theme-scenes-panel .theme-immediate-section {
+    margin-bottom: 0;
+}
+.theme-scenes-panel > .card-header {
+    padding-left: 1.6rem;
+}
+
+/* ---- Active Scenes: column label and joined side bar -----------------------
+ * The label sits at the bottom of the orange side bar, directly above
+ * Ongoing, and the side bar ends there. The header bar is hidden for this card
+ * because the label now lives in the column. */
+.theme-scenes-panel > .card-header {
+    display: none;
+}
+.theme-scenes-panel .theme-scene-column-label {
+    display: flex;
+    align-items: flex-end;
+    width: var(--lcars-label-w);
+    margin-left: calc(-1 * (var(--lcars-label-w) + 1.5rem));
+    padding: 0 0.6rem 0.5rem 1.6rem;
+    background: var(--lcars-orange);
+    color: var(--lcars-bg);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    min-height: 3.5rem;
+}
+.theme-scenes-panel .theme-home-subsection {
+    margin-bottom: 0;
+}
+.theme-scenes-panel .theme-scene-buttons,
+.theme-scenes-panel > .card-body > *:last-child {
+    margin-bottom: 0;
+}
+.theme-scenes-panel .theme-home-subsection + .theme-home-subsection {
+    margin-top: 0;
+}
+
+/* The side column below the "Active Scenes" label is black; only the part
+ * above the label stays orange. */
+.theme-scenes-panel .theme-scene-buttons {
+    position: relative;
+}
+.theme-scenes-panel .theme-scene-buttons::before {
+    content: '';
+    position: absolute;
+    top: 3.5rem;
+    bottom: 0;
+    left: calc(-1 * (var(--lcars-label-w) + 1.5rem));
+    width: var(--lcars-label-w);
+    background: #000000;
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* Side column: the label has a fixed height, and the black column starts at
+ * exactly that height (where Ongoing begins) and runs below Immediate into
+ * the card's bottom padding. */
+.theme-scenes-panel .theme-scene-column-label {
+    height: 5rem;
+    min-height: 0;
+    box-sizing: border-box;
+}
+.theme-scenes-panel .theme-scene-buttons::before {
+    top: 5rem;
+    bottom: -2.5rem;
+}
+.theme-scenes-panel > .card-body {
+    padding-bottom: 2.5rem;
+}
+
+/* Black gap between the label and Ongoing, and the black column runs to the
+ * card's bottom edge (the card clips the overhang). */
+.theme-scenes-panel .theme-scene-column-label {
+    height: 4.5rem;
+    margin-bottom: 0.5rem;
+}
+.theme-scenes-panel .theme-scene-buttons::before {
+    top: 4.5rem;
+    bottom: -10rem;
+}
+
+/* Tighten the Active Scenes panel: less space under the title, around the
+ * subsections and at the bottom of the card. */
+.theme-scenes-panel .theme-active-scene-panel {
+    margin-bottom: 0 !important;
+}
+.theme-scenes-panel .theme-active-scene-panel > * {
+    padding-bottom: 0 !important;
+}
+.theme-scenes-panel .theme-scene-name {
+    line-height: 1.2;
+}
+.theme-scenes-panel .theme-home-subsection {
+    min-height: 3rem;
+}
+.theme-scenes-panel > .card-body {
+    padding-bottom: 0.5rem;
+}
