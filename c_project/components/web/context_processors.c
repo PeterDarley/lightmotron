@@ -64,13 +64,23 @@ cJSON *build_global_context(void)
             if (stem_len > 4 && strcmp(stem + stem_len - 4, ".css") == 0) {
                 stem[stem_len - 4] = '\0';
             }
-            char icon_fs[160], icon_href[128];
-            snprintf(icon_fs, sizeof(icon_fs), "/spiffs/www/themes/%s.svg", stem);
-            snprintf(icon_href, sizeof(icon_href), "/themes/%s.svg", stem);
-            struct stat st;
-            if (stat(icon_fs, &st) == 0) {
-                snprintf(favicon_href, sizeof(favicon_href), "%s", icon_href);
+            /* The stat() below reads flash, and every page render would
+             * otherwise repeat it. Flash reads are slow and block the LED
+             * interrupt on the other core (see the interrupt-watchdog notes),
+             * so the answer is cached per theme name and only looked up again
+             * when the theme changes. */
+            static char favicon_theme[128] = "";
+            static char favicon_cached[128] = "/favicon.svg";
+            if (strcmp(favicon_theme, current_theme->valuestring) != 0) {
+                char icon_fs[160], icon_href[128];
+                snprintf(icon_fs, sizeof(icon_fs), "/spiffs/www/themes/%s.svg", stem);
+                snprintf(icon_href, sizeof(icon_href), "/themes/%s.svg", stem);
+                struct stat st;
+                snprintf(favicon_cached, sizeof(favicon_cached), "%s",
+                         stat(icon_fs, &st) == 0 ? icon_href : "/favicon.svg");
+                snprintf(favicon_theme, sizeof(favicon_theme), "%s", current_theme->valuestring);
             }
+            snprintf(favicon_href, sizeof(favicon_href), "%s", favicon_cached);
         } else {
             cJSON_AddStringToObject(ctx, "theme", "");
             cJSON_AddStringToObject(ctx, "theme_css", "");
