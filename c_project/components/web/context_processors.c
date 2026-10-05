@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <sys/stat.h>
 
 /* Adds `key` to ctx holding an upper-cased, dash-to-space copy of `value`
  * (e.g. "event-horizon" -> "EVENT HORIZON") for display in the title/
@@ -36,6 +37,13 @@ cJSON *build_global_context(void)
      * no on-disk "default.css" to fall back to, so theme_css must be an
      * empty string in that case (matching the template's
      * `{% if theme_css %}` guard in templates/base/imports.html). */
+    /* Favicon. A theme can ship themes/<name>.svg next to its stylesheet
+     * (themes/nautilus.css -> themes/nautilus.svg); otherwise the default
+     * /favicon.svg is used. Checked here so the page links to a file that
+     * exists. */
+    char favicon_href[128];
+    snprintf(favicon_href, sizeof(favicon_href), "/favicon.svg");
+
     if (sys_store) {
         cJSON *current_theme = persistent_dict_get_dup(sys_store, "theme");
         if (current_theme && current_theme->valuestring && strlen(current_theme->valuestring) > 0) {
@@ -48,6 +56,21 @@ cJSON *build_global_context(void)
             char theme_path[136];
             snprintf(theme_path, sizeof(theme_path), "/%s", theme_css);
             cJSON_AddStringToObject(ctx, "theme_css_path", theme_path);
+
+            /* themes/<stem>.svg, where <stem> is the theme name without ".css" */
+            char stem[96];
+            snprintf(stem, sizeof(stem), "%s", current_theme->valuestring);
+            size_t stem_len = strlen(stem);
+            if (stem_len > 4 && strcmp(stem + stem_len - 4, ".css") == 0) {
+                stem[stem_len - 4] = '\0';
+            }
+            char icon_fs[160], icon_href[128];
+            snprintf(icon_fs, sizeof(icon_fs), "/spiffs/www/themes/%s.svg", stem);
+            snprintf(icon_href, sizeof(icon_href), "/themes/%s.svg", stem);
+            struct stat st;
+            if (stat(icon_fs, &st) == 0) {
+                snprintf(favicon_href, sizeof(favicon_href), "%s", icon_href);
+            }
         } else {
             cJSON_AddStringToObject(ctx, "theme", "");
             cJSON_AddStringToObject(ctx, "theme_css", "");
@@ -79,6 +102,9 @@ cJSON *build_global_context(void)
 
     /* Current model name */
     cJSON_AddStringToObject(ctx, "current_model", lighting_get_current_model());
+
+    /* Favicon for base/base_head.html (theme icon, or the default). */
+    cJSON_AddStringToObject(ctx, "favicon_href", favicon_href);
 
     return ctx;
 }
