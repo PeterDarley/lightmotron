@@ -39,6 +39,28 @@ Keep icons simple. The tab shows them at about 16px, so fine detail won't be vis
 
 ---
 
+## Standard components
+
+Pages use the same building blocks, so a theme only needs to style each one once.
+
+| Element | Markup | Notes |
+|---|---|---|
+| Page title | `<h1>` | One per page |
+| Card or panel | `.card` (or `.theme-home-section`) with `.card-header` and `.card-body` | Every section on the Status, Setup and Home pages |
+| Card title | plain text inside `.card-header` | The header bar is the title; don't repeat it in the body |
+| Subsection heading | `<h6 class="theme-section-heading">` | Use this for any heading inside a card or modal body |
+| Modal | `.modal-content` with `.modal-header` (title in `.modal-title`), `.modal-body` | |
+| Primary action | `.btn-primary` | One per section, such as Save or Manage |
+| Secondary action | `.btn-outline-secondary` (`btn-sm` in lists) | |
+| Destructive action | `.btn-outline-danger btn-sm` | Delete, stop, and similar |
+| Final confirmation | `.btn-danger btn-sm` | Only on the confirmation step (Confirm Delete, Confirm Restore, Reboot) |
+| Empty or summary text | `.text-muted small` | |
+
+Don't create new heading or button styles for a single page. If a page needs something
+new, add it as a shared class so every theme can style it.
+
+---
+
 ## Class reference
 
 All `theme-*` classes below have empty stubs in `app.css`. Bootstrap handles the default

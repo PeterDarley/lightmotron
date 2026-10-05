@@ -462,3 +462,16 @@ a:hover { color: #f0c08a; }
     color: #c4f3ec !important;
     border-color: var(--nautilus-verdigris-title) !important;
 }
+
+/* ---- Standard subsection headings ------------------------------------------
+ * Every subsection heading uses .theme-section-heading. Outside panels it's
+ * copper; on the light copper panels it's a dark verdigris for contrast. */
+.theme-section-heading {
+    color: var(--nautilus-copper-light) !important;
+    letter-spacing: 0.04em;
+}
+.card .theme-section-heading,
+.modal-content .theme-section-heading,
+.theme-home-section .theme-section-heading {
+    color: #1d5552 !important;
+}
