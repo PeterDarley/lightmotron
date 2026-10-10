@@ -3,16 +3,6 @@
     hx-get="/soundscapes/status"
     hx-trigger="every 5s"
     hx-swap="outerHTML">
-    <div class="theme-soundscape-master-controls d-flex align-items-center flex-wrap gap-3 mb-3">
-        <form hx-post="/soundscapes/stop"
-              hx-target="#soundscape_buttons"
-              hx-swap="outerHTML">
-            <button type="submit" class="btn btn-sm btn-outline-danger theme-stop-all-btn">
-                &#9632; Stop All Sounds
-            </button>
-        </form>
-    </div>
-
     {% if soundscape_items %}
         <div class="theme-section-actions d-flex flex-wrap gap-2">
             {% for soundscape in soundscape_items %}

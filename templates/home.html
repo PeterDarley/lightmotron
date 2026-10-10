@@ -63,6 +63,15 @@
                                        oninput="document.getElementById('soundscape-volume-feedback').textContent = this.value + '/30'">
                                 <span class="small text-muted theme-volume-value" id="soundscape-volume-feedback">{{ current_volume }}/30</span>
                             </div>
+
+                            <h6 class="theme-section-heading">Sounds</h6>
+                            <form hx-post="/soundscapes/stop"
+                                  hx-target="#soundscape_buttons"
+                                  hx-swap="outerHTML">
+                                <button type="submit" class="btn btn-sm btn-outline-danger theme-stop-all-btn">
+                                    &#9632; Stop All Sounds
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>

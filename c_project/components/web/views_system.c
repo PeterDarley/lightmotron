@@ -941,10 +941,17 @@ static void rename_color_refs(cJSON *model, const char *old_name, const char *ne
         cJSON *colors_list = cJSON_GetObjectItem(effect, "colors");
         if (!colors_list || !cJSON_IsArray(colors_list)) continue;
         int idx = 0;
-        for (cJSON *item = colors_list->child; item; item = item->next, idx++) {
+        for (cJSON *item = colors_list->child; item; idx++) {
+            /* Grab `next` before a possible replace below -- cJSON_ReplaceItemInArray
+             * frees `item`, so reading item->next afterwards (as the old
+             * for-loop increment did) is a use-after-free: it crashed with
+             * cJSON_IsString() dereferencing freed memory on the following
+             * iteration. */
+            cJSON *next = item->next;
             if (cJSON_IsString(item) && item->valuestring && strcmp(item->valuestring, old_ref) == 0) {
                 cJSON_ReplaceItemInArray(colors_list, idx, cJSON_CreateString(new_ref));
             }
+            item = next;
         }
     }
 }
