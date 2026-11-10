@@ -1,6 +1,8 @@
 #include "effects.h"
 #include "colors.h"
 #include "named_ranges.h"
+#include "range_topology.h"
+#include "metadata.h"
 #include "json_helpers.h"
 #include "esp_log.h"
 
@@ -28,6 +30,19 @@ static void resolve_target(const char *target_spec, active_job_t *job)
     job->target_count = 0;
     if (!target_spec) return;
 
+    /* job->pattern_name is already set by the time this runs (effect_resolve()
+     * fills it in before calling resolve_target()). A 2D pattern's target
+     * must be "named:RangeName" where that range has a 2D topology set up
+     * (see range_topology.h) -- its own members laid out into rows, not a
+     * global grid. target_indices then holds that range's own LED indices
+     * in row-major grid order (-1 for a gap cell), and job->grid_width/
+     * grid_height describe the shape. */
+    if (pattern_is_2d(job->pattern_name)) {
+        if (strncmp(target_spec, "named:", 6) == 0) {
+            range_topology_resolve(target_spec + 6, job);
+        }
+        return;
+    }
     job->target_count = target_spec_resolve(target_spec, job->target_indices, MAX_LEDS);
 }
 
@@ -90,6 +105,7 @@ void effect_resolve(const cJSON *effect_def, const cJSON *filters_dict, active_j
     job->cooling = json_get_int(effect_def, "cooling", 55);
     job->sparking = json_get_int(effect_def, "sparking", 120);
     job->spacing = json_get_int(effect_def, "spacing", 3);
+    job->ball_radius = (float)json_get_double(effect_def, "ball_radius", 2.0);
 
     const char *target = json_get_string(effect_def, "target", NULL);
     resolve_target(target, job);

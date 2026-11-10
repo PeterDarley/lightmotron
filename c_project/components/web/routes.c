@@ -56,6 +56,8 @@ REFRESH_ROUTE(view_sound_edit, "sounds")
 REFRESH_ROUTE(view_soundscapes, "soundscapes")
 REFRESH_ROUTE(view_soundscape_edit, "soundscapes")
 REFRESH_ROUTE(view_system_settings, "system_settings")
+REFRESH_ROUTE(view_named_range_topology, "named_range")
+REFRESH_ROUTE(view_named_range_topology_disable, "named_range")
 
 /* The Updates card only shows the repository, and refreshing it triggers a
  * GitHub release check, so only refresh it when the repository was actually
@@ -108,6 +110,11 @@ void routes_register_all(void)
     webserver_add_route(HTTP_METHOD_GET, "/named_range/reorder", view_named_range_reorder);
     webserver_add_route(HTTP_METHOD_GET, "/named_range/close", view_named_range_close);
     webserver_add_route(HTTP_METHOD_POST, "/named_range/reorder", view_named_range_reorder_refresh);
+
+    /* Per-range 2D topology: turn a range's own members into rows for a 2D effect. */
+    webserver_add_route(HTTP_METHOD_GET, "/named_range/topology", view_named_range_topology);
+    webserver_add_route(HTTP_METHOD_POST, "/named_range/topology", view_named_range_topology_refresh);
+    webserver_add_route(HTTP_METHOD_POST, "/named_range/topology/disable", view_named_range_topology_disable_refresh);
 
     /* Custom colors. CustomColorsView has both get() and post() in Python. */
     webserver_add_route(HTTP_METHOD_GET, "/custom_colors", view_custom_colors);

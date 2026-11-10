@@ -229,6 +229,16 @@ const pattern_metadata_t pattern_metadata_table[] = {
         .optional_count = 1,
         .color_count = 2,
     },
+    {
+        .name = "bouncing_ball",
+        .description = "A single LED bounces around the 2D LED grid, with a glow that falls off with distance",
+        .required = {"target", "colors"},
+        .required_count = 2,
+        .optional = {"duration", "ball_radius"},
+        .optional_count = 2,
+        .color_count = 1,
+        .dimensions = 2,
+    },
     { .name = NULL },
 };
 
@@ -320,6 +330,12 @@ const pattern_metadata_t *metadata_get_pattern(const char *name)
     }
 
     return NULL;
+}
+
+bool pattern_is_2d(const char *name)
+{
+    const pattern_metadata_t *meta = metadata_get_pattern(name);
+    return meta && meta->dimensions == 2;
 }
 
 const filter_metadata_t *metadata_get_filter(const char *name)

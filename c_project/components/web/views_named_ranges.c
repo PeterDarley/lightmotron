@@ -5,6 +5,7 @@
 #include "lighting.h"
 #include "leds.h"
 #include "animation.h"
+#include "range_topology.h"
 #include "json_helpers.h"
 #include "cJSON.h"
 
@@ -261,6 +262,7 @@ static cJSON *build_named_range_entries(const char *sort_by)
         cJSON_AddStringToObject(entry, "name", names[i]);
         cJSON_AddStringToObject(entry, "summary", summary);
         cJSON_AddNumberToObject(entry, "min_led", min_led);
+        cJSON_AddBoolToObject(entry, "is_2d", range_topology_exists(names[i]));
         cJSON_AddItemToArray(result, entry);
         free(summary);
     }
@@ -419,8 +421,13 @@ static cJSON *build_named_range_context(const char *sort_by)
     cJSON_AddItemToObject(ctx, "led_list", build_led_list(tokens));
     cJSON_AddItemToObject(ctx, "named_range_names", build_named_range_entries(sort_by));
 
-    if (g_has_editing_range_name) cJSON_AddStringToObject(ctx, "range_name", g_editing_range_name);
-    else cJSON_AddNullToObject(ctx, "range_name");
+    if (g_has_editing_range_name) {
+        cJSON_AddStringToObject(ctx, "range_name", g_editing_range_name);
+        cJSON_AddBoolToObject(ctx, "range_is_2d", range_topology_exists(g_editing_range_name));
+    } else {
+        cJSON_AddNullToObject(ctx, "range_name");
+        cJSON_AddBoolToObject(ctx, "range_is_2d", false);
+    }
 
     const char *effective_sort = (sort_by && (strcmp(sort_by, "name") == 0 || strcmp(sort_by, "leds") == 0))
                                       ? sort_by
@@ -790,10 +797,40 @@ static cJSON *build_reorder_context(void)
     return ctx;
 }
 
+/* Greedily queues every eligible range (in start-index order, same as
+ * reorder_eligible_ranges()'s sort), skipping one only if it overlaps a
+ * range already queued -- same overlap rule the old manual "add" step
+ * enforced, just applied to all of them up front instead of one at a time. */
+static void auto_populate_reorder_queue(cJSON *eligible)
+{
+    g_reorder_queue_count = 0;
+    for (cJSON *entry = eligible->child; entry; entry = entry->next) {
+        const char *name = json_get_string(entry, "name", "");
+        cJSON *members = cJSON_GetObjectItem(entry, "members");
+        bool overlaps = false;
+        for (int i = 0; i < g_reorder_queue_count && !overlaps; i++) {
+            cJSON *other = NULL;
+            for (cJSON *e2 = eligible->child; e2; e2 = e2->next) {
+                if (strcmp(json_get_string(e2, "name", ""), g_reorder_queue[i]) == 0) { other = e2; break; }
+            }
+            if (!other) continue;
+            cJSON *other_members = cJSON_GetObjectItem(other, "members");
+            for (cJSON *ca = members->child; ca && !overlaps; ca = ca->next) {
+                for (cJSON *cb = other_members->child; cb; cb = cb->next) {
+                    if (ca->valueint == cb->valueint) { overlaps = true; break; }
+                }
+            }
+        }
+        if (!overlaps) reorder_queue_add(name);
+    }
+}
+
 http_response_t *view_named_range_reorder(http_request_t *req)
 {
     if (req->method == HTTP_METHOD_GET) {
-        g_reorder_queue_count = 0;
+        cJSON *eligible = reorder_eligible_ranges();
+        auto_populate_reorder_queue(eligible);
+        cJSON_Delete(eligible);
         return webserver_render_response("setup/named_ranges_reorder.html", build_reorder_context());
     }
 

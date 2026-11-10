@@ -84,6 +84,12 @@ typedef struct {
     int cooling;      /* fire */
     int sparking;     /* fire */
     int spacing;      /* theater_chase */
+    float ball_radius; /* bouncing_ball: glow falloff radius, in grid cells */
+    /* For a 2D pattern only: the shape target_indices[] is laid out in
+     * (row * grid_width + col, value = LED index or -1 for a gap), set by
+     * range_topology_resolve(). Meaningless/0 for a 1D job. */
+    int grid_width;
+    int grid_height;
     uint32_t start_tick;
     bool finished;
     char after[64];          /* Job name this depends on */

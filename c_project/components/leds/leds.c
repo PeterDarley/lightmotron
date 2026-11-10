@@ -291,6 +291,23 @@ esp_err_t leds_init_from_config(const cJSON *neopixels_array)
     return leds_init(configs, count);
 }
 
+int leds_count_configured_total(const cJSON *neopixels_array)
+{
+    if (!neopixels_array || !cJSON_IsArray(neopixels_array)) {
+        return 0;
+    }
+    int count = cJSON_GetArraySize(neopixels_array);
+    if (count > MAX_STRIPS) count = MAX_STRIPS;
+
+    int total = 0;
+    for (int i = 0; i < count; i++) {
+        cJSON *item = cJSON_GetArrayItem(neopixels_array, i);
+        total += json_get_int(item, "num", 144);
+    }
+    if (total > MAX_TOTAL_LEDS) total = MAX_TOTAL_LEDS;
+    return total;
+}
+
 esp_err_t leds_init(const strip_config_t *configs, int count)
 {
     if (!configs || count <= 0) {

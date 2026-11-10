@@ -18,6 +18,8 @@
 #include "persistent_dict.h"
 #include "json_helpers.h"
 #include "lighting.h"
+#include "metadata.h"
+#include "range_topology.h"
 #include "cJSON.h"
 
 #include <string.h>
@@ -344,7 +346,18 @@ static void fill_scene_edit_context(cJSON *ctx, cJSON *model, const char *scene_
 
     cJSON *named_ranges_obj = model ? cJSON_GetObjectItem(model, "named_ranges") : NULL;
     if (named_ranges_obj) cJSON_AddItemReferenceToObject(ctx, "named_ranges", named_ranges_obj);
-    cJSON_AddItemToObject(ctx, "named_range_names", sorted_keys_array(named_ranges_obj));
+    {
+        cJSON *names_arr = sorted_keys_array(named_ranges_obj);
+        cJSON *range_options = cJSON_CreateArray();
+        for (cJSON *n = names_arr->child; n; n = n->next) {
+            cJSON *entry = cJSON_CreateObject();
+            cJSON_AddStringToObject(entry, "name", n->valuestring);
+            cJSON_AddBoolToObject(entry, "is_2d", range_topology_exists(n->valuestring));
+            cJSON_AddItemToArray(range_options, entry);
+        }
+        cJSON_Delete(names_arr);
+        cJSON_AddItemToObject(ctx, "named_range_names", range_options);
+    }
 
     cJSON_AddItemToObject(ctx, "chainable_entries", chainable_arr);
     cJSON_AddItemToObject(ctx, "killable_scenes", killable_arr);
@@ -546,6 +559,53 @@ http_response_t *view_scenes(http_request_t *req)
     return webserver_render_response("setup/scenes.html", ctx);
 }
 
+/* A 2D pattern's (e.g. bouncing_ball) target must be exactly "named:X"
+ * where X is a range with a 2D topology set up (range_topology_exists()) --
+ * there's no global grid to fall back on, so "all"/numeric/multi-token
+ * specs don't mean anything for a 2D pattern. A 1D pattern can use
+ * anything EXCEPT a "named:X" that points at a 2D-enabled range. Returns
+ * NULL if `target` is fine, else a short error message (static storage,
+ * don't free). */
+static const char *validate_target_dimensions(cJSON *model, const char *pattern_name, const char *target)
+{
+    if (!target || !pattern_name || !model) return NULL;
+    bool want_2d = pattern_is_2d(pattern_name);
+
+    if (want_2d) {
+        if (strncmp(target, "named:", 6) != 0 || strchr(target, ',')) {
+            return "This effect's pattern is 2D (e.g. bouncing_ball). Its target must be a single named "
+                   "range that's been set up as 2D -- open that range and use \"2D Layout\".";
+        }
+        if (!range_topology_exists(target + 6)) {
+            return "That named range hasn't been set up as 2D yet -- open it and use \"2D Layout\" first.";
+        }
+        return NULL;
+    }
+
+    char *copy = strdup(target);
+    if (!copy) return NULL;
+    const char *error = NULL;
+
+    char *token = strtok(copy, ",");
+    while (token) {
+        while (*token == ' ') token++;
+        size_t tlen = strlen(token);
+        while (tlen > 0 && token[tlen - 1] == ' ') token[--tlen] = '\0';
+
+        if (strncmp(token, "named:", 6) == 0) {
+            const char *name = token + 6;
+            if (range_topology_exists(name)) {
+                error = "This effect's pattern is 1D, but the chosen target is a range set up as 2D. "
+                        "Pick a different range, or disable 2D on that one.";
+                break;
+            }
+        }
+        token = strtok(NULL, ",");
+    }
+    free(copy);
+    return error;
+}
+
 /* GET/POST /scenes/edit — mirrors SceneEditView.get()/post(). */
 http_response_t *view_scene_edit(http_request_t *req)
 {
@@ -577,6 +637,18 @@ http_response_t *view_scene_edit(http_request_t *req)
         if (action && (strcmp(action, "add_entry") == 0 || strcmp(action, "update_entry") == 0) &&
             entry_name && entry_name[0] && effect_name && effect_name[0]) {
             const char *old_entry_name = request_get_form_field(req, "old_entry_name");
+            const char *effective_target = (target && target[0]) ? target : "all";
+
+            cJSON *effects_dict_check = cJSON_GetObjectItem(model, "effects");
+            cJSON *effect_def_check = effects_dict_check ? cJSON_GetObjectItem(effects_dict_check, effect_name) : NULL;
+            const char *pattern_name = json_get_string(effect_def_check, "pattern", NULL);
+            const char *dim_error = validate_target_dimensions(model, pattern_name, effective_target);
+            if (dim_error) {
+                cJSON *ctx = build_global_context();
+                fill_scene_edit_context(ctx, model, scene_name, old_entry_name && old_entry_name[0] ? old_entry_name : NULL);
+                cJSON_AddStringToObject(ctx, "error", dim_error);
+                return webserver_render_response("setup/scene_edit.html", ctx);
+            }
 
             if (old_entry_name && old_entry_name[0] && strcmp(old_entry_name, entry_name) != 0 &&
                 cJSON_GetObjectItem(scene_data, old_entry_name)) {
@@ -586,7 +658,7 @@ http_response_t *view_scene_edit(http_request_t *req)
 
             cJSON *entry_dict = cJSON_CreateObject();
             cJSON_AddStringToObject(entry_dict, "effect", effect_name);
-            cJSON_AddStringToObject(entry_dict, "target", (target && target[0]) ? target : "all");
+            cJSON_AddStringToObject(entry_dict, "target", effective_target);
 
             const char *cycles_value = request_get_form_field(req, "cycles");
             if (cycles_value && cycles_value[0]) {

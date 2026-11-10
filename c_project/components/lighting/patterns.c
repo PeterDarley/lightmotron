@@ -14,9 +14,10 @@ static const char *TAG = "patterns";
 
 static const char *pattern_names[] = {
     "solid", "blink", "pulse", "fade_in", "breathe", "wave", "cylon", "phaser_strip",
-    "rainbow", "color_wipe", "fire", "gradient", "warp_pulse", "theater_chase", "heartbeat"
+    "rainbow", "color_wipe", "fire", "gradient", "warp_pulse", "theater_chase", "heartbeat",
+    "bouncing_ball"
 };
-static const int pattern_count = 15;
+static const int pattern_count = 16;
 
 /* Max number of simultaneous wave "heads" pattern_wave will render (mirrors
  * the effect's "number" param). Extra heads beyond this are silently
@@ -659,6 +660,88 @@ int pattern_heartbeat(active_job_t *job, uint32_t local_tick, const rgb_t *curre
     return count;
 }
 
+/*
+ * A single LED "ball" bounces around a 2D-enabled named range's own grid
+ * (see range_topology.h), elastically off the virtual grid's edges --
+ * including gap rows/columns that have no real LED, since the ball moves
+ * through full grid space and just doesn't light up a cell that has
+ * nothing wired there.
+ *
+ * Speed uses job->duration the same way pattern_theater_chase does: ticks
+ * per 1-cell step, not a raw cells-per-tick number -- the same "ticks per
+ * update" interface as every other pattern's Duration control, so the
+ * effect editor doesn't need a bespoke speed widget. Position is computed
+ * directly from local_tick, not accumulated frame to frame, so there's no
+ * persisted ball state on the job at all (mirrors pattern_cylon/
+ * pattern_phaser_strip's phase-from-tick approach).
+ *
+ * job->target_indices here is a dense row-major grid (job->target_count ==
+ * job->grid_width * job->grid_height): target_indices[row*width+col] is
+ * that cell's real LED index, or -1 for a gap. Built by
+ * range_topology_resolve() in effects.c's resolve_target() whenever the
+ * pattern is 2D (see pattern_is_2d()).
+ */
+static float bouncing_ball_axis_position(long step, int max_index)
+{
+    if (max_index <= 0) return 0.0f;
+    long period = 2L * max_index;
+    long phase = step % period;
+    if (phase < 0) phase += period;
+    return (float)((phase <= max_index) ? phase : (period - phase));
+}
+
+int pattern_bouncing_ball(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors,
+                          led_output_t *output, int max_output)
+{
+    (void)current_colors;
+
+    int width = job->grid_width;
+    int height = job->grid_height;
+    if (width <= 0 || height <= 0 || job->target_count == 0) return 0;
+
+    rgb_t color = job->color_count > 0 ? job->colors[0] : (rgb_t){255, 255, 255};
+    float radius = job->ball_radius > 0.1f ? job->ball_radius : 0.1f;
+    int step_ticks = job->duration > 0 ? job->duration : 6;
+
+    long step = (long)local_tick / step_ticks;
+    /* y advances at a different rate than x (73% as fast) so the path
+     * doesn't immediately retrace a short cycle the way a pure diagonal
+     * bounce would. */
+    long step_y = (step * 73L) / 100L;
+    float ball_x = bouncing_ball_axis_position(step, width - 1);
+    float ball_y = bouncing_ball_axis_position(step_y, height - 1);
+
+    /* Every real LED in the grid must get an output entry each tick, lit or
+     * not: lighting_process_tick() only overwrites logical_colors[] for
+     * indices a pattern actually emits (lighting.c), so a cell this pattern
+     * stops reporting once the ball moves away keeps showing its last color
+     * forever instead of turning off -- the exact "glow stays on" bug this
+     * fixes. Solid/wipe-style patterns don't hit this because they always
+     * cover their whole target; a moving, radius-limited glow must emit
+     * black explicitly instead of skipping out-of-range cells. */
+    int count = 0;
+    for (int cell = 0; cell < job->target_count && count < max_output; cell++) {
+        int led = job->target_indices[cell];
+        if (led < 0) continue; /* gap cell -- nothing wired here */
+
+        int row = cell / width;
+        int col = cell % width;
+        float dx = (float)col - ball_x;
+        float dy = (float)row - ball_y;
+        float dist = sqrtf(dx * dx + dy * dy);
+        float falloff = (dist > radius) ? 0.0f : 1.0f - (dist / radius); /* 1 at center, 0 at/beyond the glow's edge */
+
+        output[count].led_index = led;
+        output[count].color = (rgb_t){
+            (uint8_t)((float)color.r * falloff),
+            (uint8_t)((float)color.g * falloff),
+            (uint8_t)((float)color.b * falloff),
+        };
+        count++;
+    }
+    return count;
+}
+
 /* Pattern lookup table */
 typedef struct {
     const char *name;
@@ -681,6 +764,7 @@ static const pattern_entry_t pattern_table[] = {
     {"warp_pulse",    pattern_warp_pulse},
     {"theater_chase", pattern_theater_chase},
     {"heartbeat",     pattern_heartbeat},
+    {"bouncing_ball", pattern_bouncing_ball},
     {NULL, NULL},
 };
 

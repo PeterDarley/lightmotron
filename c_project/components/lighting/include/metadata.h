@@ -2,6 +2,7 @@
 #define METADATA_H
 
 #include "cJSON.h"
+#include <stdbool.h>
 
 /**
  * Scene metadata structure (kills, sound triggers).
@@ -45,6 +46,11 @@ typedef struct {
     const char *optional[METADATA_MAX_PARAMS];
     int optional_count;
     int color_count;
+    /* 2 for a pattern that renders over the 2D LED grid (its target must be
+     * a 2D named range or the whole grid); omitted/0/1 means an ordinary 1D
+     * pattern. Existing table rows don't set this, so they default to 0
+     * via designated-initializer zero-fill -- see pattern_is_2d(). */
+    int dimensions;
 } pattern_metadata_t;
 
 /**
@@ -75,6 +81,12 @@ extern const filter_metadata_t filter_metadata_table[];
  * against it would raise KeyError / miss).
  */
 const pattern_metadata_t *metadata_get_pattern(const char *name);
+
+/**
+ * True if `name` is a 2D pattern (renders over the LED grid, not a flat 1D
+ * target). Unknown pattern names are treated as 1D (false).
+ */
+bool pattern_is_2d(const char *name);
 
 /**
  * Look up a filter's metadata by name. Returns NULL if not found.

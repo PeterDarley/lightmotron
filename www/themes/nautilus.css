@@ -23,7 +23,7 @@
     --nautilus-text: #d9ece8;
     --nautilus-muted: #8fa8a2;
 
-    --effect-optional-bg: #1a1714;
+    --effect-optional-bg: rgba(42, 22, 7, 0.08);
     --effect-optional-border: #6e3f1d;
     --effect-slider-track: #4a2c17;
     --effect-slider-track-focus: #b87333;
@@ -251,6 +251,21 @@ a:hover { color: #f0c08a; }
 .table .text-muted,
 .card .text-muted,
 .modal-content .text-muted {
+    color: #5a3a22 !important;
+}
+
+/* The small translucent cards an effect's optional params (duration,
+ * saturation, the bouncing-ball's Duration/Glow Radius, ...) render in --
+ * light panel + dark text like every other card/modal area, explicit
+ * rather than relying on inheritance since .form-label and small/muted
+ * text inside them weren't picking up the ancestor color reliably. */
+.effect-optional-card,
+.effect-optional-card .form-label,
+.effect-optional-card label {
+    color: var(--nautilus-dark-text);
+}
+.effect-optional-card .text-muted,
+.effect-optional-card small {
     color: #5a3a22 !important;
 }
 

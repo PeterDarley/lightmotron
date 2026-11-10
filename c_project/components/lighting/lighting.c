@@ -4,6 +4,7 @@
 #include "effects.h"
 #include "colors.h"
 #include "named_ranges.h"
+#include "range_topology.h"
 #include "metadata.h"
 #include "animation.h"
 #include "persistent_dict.h"
@@ -181,7 +182,15 @@ static void resolve_job_entry(const cJSON *job_entry, const cJSON *effects_dict,
         /* Override with inline params */
         const char *target = json_get_string(job_entry, "target", NULL);
         if (target) {
-            job->target_count = target_spec_resolve(target, job->target_indices, MAX_LEDS);
+            if (pattern_is_2d(job->pattern_name)) {
+                if (strncmp(target, "named:", 6) == 0) {
+                    range_topology_resolve(target + 6, job);
+                } else {
+                    job->target_count = 0;
+                }
+            } else {
+                job->target_count = target_spec_resolve(target, job->target_indices, MAX_LEDS);
+            }
         }
         int cycles = json_get_int(job_entry, "cycles", -1);
         if (cycles >= 0) job->cycles = cycles;
@@ -1023,7 +1032,13 @@ float lighting_estimate_led_amps(void)
     cJSON *scenes = model ? cJSON_GetObjectItem(model, "scenes") : NULL;
     cJSON *effects_dict = model ? cJSON_GetObjectItem(model, "effects") : NULL;
     cJSON *filters_dict = model ? cJSON_GetObjectItem(model, "filters") : NULL;
-    int total = leds_total_count();
+    /* Read the just-saved strip count from storage rather than the LED
+     * driver's live total, which only reflects the config as of the last
+     * boot -- this lets the Status page's power estimate update the moment
+     * settings are saved, without needing a reboot. */
+    persistent_dict_t *sys_for_count = persistent_dict_open(STORAGE_SYSTEM_SETTINGS_FILE);
+    cJSON *neopixels = sys_for_count ? persistent_dict_get(sys_for_count, "neopixels") : NULL;
+    int total = leds_count_configured_total(neopixels);
     if (!scenes || total <= 0) return 0.0f;
     if (total > MAX_LEDS) total = MAX_LEDS;
 

@@ -119,6 +119,15 @@ void leds_clear(void);
 int leds_total_count(void);
 
 /**
+ * Sum "num" across a cJSON neopixels config array, applying the same strip
+ * count / total LED caps as leds_init_from_config(). Pure -- reads only the
+ * JSON passed in, touches no driver/hardware state. Lets callers (e.g. the
+ * Status page's power estimate) report the just-saved configuration
+ * immediately, without waiting for a reboot to actually re-init the LEDs.
+ */
+int leds_count_configured_total(const cJSON *neopixels_array);
+
+/**
  * Get the number of strips configured.
  */
 int leds_strip_count(void);

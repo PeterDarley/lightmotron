@@ -49,5 +49,6 @@ int pattern_gradient(active_job_t *job, uint32_t local_tick, const rgb_t *curren
 int pattern_warp_pulse(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
 int pattern_theater_chase(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
 int pattern_heartbeat(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
+int pattern_bouncing_ball(active_job_t *job, uint32_t local_tick, const rgb_t *current_colors, led_output_t *output, int max_output);
 
 #endif /* PATTERNS_H */

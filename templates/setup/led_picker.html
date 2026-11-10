@@ -24,6 +24,14 @@
                 hx-get="/named_range"
                 hx-target="#modal-body"
                 hx-swap="innerHTML">Back</button>
+
+        <button type="button" class="btn btn-outline-info btn-sm mb-3 ms-1"
+                hx-get="/named_range/topology?name={{ range_name }}"
+                hx-target="#modal-body"
+                hx-swap="innerHTML">
+            {% if range_is_2d %}Edit 2D Layout{% else %}Set Up 2D Layout{% endif %}
+        </button>
+        {% if range_is_2d %}<span class="badge bg-info mb-3 align-middle">2D</span>{% endif %}
     {% else %}
         <form hx-post="/named_range" hx-target="#modal-body" hx-swap="innerHTML" id="range-form" class="mb-3">
             <input type="hidden" id="selected-leds" name="selected_leds" value="{{ selected_tokens_str }}">
@@ -117,7 +125,7 @@
                     hx-get="/named_range?name={{ r.name }}"
                     hx-target="#modal-body"
                     hx-swap="innerHTML">
-                {{ r.name }} <span class="text-muted fw-normal" style="font-size:0.75em">{{ r.summary }}</span>
+                {{ r.name }}{% if r.is_2d %} <span class="badge bg-info">2D</span>{% endif %} <span class="text-muted fw-normal" style="font-size:0.75em">{{ r.summary }}</span>
             </button>
             {% endfor %}
     </div>
@@ -132,7 +140,7 @@
                         hx-get="/named_range?name={{ r.name }}"
                         hx-target="#modal-body"
                         hx-swap="innerHTML">
-                    {{ r.name }} <span class="text-muted fw-normal" style="font-size:0.75em">{{ r.summary }}</span>
+                    {{ r.name }}{% if r.is_2d %} <span class="badge bg-info">2D</span>{% endif %} <span class="text-muted fw-normal" style="font-size:0.75em">{{ r.summary }}</span>
                 </button>
                 {% endif %}
             {% endfor %}

@@ -1,30 +1,13 @@
 <div id="named-ranges-reorder">
     <p class="text-muted small mb-2">
-        Select the primary ranges that each represent one physical LED string
-        (in wiring order), then use &uarr;/&darr; to reorder them to match how
-        the strings are actually plugged together. Ranges composed of other
-        ranges, or that aren't a single contiguous block, aren't eligible.
+        Every range that represents one physical LED string (a single
+        contiguous block, not composed of other ranges) is listed below,
+        already selected. Use &uarr;/&darr; to reorder them to match how the
+        strings are actually plugged together.
     </p>
 
     {% if error %}
     <div class="alert alert-warning py-1 px-2 small mb-2">{{ error }}</div>
-    {% endif %}
-
-    {% if reorder_available %}
-    <div class="mb-3">
-        <small class="text-muted">Add a string to reorder:</small>
-        <form hx-post="/named_range/reorder" hx-target="#modal-body" hx-swap="innerHTML"
-              class="input-group mt-1" style="max-width: 360px;">
-            <input type="hidden" name="action" value="add_to_reorder_list">
-            <select class="form-select form-select-sm" name="range_name" required>
-                <option value="">Choose range…</option>
-                {% for r in reorder_available %}
-                <option value="{{ r.name }}">{{ r.name }} ({{ r.summary }})</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-outline-secondary btn-sm">Add</button>
-        </form>
-    </div>
     {% endif %}
 
     {% if reorder_queue %}
@@ -75,7 +58,7 @@
         </tbody>
     </table>
     {% else %}
-    <p class="text-muted small">No strings queued yet. Add ranges above to start reordering.</p>
+    <p class="text-muted small">No eligible strings found -- ranges must each be a single contiguous block.</p>
     {% endif %}
 
     <button type="button" class="btn btn-outline-secondary btn-sm mt-2"

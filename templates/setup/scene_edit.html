@@ -9,6 +9,10 @@
         <h5 class="modal-title">{{ scene_name }}</h5>
     </div>
 
+    {% if error %}
+    <div class="alert alert-danger small py-2">{{ error }}</div>
+    {% endif %}
+
     <!-- Entries list -->
     {% if scene_entries %}
     <table class="table table-hover align-middle mb-3">
@@ -110,12 +114,12 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="#" onclick="document.getElementById('target-{{ scene_name_id }}').value='all'; return false;">all</a></li>
-                            {% for range_name in named_range_names %}
-                            <li><a class="dropdown-item" href="#" onclick="document.getElementById('target-{{ scene_name_id }}').value='named:{{ range_name }}'; return false;">{{ range_name }}</a></li>
+                            {% for r in named_range_names %}
+                            <li><a class="dropdown-item" href="#" onclick="document.getElementById('target-{{ scene_name_id }}').value='named:{{ r.name }}'; return false;">{{ r.name }}{% if r.is_2d %} (2D){% endif %}</a></li>
                             {% endfor %}
                         </ul>
                     </div>
-                    <small class="text-muted">Single LED (0), range (0-5), all LEDs (all), or named range</small>
+                    <small class="text-muted">Single LED (0), range (0-5), all LEDs (all), or named range -- a 2D effect like bouncing_ball needs a range marked (2D)</small>
                 </div>
 
                 <div class="mb-3">
